@@ -4,21 +4,11 @@
 
 ## 로컬에서 바로 해 보기
 
-```bash
-# 1) pyroguard2d — 서버 켜기
-cd ~/Developer/pyroguard2d
-git fetch origin && git switch claude/modest-faraday-wqsutc && git pull
-cp .env.example .env.local      # OPERATOR_PASSWORD · SESSION_SECRET(16자 이상) · EMERGENCY_OTP(6자리) 채우기
-npm install
-npm run build && npm start      # http://localhost:3000
+QA 폴더의 **`QA 실행.command`** 를 더블클릭 → ⚙ 설정에 pyroguard2d 폴더·로그인 비밀번호·OTP → **[서버 켜기]** → **[전체 검사]**.
+pyroguard2d 에 `.env.local` 이 없으면 화면이 설정값으로 만들어 준다 (SESSION_SECRET 은 무작위).
+서버를 켜는 방법은 `qa.config.js` 의 `serve` 블록에 적혀 있다.
 
-# 2) QA — 다른 터미널에서 조회 화면 띄우기
-cd ~/Developer/QA
-git fetch origin && git switch claude/modest-faraday-wqsutc && git pull
-bash nextjs/ui-local.sh         # pyroguard2d/.env.local 의 비밀번호·OTP 를 읽어 간다 → http://localhost:4545
-```
-
-레포가 다른 곳에 있으면 `QA_ROOT=/경로/pyroguard2d bash nextjs/ui-local.sh`.
+터미널이 편하면 `bash nextjs/ui-local.sh` (pyroguard2d 서버를 직접 켠 뒤).
 검사는 검사용 센서를 만들었다 지운다 — 운영 서버가 아니라 로컬 서버에 대고 돌린다.
 
 ## 명령줄로 돌리기

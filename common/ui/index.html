@@ -81,6 +81,24 @@
   .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
   .card .k { color: var(--muted); font-size: 12px; } .card .v { font-size: 22px; font-weight: 700; }
   ul.plain { margin: 0; padding: 0 18px 16px 36px; }
+  .srv { display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.up { background: var(--ok); } .dot.busy { background: var(--accent); animation: blink 1s infinite; } .dot.err { background: var(--bad); }
+  @keyframes blink { 50% { opacity: .3; } }
+  .srv .btn { padding: 3px 10px; font-size: 12px; border-radius: 999px; }
+  .srvbar { display: none; padding: 10px 20px; background: var(--soft); border-bottom: 1px solid var(--line); }
+  .srvbar.on { display: block; }
+  .srvbar pre { margin: 8px 0 0; max-height: 220px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 12px; white-space: pre-wrap; }
+  dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(560px, calc(100vw - 32px)); background: var(--panel); color: var(--text); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  .dlg-h { padding: 16px 20px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 16px; display: flex; justify-content: space-between; }
+  .dlg-b { padding: 16px 20px; display: grid; gap: 14px; }
+  .dlg-b label { display: grid; gap: 5px; font-weight: 600; font-size: 13px; }
+  .dlg-b input { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  .hint { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .dlg-f { padding: 12px 20px 16px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .dlg-f .left { margin-right: auto; }
+  .steps { text-align: left; display: inline-block; margin-top: 12px; line-height: 2; }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: s .8s linear infinite; vertical-align: -1px; }
   @keyframes s { to { transform: rotate(360deg); } }
 </style>
@@ -92,13 +110,32 @@
   <select id="tool" aria-label="도구"></select>
   <span class="target" id="target"></span>
   <span class="spacer"></span>
+  <span class="srv" id="srv"><span class="dot" id="srvDot"></span><span id="srvText">대상 서버 확인 중</span><span id="srvBtns"></span></span>
+  <button class="btn" id="openSettings" title="설정">⚙ 설정</button>
   <span class="score" id="score" title="전체 요약 보기"></span>
   <button class="btn primary" id="runAll">전체 검사</button>
 </header>
 <div class="status-line" id="status"></div>
+<div class="srvbar" id="srvbar"><b id="srvbarTitle"></b> <button class="btn run-btn" id="toggleLog">로그 보기</button><pre id="srvlog" hidden></pre></div>
+<dialog id="dlg">
+  <div class="dlg-h"><span>⚙ 설정 <span class="hint" id="dlgTool"></span></span><button class="btn run-btn" id="dlgClose">닫기</button></div>
+  <div class="dlg-b">
+    <label>대상 레포 폴더 <span class="hint" id="rootHint"></span><input id="fRoot" placeholder="~/Developer/pyroguard2d"></label>
+    <label>대상 주소 <input id="fBase" placeholder="http://localhost:3000"></label>
+    <label>로그인 비밀번호 <span class="hint" id="pwHint"></span><input id="fPw" type="password" autocomplete="off"></label>
+    <label>119 OTP (6자리) <span class="hint" id="otpHint"></span><input id="fOtp" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+    <div class="hint" id="envHint"></div>
+    <div id="dlgMsg" class="hint"></div>
+  </div>
+  <div class="dlg-f">
+    <button class="btn left" id="btnUpdate" title="QA 와 대상 레포를 git pull">⬇ 최신 코드 받기</button>
+    <button class="btn" id="btnRebuild" title="대상 레포를 다시 빌드하고 켠다">다시 빌드해서 켜기</button>
+    <button class="btn primary" id="btnSave">저장</button>
+  </div>
+</dialog>
 <main>
   <aside id="areas"></aside>
-  <section class="panel" id="panel"><div class="empty">왼쪽에서 영역의 <b>[조회]</b>를 누르면 검사한 목록이 여기에 O / X 로 나옵니다.</div></section>
+  <section class="panel" id="panel"></section>
 </main>
 <script>
 const $ = s => document.querySelector(s);
@@ -160,7 +197,7 @@ function renderPanel() {
   const t = state.tools.find(x => x.key === state.tool);
   const probe = t && t.sections.flatMap(s => s.probes).find(p => p.id === state.selected);
   const r = state.results[state.selected];
-  if (!probe) { panel.innerHTML = '<div class="empty">왼쪽에서 영역의 <b>[조회]</b>를 누르면 검사한 목록이 여기에 O / X 로 나옵니다.</div>'; return; }
+  if (!probe) { panel.innerHTML = guide(); return; }
   const busy = state.running && state.running.status === 'running';
   const head = `<div class="ph"><h2><span class="letter">${esc(probe.id)}</span>${esc(probe.name)}
       <button class="btn run-btn" data-run="${esc(probe.id)}" ${busy ? 'disabled' : ''}>${r ? '다시 조회' : '조회'}</button></h2>`;
@@ -240,11 +277,114 @@ function renderStatus() {
   }
 }
 
-function renderAll() { renderHeader(); renderAreas(); renderPanel(); renderStatus(); }
+function renderAll() { renderHeader(); renderAreas(); renderPanel(); renderStatus(); renderServer(); }
+
+// 처음 쓰는 사람을 위한 안내 — 지금 무엇을 누르면 되는지
+function guide() {
+  const sv = state.server;
+  const up = sv && sv.up;
+  return `<div class="empty"><div style="font-size:16px;color:var(--text);font-weight:700">${up ? '준비됐습니다' : '시작하기'}</div>
+    <ol class="steps">
+      <li>${state.settings && state.settings.secrets.every(x => x.set) ? '✅' : '①'} <b>⚙ 설정</b>에서 대상 레포 폴더·로그인 비밀번호·OTP 확인</li>
+      <li>${up ? '✅' : '②'} 위쪽 <b>[서버 켜기]</b> — 설치·빌드·실행을 알아서 합니다 (처음엔 1~2분)</li>
+      <li>③ <b>[전체 검사]</b> 또는 왼쪽 영역의 <b>[조회]</b> → 결과가 O / X 목록으로</li>
+    </ol></div>`;
+}
+
+const PHASE = { idle: '꺼짐', installing: '설치 중', building: '빌드 중', starting: '켜는 중', running: '켜짐', stopping: '끄는 중', error: '오류' };
+function renderServer() {
+  const sv = state.server;
+  if (!sv) return;
+  const busy = ['installing', 'building', 'starting', 'stopping'].includes(sv.phase);
+  $('#srvDot').className = 'dot ' + (sv.up ? 'up' : busy ? 'busy' : sv.phase === 'error' ? 'err' : '');
+  $('#srvText').innerHTML = `대상 서버 <b>${esc(sv.up ? '켜짐' : PHASE[sv.phase] || '꺼짐')}</b>`;
+  $('#srvBtns').innerHTML = !sv.canServe ? '' : busy ? '<span class="spin"></span>'
+    : sv.up ? (sv.managed ? '<button class="btn" data-srv="stop">끄기</button>' : '')
+    : '<button class="btn primary" data-srv="start">서버 켜기</button>';
+  const bar = $('#srvbar');
+  const show = busy || sv.phase === 'error';
+  bar.className = 'srvbar' + (show || !$('#srvlog').hidden ? ' on' : '');
+  $('#srvbarTitle').innerHTML = sv.phase === 'error' ? `<span style="color:var(--bad)">✗ ${esc(sv.error || '오류')}</span>` : busy ? `<span class="spin"></span> ${esc(PHASE[sv.phase])}…` : '서버 로그';
+  $('#srvlog').textContent = (sv.log || []).join('\n');
+  if (!$('#srvlog').hidden) $('#srvlog').scrollTop = 1e9;
+}
+
+async function pollServer() {
+  if (!state.tool) return;
+  const sv = await api('/api/server?tool=' + encodeURIComponent(state.tool)).catch(() => null);
+  const wasUp = state.server && state.server.up;
+  state.server = sv;
+  renderServer();
+  if (sv && sv.up !== wasUp && !state.selected) renderPanel();
+  const busy = sv && ['installing', 'building', 'starting', 'stopping'].includes(sv.phase);
+  clearTimeout(state.srvTimer);
+  state.srvTimer = setTimeout(pollServer, busy ? 1000 : 4000);
+}
+
+async function serverAction(action, extra = {}) {
+  try {
+    await api('/api/server/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool: state.tool, ...extra }) });
+  } catch (e) { alert(e.message); }
+  if (action === 'start') { $('#srvlog').hidden = false; $('#toggleLog').textContent = '로그 숨기기'; }
+  setTimeout(pollServer, 300);
+}
+
+async function loadSettings() {
+  state.settings = await api('/api/settings?tool=' + encodeURIComponent(state.tool)).catch(() => null);
+}
+function fillSettings() {
+  const st = state.settings;
+  if (!st) return;
+  $('#dlgTool').textContent = state.tool;
+  $('#fRoot').value = st.root || ''; $('#fBase').value = st.baseUrl || '';
+  $('#fPw').value = ''; $('#fOtp').value = '';
+  $('#rootHint').innerHTML = !st.rootExists ? '<span style="color:var(--bad)">— 폴더가 없습니다</span>' : !st.isRepo ? '<span style="color:var(--bad)">— package.json 이 없습니다</span>' : '— 확인됨';
+  const sec = f => st.secrets.find(x => x.field === f) || {};
+  const hint = x => x.set ? `— 저장됨 (${esc(x.from)}) · 바꿀 때만 입력` : '— <span style="color:var(--bad)">비어 있음</span>';
+  $('#pwHint').innerHTML = hint(sec('operatorPassword'));
+  $('#otpHint').innerHTML = hint(sec('otp'));
+  $('#envHint').innerHTML = st.envFile ? (st.envFileExists ? `대상 레포의 <b>${esc(st.envFile)}</b> 를 읽습니다. 여기 입력한 값은 이 컴퓨터의 QA 설정에만 저장됩니다.`
+    : `대상 레포에 <b>${esc(st.envFile)}</b> 가 없습니다 — [서버 켜기] 때 위 비밀번호·OTP 로 만들어 줍니다.`) : '';
+  $('#dlgMsg').textContent = '';
+}
+async function openSettings() { await loadSettings(); fillSettings(); $('#dlg').showModal(); }
+
+async function saveSettings() {
+  try {
+    state.settings = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: state.tool, root: $('#fRoot').value, baseUrl: $('#fBase').value, operatorPassword: $('#fPw').value, otp: $('#fOtp').value }) });
+    fillSettings();
+    $('#dlgMsg').innerHTML = '<span style="color:var(--ok)">저장했습니다.</span>';
+    state.tools = await api('/api/tools');
+    renderHeader(); pollServer(); if (!state.selected) renderPanel();
+    return true;
+  } catch (e) { $('#dlgMsg').innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; return false; }
+}
+
+async function updateCode() {
+  $('#dlgMsg').innerHTML = '<span class="spin"></span> 최신 코드를 받는 중…';
+  try {
+    const r = await api('/api/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool: state.tool }) });
+    const line = (name, x) => `${name}: ${x.ok ? (x.changed ? '✅ 새 코드 받음' : '이미 최신') : '✗ ' + esc(x.out)}`;
+    $('#dlgMsg').innerHTML = line('QA', r.qa) + '<br>' + line('대상 레포', r.target) +
+      (r.targetChanged ? '<br>대상 코드가 바뀌었습니다 — <b>[다시 빌드해서 켜기]</b>를 누르세요.' : '') +
+      (r.restart ? '<br><span class="spin"></span> QA 화면을 새 코드로 다시 띄우는 중…' : (r.qa.changed ? '<br>QA 화면 코드가 바뀌었습니다 — 창을 닫고 다시 실행하세요.' : ''));
+    if (r.restart) waitAndReload();
+  } catch (e) { $('#dlgMsg').innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+}
+async function waitAndReload() {
+  await new Promise(r => setTimeout(r, 1500));
+  for (let i = 0; i < 60; i++) {
+    if (await fetch('/api/ping').then(r => r.ok).catch(() => false)) { location.reload(); return; }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
 
 async function loadTool(key) {
   state.tool = key; state.results = {}; state.report = null; state.selected = null;
   try { localStorage.setItem('qa-ui-tool', key); } catch (e) {}
+  await loadSettings();
+  pollServer();
   const latest = await api('/api/latest?tool=' + encodeURIComponent(key)).catch(() => null);
   if (latest) {
     for (const r of latest.results) state.results[r.id] = r;
@@ -255,6 +395,7 @@ async function loadTool(key) {
 }
 
 async function run(ids) {
+  if (state.server && !state.server.up) { alert('대상 서버가 꺼져 있습니다. 위쪽 [서버 켜기]를 먼저 누르세요.'); return; }
   try {
     await api('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool: state.tool, ids }) });
   } catch (e) { alert(e.message); return; }
@@ -289,11 +430,22 @@ document.addEventListener('click', e => {
   const tg = e.target.closest('[data-toggle]');
   if (tg) { state.collapsed[tg.dataset.toggle] = !(state.collapsed[tg.dataset.toggle] ?? false); renderPanel(); return; }
   if (e.target.closest('#score')) { state.selected = '__summary'; renderAreas(); renderPanel(); }
+  const sb = e.target.closest('[data-srv]');
+  if (sb) serverAction(sb.dataset.srv);
 });
+$('#openSettings').addEventListener('click', openSettings);
+$('#dlgClose').addEventListener('click', () => $('#dlg').close());
+$('#btnSave').addEventListener('click', saveSettings);
+$('#btnUpdate').addEventListener('click', updateCode);
+$('#btnRebuild').addEventListener('click', async () => { if (await saveSettings()) { $('#dlg').close(); serverAction('start', { rebuild: true }); } });
+$('#toggleLog').addEventListener('click', () => { const pre = $('#srvlog'); pre.hidden = !pre.hidden; $('#toggleLog').textContent = pre.hidden ? '로그 보기' : '로그 숨기기'; renderServer(); });
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { state.q = e.target.value; const pos = e.target.selectionStart; renderPanel(); const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos); }
 });
-$('#runAll').addEventListener('click', () => { if (confirm('모든 영역을 검사합니다. 대상 서버에 검사용 데이터를 만들고 지웁니다. 계속할까요?')) run([]); });
+$('#runAll').addEventListener('click', () => {
+  if (state.server && !state.server.up) { alert('대상 서버가 꺼져 있습니다. 위쪽 [서버 켜기]를 먼저 누르세요.'); return; }
+  if (confirm('모든 영역을 검사합니다. 대상 서버에 검사용 데이터를 만들고 지웁니다. 계속할까요?')) run([]);
+});
 $('#tool').addEventListener('change', e => loadTool(e.target.value));
 
 (async () => {
@@ -304,6 +456,9 @@ $('#tool').addEventListener('change', e => loadTool(e.target.value));
   $('#tool').value = first.key;
   await loadTool(first.key);
   poll();   // 이미 돌고 있는 검사가 있으면 이어서 본다
+  // 처음 쓰는데 레포 위치나 비밀번호가 없으면 설정 창부터 연다
+  const st = state.settings;
+  if (st && (!st.isRepo || st.secrets.some(x => !x.set))) openSettings();
 })();
 </script>
 </body>
