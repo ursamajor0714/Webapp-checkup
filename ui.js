@@ -74,6 +74,8 @@ function toolInfo(key) {
   return {
     key, name: config.name, baseUrl: config.baseUrl, root: config.root,
     rootExists: fs.existsSync(config.root), canServe: !!config.serve,
+    // 실제로 만든 검사 영역 수 — 0 이면 아직 빈 틀(준비 중)이다
+    ready: probes.filter(p => !p.todo).length, total: probes.length,
     sections: SECTIONS.map(([sec, label]) => ({
       dir: sec, label,
       probes: probes.filter(p => p.section === sec).map(p => ({ id: p.id, name: p.name, weight: p.weight, todo: !!p.todo, file: p.file })),

@@ -251,10 +251,11 @@ function renderSummary() {
 
 function renderHeader() {
   const t = state.tools.find(x => x.key === state.tool);
-  $('#target').innerHTML = t ? `대상 <b>${esc(t.name)}</b> · ${esc(t.baseUrl)}${t.rootExists ? '' : ' · <span style="color:var(--bad)">레포 위치 없음(QA_ROOT)</span>'}` : '';
+  $('#target').innerHTML = t ? `대상 <b>${esc(t.name)}</b> · ${esc(t.baseUrl)}${t.ready && !t.rootExists ? ' · <span style="color:var(--bad)">레포 폴더를 못 찾음 — ⚙ 설정에서 지정</span>' : ''}` : '';
   const s = state.report && state.report.summary;
   $('#score').innerHTML = s ? `<span>최종</span><b>${esc(s.score)}</b><span>${esc(s.grade)}</span>` : '<span>점수 없음</span>';
-  $('#runAll').disabled = !!(state.running && state.running.status === 'running');
+  $('#runAll').disabled = !!(state.running && state.running.status === 'running') || !(t && t.ready);
+  $('#srv').style.display = t && t.ready && t.canServe ? '' : 'none';
 }
 
 function renderStatus() {
@@ -281,6 +282,13 @@ function renderAll() { renderHeader(); renderAreas(); renderPanel(); renderStatu
 
 // 처음 쓰는 사람을 위한 안내 — 지금 무엇을 누르면 되는지
 function guide() {
+  const t = state.tools.find(x => x.key === state.tool);
+  if (t && !t.ready) {
+    const names = state.tools.filter(x => x.ready).map(x => `<b>${esc(x.name)}</b>`).join(', ');
+    return `<div class="empty"><div style="font-size:16px;color:var(--text);font-weight:700">아직 준비 중인 도구입니다</div>
+      <p><b>${esc(t.name)}</b> 용 검사는 아직 만들지 않았습니다 (빈 틀 ${esc(t.total)}칸).</p>
+      <p>왼쪽 위 목록에서 검사가 들어 있는 도구를 고르세요: ${names}</p></div>`;
+  }
   const sv = state.server;
   const up = sv && sv.up;
   return `<div class="empty"><div style="font-size:16px;color:var(--text);font-weight:700">${up ? '준비됐습니다' : '시작하기'}</div>
@@ -451,14 +459,17 @@ $('#tool').addEventListener('change', e => loadTool(e.target.value));
 (async () => {
   state.tools = await api('/api/tools');
   const saved = (() => { try { return localStorage.getItem('qa-ui-tool'); } catch (e) { return null; } })();
-  const first = state.tools.find(t => t.key === saved) || state.tools.find(t => t.key === 'nextjs') || state.tools[0];
-  $('#tool').innerHTML = state.tools.map(t => `<option value="${esc(t.key)}">${esc(t.key)} — ${esc(t.name || '')}</option>`).join('');
+  // 검사가 들어 있는 도구를 앞에, 빈 틀은 뒤에 '(준비 중)' 으로
+  state.tools.sort((a, b) => (b.ready > 0) - (a.ready > 0) || a.key.localeCompare(b.key));
+  const ready = state.tools.filter(t => t.ready > 0);
+  const first = ready.find(t => t.key === saved) || ready.find(t => t.key === 'nextjs') || ready[0] || state.tools[0];
+  $('#tool').innerHTML = state.tools.map(t => `<option value="${esc(t.key)}">${t.ready ? '' : '(준비 중) '}${esc(t.name || t.key)} — ${esc(t.key)}</option>`).join('');
   $('#tool').value = first.key;
   await loadTool(first.key);
   poll();   // 이미 돌고 있는 검사가 있으면 이어서 본다
   // 처음 쓰는데 레포 위치나 비밀번호가 없으면 설정 창부터 연다
   const st = state.settings;
-  if (st && (!st.isRepo || st.secrets.some(x => !x.set))) openSettings();
+  if (first.ready && st && (!st.isRepo || st.secrets.some(x => !x.set))) openSettings();
 })();
 </script>
 </body>
