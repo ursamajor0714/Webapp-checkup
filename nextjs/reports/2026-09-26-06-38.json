@@ -1,0 +1,1480 @@
+{
+  "summary": {
+    "target": "PyroGuard 2D 방재 관제",
+    "at": "2026-09-26T06:38:21.681Z",
+    "areas": 24,
+    "todo": 0,
+    "sections": [
+      {
+        "dir": "front",
+        "label": "순수 프론트",
+        "areas": 4,
+        "todo": 0,
+        "score": 56.8
+      },
+      {
+        "dir": "front-api",
+        "label": "API 받아오는 프론트",
+        "areas": 3,
+        "todo": 0,
+        "score": 69.1
+      },
+      {
+        "dir": "api",
+        "label": "API 기능",
+        "areas": 10,
+        "todo": 0,
+        "score": 34
+      },
+      {
+        "dir": "security",
+        "label": "보안",
+        "areas": 7,
+        "todo": 0,
+        "score": 53.8
+      }
+    ],
+    "universe": 330,
+    "scanned": 330,
+    "passed": 228,
+    "warned": 2,
+    "failed": 100,
+    "scanRate": 100,
+    "qualityRate": 47.4,
+    "rawScore": 47.4,
+    "maturity": {
+      "got": 0,
+      "total": 18,
+      "factor": 0.55
+    },
+    "score": 26.1,
+    "grade": "미완성",
+    "tier": "미완성"
+  },
+  "tiers": {
+    "대기업": {
+      "min": 90,
+      "max": 100,
+      "note": "네이버·카카오·토스 같은 곳의 서비스. 전담 QA 조직과 CI 가 있다."
+    },
+    "중급": {
+      "min": 60,
+      "max": 89,
+      "note": "개발자 몇 명이 붙은 스타트업·중소기업 제품. 아픈 곳만 자동 검사."
+    },
+    "초급": {
+      "min": 30,
+      "max": 59,
+      "note": "1인 개발·외주 납품 직후. 기능은 되지만 회귀 검사가 없다."
+    },
+    "미완성": {
+      "min": 0,
+      "max": 29,
+      "note": "개발 중이거나 주요 흐름이 끊긴 상태."
+    }
+  },
+  "grades": [
+    {
+      "min": 90,
+      "label": "대기업 수준",
+      "desc": "26개 영역 전부 자동 검사 + CI + 상시 감시. 사람이 빠뜨릴 구조가 아니다."
+    },
+    {
+      "min": 75,
+      "label": "중급 상위",
+      "desc": "돈·권한·개인정보처럼 아픈 곳은 자동 검사로 지킨다. 감시와 부하 시험이 없다."
+    },
+    {
+      "min": 60,
+      "label": "중급",
+      "desc": "주요 흐름은 돌고 큰 구멍은 없다. 검사는 사람이 기억해서 돌린다."
+    },
+    {
+      "min": 45,
+      "label": "초급 상위",
+      "desc": "기능은 다 되지만 검사가 눈으로 하는 수준. 고치면 다른 데가 깨지는지 모른다."
+    },
+    {
+      "min": 30,
+      "label": "초급",
+      "desc": "만든 사람만 쓸 수 있는 상태. 돈이나 권한이 틀려도 한참 뒤에 안다."
+    },
+    {
+      "min": 0,
+      "label": "미완성",
+      "desc": "주요 흐름이 끊겨 있다."
+    }
+  ],
+  "maturity": {
+    "items": [
+      {
+        "key": "ci",
+        "weight": 3,
+        "label": "배포할 때마다 자동으로 검사가 돈다 (CI)",
+        "ok": false
+      },
+      {
+        "key": "tests",
+        "weight": 3,
+        "label": "레포 안에 자동 테스트가 있다",
+        "ok": false
+      },
+      {
+        "key": "qaSuite",
+        "weight": 2,
+        "label": "이 QA 같은 회귀 검사 도구가 붙어 있다",
+        "ok": false
+      },
+      {
+        "key": "monitor",
+        "weight": 2,
+        "label": "장애를 사람보다 먼저 알려 주는 감시가 있다",
+        "ok": false
+      },
+      {
+        "key": "staging",
+        "weight": 2,
+        "label": "운영과 분리된 시험 환경이 있다",
+        "ok": false
+      },
+      {
+        "key": "docs",
+        "weight": 1,
+        "label": "결정과 작업 내용이 문서로 남는다",
+        "ok": false
+      },
+      {
+        "key": "deploy",
+        "weight": 1,
+        "label": "배포 절차가 코드로 적혀 있다",
+        "ok": false
+      },
+      {
+        "key": "audit",
+        "weight": 1,
+        "label": "의존성 취약점을 정기적으로 본다",
+        "ok": false
+      },
+      {
+        "key": "backup",
+        "weight": 2,
+        "label": "DB 백업·복구 절차가 있다",
+        "ok": false
+      },
+      {
+        "key": "rollback",
+        "weight": 1,
+        "label": "배포를 되돌리는 방법이 적혀 있다",
+        "ok": false
+      }
+    ],
+    "got": 0,
+    "total": 18,
+    "ratio": 0,
+    "factor": 0.55
+  },
+  "selfcheck": {
+    "items": [
+      {
+        "label": "검사가 만든 센서를 치웠다",
+        "ok": false,
+        "notes": [
+          "12345 — API 로 지울 수 없는 것이면 제품 결함(F 참조)"
+        ]
+      },
+      {
+        "label": "119 승인을 해제 상태로 돌려놨다",
+        "ok": true,
+        "notes": []
+      },
+      {
+        "label": "센서 수가 시드(92)와 같다",
+        "ok": false,
+        "notes": [
+          "현재 93"
+        ]
+      }
+    ]
+  },
+  "results": [
+    {
+      "id": "G",
+      "name": "빌드·타입·린트",
+      "weight": 6,
+      "section": "front",
+      "composite": false,
+      "universe": 51,
+      "scanned": 51,
+      "passed": 42,
+      "warned": 0,
+      "failed": 9,
+      "scanRate": 1,
+      "passRate": 0.8235294117647058,
+      "ms": 15428,
+      "checks": [
+        {
+          "name": "import 하는 패키지가 package.json 에 선언돼 있다",
+          "universe": 8,
+          "scanned": 8,
+          "passed": 7,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "zustand 를 import 하는데 package.json 에 없다 — npm ci 뒤 next build 가 \"Module not found\" 로 실패한다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "타입 선언이 갖춰져 있다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 0,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "@types/d3-selection 없음 → tsc TS7016",
+            "@types/d3-zoom 없음 → tsc TS7016"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "tsc --noEmit 통과",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "eslint 오류 없는 파일",
+          "universe": 39,
+          "scanned": 39,
+          "passed": 34,
+          "warned": 0,
+          "failed": 5,
+          "skipped": 0,
+          "notes": [
+            "오류 7 · 경고 30",
+            "app/mobile-demo/page.tsx (2)",
+            "app/page.tsx (1)",
+            "components/canvas/OccupantLayer.tsx (1)",
+            "components/sidebar/FloorSelector.tsx (1)",
+            "hooks/useD3Zoom.ts (2)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "Next 16 규약 (middleware → proxy)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "middleware.ts 는 Next 16 에서 deprecated — proxy.ts 로 이름 변경 (빌드 경고)"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "N",
+      "name": "탐색·자원 연결",
+      "weight": 4,
+      "section": "front",
+      "composite": false,
+      "universe": 13,
+      "scanned": 13,
+      "passed": 11,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.8461538461538461,
+      "ms": 106,
+      "checks": [
+        {
+          "name": "페이지·링크·도면·이미지가 열린다",
+          "universe": 11,
+          "scanned": 11,
+          "passed": 11,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "proxy(middleware)가 가리키는 자원이 실제로 있다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 0,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "middleware.ts matcher 의 /image/snapshot_best.webp 가 public/ 에 없다",
+            "middleware.ts matcher 의 /image/snapshot_fallback.webp 가 public/ 에 없다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "U",
+      "name": "문구·문서 정합",
+      "weight": 3,
+      "section": "front",
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 0,
+      "warned": 0,
+      "failed": 4,
+      "scanRate": 1,
+      "passRate": 0,
+      "ms": 12,
+      "checks": [
+        {
+          "name": "문구가 사실과 맞다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 0,
+          "warned": 0,
+          "failed": 4,
+          "skipped": 0,
+          "notes": [
+            "README \"164개 노드\" ↔ 실제 시드 92개",
+            "README \"21개 구역\" ↔ /api/floors 22개",
+            "README 는 hls.js 를 쓴다고 하는데 화면에서 import 하는 곳이 없다",
+            "운영 화면에 \"로컬 테스트 인증 코드\" 문구가 그대로 노출된다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Z",
+      "name": "빈 상태·경계값",
+      "weight": 4,
+      "section": "front",
+      "composite": false,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 1,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.3333333333333333,
+      "ms": 151,
+      "checks": [
+        {
+          "name": "빈 상태·경계값을 정직하게 보고한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 1,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "센서 0개 층을 NORMAL 로 보고하지 않는다 — B3 센서 전부 철거 → status=NORMAL. 감시 공백이 '정상' 으로 보인다",
+            "없는 floorId 조회는 400 — 200 — 오타가 \"센서 없음\" 과 구분 안 된다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "A",
+      "name": "API 계약 (화면↔서버 경로)",
+      "weight": 5,
+      "section": "front-api",
+      "composite": false,
+      "universe": 9,
+      "scanned": 9,
+      "passed": 8,
+      "warned": 1,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 15,
+      "checks": [
+        {
+          "name": "화면이 부르는 경로가 서버에 있다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 라우트가 화면에서 쓰인다 (죽은 API 찾기)",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 2,
+          "warned": 1,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [
+            "/api/floors 를 부르는 곳을 못 찾았다 — 정말 안 쓰는지 확인 필요"
+          ]
+        },
+        {
+          "name": "파라미터 없는 GET 이 전부 응답한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 보내는 항목을 서버가 읽는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "J",
+      "name": "응답 규격",
+      "weight": 5,
+      "section": "front-api",
+      "composite": false,
+      "universe": 5,
+      "scanned": 5,
+      "passed": 5,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 18,
+      "checks": [
+        {
+          "name": "응답 봉투가 일관된다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버가 주는 신호를 화면이 읽는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Y",
+      "name": "숫자 일관성",
+      "weight": 7,
+      "section": "front-api",
+      "composite": true,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 1,
+      "warned": 0,
+      "failed": 3,
+      "scanRate": 1,
+      "passRate": 0.25,
+      "ms": 2202,
+      "checks": [
+        {
+          "name": "같은 숫자를 모두가 같게 말한다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 1,
+          "warned": 0,
+          "failed": 3,
+          "skipped": 0,
+          "notes": [
+            "없는 층 센서를 넣어 본 뒤 센서 총수 vs 층별 합계: 93 ≠ 92",
+            "ALARM 센서가 있는가 vs ALARM 층이 있는가: true ≠ false",
+            "서버 peopleCount vs 재실자 목록 수: 286 ≠ 322"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "D",
+      "name": "데이터 무결성",
+      "weight": 6,
+      "section": "api",
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 0,
+      "warned": 0,
+      "failed": 4,
+      "scanRate": 1,
+      "passRate": 0,
+      "ms": 76,
+      "checks": [
+        {
+          "name": "POST 가 기존 센서를 조용히 덮어쓰지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "POST {id:\"sensor-ext-cctv-main\"} → 200, 기존 name·x·y·fov 가 사라진다 (409 가 맞다)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "새 센서에 서버 시각(updatedAt)이 찍힌다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "신규 저장 때 updatedAt 이 안 붙는다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "PUT 이 스키마 밖 필드를 저장하지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "PUT 본문 전체를 병합 — 임의 필드가 저장되어 모든 조회 응답에 섞여 나간다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "센서 배치가 서버 재시작 뒤에도 남는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "저장소가 모듈 변수뿐 — 재시작·재배포 때마다 배치가 초기화되고, 인스턴스가 여럿이면 서로 다른 데이터를 본다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "E",
+      "name": "에러 처리",
+      "weight": 5,
+      "section": "api",
+      "composite": false,
+      "universe": 9,
+      "scanned": 9,
+      "passed": 2,
+      "warned": 0,
+      "failed": 7,
+      "scanRate": 1,
+      "passRate": 0.2222222222222222,
+      "ms": 133,
+      "checks": [
+        {
+          "name": "잘못된 요청에 맞는 상태 코드로 답한다",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 2,
+          "warned": 0,
+          "failed": 7,
+          "skipped": 0,
+          "notes": [
+            "POST /api/sensors 깨진 JSON → 500 (400 이 맞다)",
+            "PUT /api/sensors 깨진 JSON → 500 (400 이 맞다)",
+            "PUT /api/sensors 본문 null → 500 (400 이 맞다)",
+            "POST /api/sensors 본문 null → 500 (400 이 맞다)",
+            "POST /api/emergency 깨진 JSON → 500 (400 이 맞다)",
+            "POST /api/emergency 본문 null → 500 (400 이 맞다)",
+            "DELETE 없는 센서 → 200 (404 이 맞다)"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "F",
+      "name": "입력 검증",
+      "weight": 6,
+      "section": "api",
+      "composite": false,
+      "universe": 15,
+      "scanned": 15,
+      "passed": 0,
+      "warned": 0,
+      "failed": 15,
+      "scanRate": 1,
+      "passRate": 0,
+      "ms": 642,
+      "checks": [
+        {
+          "name": "서버가 말이 안 되는 값을 거절한다",
+          "universe": 15,
+          "scanned": 15,
+          "passed": 0,
+          "warned": 0,
+          "failed": 15,
+          "skipped": 0,
+          "notes": [
+            "POST type 이 목록 밖 → 200 (저장됨)",
+            "POST floorId 가 없는 층 → 200 (저장됨)",
+            "POST status 가 목록 밖 → 200 (저장됨)",
+            "POST x 가 도면 밖(-9999) → 200 (저장됨)",
+            "POST y 가 문자열 → 200 (저장됨)",
+            "POST id 가 숫자 → 200 (저장됨)",
+            "POST id 가 공백만 → 200 (저장됨)",
+            "POST name 5MB → 200 (저장됨)",
+            "POST fov.angle 720도 → 200 (저장됨)",
+            "PUT floorId 를 없는 층으로 → 200 (저장됨)",
+            "PUT status 를 목록 밖으로 → 200 (저장됨)",
+            "PUT 수압 value 를 음수로 → 200 (저장됨)",
+            "PUT doorState 를 목록 밖으로 → 200 (저장됨)",
+            "OTP 가 객체 → 401 (400 이 맞다)",
+            "숫자 id(12345) 센서가 DELETE ?id=12345 로 지워지지 않는다 — 서버 재시작 전까지 영구 잔류"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "L",
+      "name": "로깅·관측성",
+      "weight": 3,
+      "section": "api",
+      "composite": false,
+      "universe": 6,
+      "scanned": 6,
+      "passed": 2,
+      "warned": 0,
+      "failed": 4,
+      "scanRate": 1,
+      "passRate": 0.3333333333333333,
+      "ms": 10,
+      "checks": [
+        {
+          "name": "서버 catch 가 오류를 기록한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 2,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "app/api/emergency/route.ts: 오류를 기록하지 않는 catch"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 저장 실패를 삼키지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "store/useSensorStore.ts: 서버 동기화 실패를 .catch(() => {}) 로 삼킨다 ×6"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "상태 확인 경로가 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "/api/health 없음 — 관제 시스템이 죽었는지 밖에서 알 방법이 없다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "인명정보 열람·해제·센서 변경에 감사 로그가 남는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "누가 언제 OTP 로 인명 정보를 열었고 누가 REVOKE 했는지 기록이 없다 (개인정보 접속기록)"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "O",
+      "name": "응답 크기·속도",
+      "weight": 5,
+      "section": "api",
+      "composite": false,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 1,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.3333333333333333,
+      "ms": 136,
+      "checks": [
+        {
+          "name": "요청 본문 크기에 상한이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "2MB 이름 센서 저장됨 → 이후 모든 GET /api/sensors 가 2.0MB. 폴링 × 단말 수만큼 증폭"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "센서 목록 응답이 가볍다 (<100KB, <300ms)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "16364B · 4ms"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "폴링이 바뀐 것이 없으면 본문을 다시 받지 않는다 (ETag → 304)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "몇 초마다 전체 센서를 통째로 받는다 (ETag/If-None-Match 없음)"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "R",
+      "name": "동시성",
+      "weight": 6,
+      "section": "api",
+      "composite": false,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 1,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.3333333333333333,
+      "ms": 100,
+      "checks": [
+        {
+          "name": "동시 부분수정이 서로를 지우지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "같은 id 동시 등록은 하나만 성공한다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "3건 → 200/200/200 — 뒤의 것이 앞의 것을 덮는다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "낡은 화면의 수정이 최신 값을 덮지 않는다 (낙관적 잠금)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "기준 시각이 지난 수정이 200 로 받아들여진다 — 늦게 누른 단말이 경보 상태를 조용히 되돌릴 수 있다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "S",
+      "name": "상태 전이",
+      "weight": 6,
+      "section": "api",
+      "composite": false,
+      "universe": 5,
+      "scanned": 5,
+      "passed": 3,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.6,
+      "ms": 97,
+      "checks": [
+        {
+          "name": "상태 전이가 규칙대로 움직인다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 3,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "경보 0건인데 OTP 승인이 200 — 평시에는 거절해야 한다",
+            "비상문 전원 OFF + LOCKED 조합이 200 — 거절해야 한다 (정전 시 fail-safe 개방)"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "T",
+      "name": "시간·날짜 (KST)",
+      "weight": 5,
+      "section": "api",
+      "composite": false,
+      "universe": 28,
+      "scanned": 28,
+      "passed": 25,
+      "warned": 0,
+      "failed": 3,
+      "scanRate": 1,
+      "passRate": 0.8928571428571429,
+      "ms": 9,
+      "checks": [
+        {
+          "name": "화면에 보이는 날짜·시각이 UTC 가 아니다",
+          "universe": 27,
+          "scanned": 27,
+          "passed": 25,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "components/modals/CctvLiveModal.tsx:47 — setLiveTimestamp(now.toISOString().replace('T', ' ').substring(0, 19));",
+            "components/modals/FireLogManageModal.tsx:35 — const [formDate, setFormDate] = useState(new Date().toISOString().substring(0, 10));",
+            "components/modals/FireLogManageModal.tsx:60 — setFormDate(new Date().toISOString().substring(0, 10));"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "표시 시간대가 명시돼 있다 (Asia/Seoul)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "어디에도 Asia/Seoul 이 없다 — 서버 렌더(UTC)와 브라우저가 다른 날짜를 보여 줄 수 있다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "W",
+      "name": "업무 흐름: EV 화재 → 119 → 종료",
+      "weight": 8,
+      "section": "api",
+      "composite": true,
+      "universe": 9,
+      "scanned": 9,
+      "passed": 7,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.7777777777777778,
+      "ms": 48,
+      "checks": [
+        {
+          "name": "화재 대응 흐름이 끝까지 이어진다",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 7,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "6. 승인 뒤 인원수와 내려준 재실자 목록이 같다 — peopleCount=286 만 있고 재실자 목록은 화면에 박혀 있다 — 둘이 따로 논다",
+            "9. 경보·승인·해제 이력이 서버에 남는다 — 이력이 서버에 남지 않는다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "X",
+      "name": "기능 간섭 (다중 단말)",
+      "weight": 9,
+      "section": "api",
+      "composite": true,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 0,
+      "warned": 0,
+      "failed": 3,
+      "scanRate": 1,
+      "passRate": 0,
+      "ms": 1405,
+      "checks": [
+        {
+          "name": "다른 단말이 지운 센서가 이 화면에서도 사라진다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "loadNodes 가 서버에 없는 로컬 노드를 계속 붙잡는다 — 모바일에서 철거한 센서가 관제 PC 에 영원히 남고, 그게 ALARM 이면 경보(activeAlarmCount=1)가 안 꺼진다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "서버가 거절한 수정을 화면이 되돌린다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "낙관적 반영 후 응답을 확인하지 않는다 — 4xx/5xx 여도 화면은 저장된 것처럼 보인다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "단말 간 폴링 주기가 같다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "관제 PC 3000 ↔ 모바일 5000 — 같은 경보가 단말마다 다른 시점에 보인다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "B",
+      "name": "인증",
+      "weight": 6,
+      "section": "security",
+      "composite": false,
+      "universe": 9,
+      "scanned": 9,
+      "passed": 1,
+      "warned": 0,
+      "failed": 8,
+      "scanRate": 1,
+      "passRate": 0.1111111111111111,
+      "ms": 67,
+      "checks": [
+        {
+          "name": "보호돼야 할 API 가 토큰 없이 닫혀 있다",
+          "universe": 7,
+          "scanned": 7,
+          "passed": 1,
+          "warned": 0,
+          "failed": 6,
+          "skipped": 0,
+          "notes": [
+            "GET /api/emergency → 200 (토큰 없이 통과)",
+            "GET /api/floors → 200 (토큰 없이 통과)",
+            "GET /api/sensors → 200 (토큰 없이 통과)",
+            "POST /api/sensors → 200 (토큰 없이 통과)",
+            "PUT /api/sensors → 200 (토큰 없이 통과)",
+            "DELETE /api/sensors → 200 (토큰 없이 통과)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "119 상황 종료(REVOKE)에 인증이 필요하다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "아무나 {action:\"REVOKE\"} 로 현장 소방관의 인명 정보 조회를 끊을 수 있다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "인증 수단(세션·토큰 검증)이 서버에 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "서버 코드 어디에도 토큰·세션 검증이 없다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "C",
+      "name": "권한 (119 OTP 승인 범위)",
+      "weight": 7,
+      "section": "security",
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 0,
+      "warned": 0,
+      "failed": 4,
+      "scanRate": 1,
+      "passRate": 0,
+      "ms": 42,
+      "checks": [
+        {
+          "name": "승인이 요청한 단말에만 적용된다 (전역 승인 아님)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "한 단말의 OTP 승인을 인증 안 한 다른 단말도 approved:true 로 받는다 (서버 전역 변수)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "승인에 만료 시간이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "\"상황 종료 버튼을 누를 때까지 영구 유지\" — 누가 안 누르면 인명 정보가 무기한 열린다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "인명 좌표는 서버 승인 뒤에만 내려온다 (화면에서만 숨기지 않는다)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "types/floor.ts 에 재실자 호실·좌표가 들어 있다 — 화면 번들에 실려 가고, 마스킹은 렌더만 막는다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "화면의 승인 상태가 서버 상태에서 온다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "화면은 GET /api/emergency 를 부르지 않는다 — 다른 단말의 REVOKE·만료를 모른 채 인명 정보를 계속 보여 준다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "H",
+      "name": "HTTP 보안 헤더",
+      "weight": 4,
+      "section": "security",
+      "composite": false,
+      "universe": 15,
+      "scanned": 15,
+      "passed": 1,
+      "warned": 0,
+      "failed": 14,
+      "scanRate": 1,
+      "passRate": 0.06666666666666667,
+      "ms": 23,
+      "checks": [
+        {
+          "name": "페이지마다 보안 헤더가 붙는다",
+          "universe": 12,
+          "scanned": 12,
+          "passed": 0,
+          "warned": 0,
+          "failed": 12,
+          "skipped": 0,
+          "notes": [
+            "/ 에 x-content-type-options 없음 — 파일 종류 추측 금지",
+            "/ 에 x-frame-options 없음 — 남의 사이트가 관제 화면을 액자로 끼우지 못하게 (클릭재킹)",
+            "/ 에 strict-transport-security 없음 — 항상 https",
+            "/ 에 referrer-policy 없음 — 주소 덜 흘리기",
+            "/ 에 content-security-policy 없음 — 허락한 곳의 스크립트만",
+            "/ 에 permissions-policy 없음 — 카메라·마이크 범위 제한",
+            "/mobile-demo 에 x-content-type-options 없음 — 파일 종류 추측 금지",
+            "/mobile-demo 에 x-frame-options 없음 — 남의 사이트가 관제 화면을 액자로 끼우지 못하게 (클릭재킹)",
+            "/mobile-demo 에 strict-transport-security 없음 — 항상 https",
+            "/mobile-demo 에 referrer-policy 없음 — 주소 덜 흘리기",
+            "/mobile-demo 에 content-security-policy 없음 — 허락한 곳의 스크립트만",
+            "/mobile-demo 에 permissions-policy 없음 — 카메라·마이크 범위 제한"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 종류를 헤더로 알리지 않는다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 1,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "x-powered-by: Next.js — next.config 에 poweredByHeader:false"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "상태를 바꾸는 API 가 아무 출처에나 열려 있지 않다 (CORS)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "Access-Control-Allow-Origin: * + DELETE/PUT 허용 — 임의 웹사이트가 센서를 지우거나 경보를 조작할 수 있다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "I",
+      "name": "주입",
+      "weight": 7,
+      "section": "security",
+      "composite": false,
+      "universe": 31,
+      "scanned": 31,
+      "passed": 30,
+      "warned": 1,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 3,
+      "checks": [
+        {
+          "name": "HTML 을 직접 꽂는 싱크가 없다",
+          "universe": 30,
+          "scanned": 30,
+          "passed": 30,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "외부 URL 을 넣는 iframe 이 제한돼 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 1,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [
+            "components/modals/CctvLiveModal.tsx: 변수 URL 을 sandbox 없는 <iframe src> 에 넣는다 — 스킴 허용목록이 있는지 사람이 확인"
+          ]
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "K",
+      "name": "비밀 노출",
+      "weight": 7,
+      "section": "security",
+      "composite": false,
+      "universe": 73,
+      "scanned": 73,
+      "passed": 69,
+      "warned": 0,
+      "failed": 4,
+      "scanRate": 1,
+      "passRate": 0.9452054794520548,
+      "ms": 47,
+      "checks": [
+        {
+          "name": "코드에 비밀번호·키가 박혀 있지 않다",
+          "universe": 35,
+          "scanned": 35,
+          "passed": 35,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "OTP 가 코드·화면에 박혀 있지 않다 (환경변수)",
+          "universe": 35,
+          "scanned": 35,
+          "passed": 33,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "app/api/emergency/route.ts 에 OTP 값이 있다",
+            "components/modals/EmergencyOtpModal.tsx 에 OTP 값이 있다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "실패 응답이 정답을 알려 주지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "OTP 가 틀리면 응답 message 에 정답을 그대로 적어 돌려준다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "OTP 를 연달아 틀리면 잠긴다 (무차별 대입 방지)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "12번 연속 오답이 전부 401 — 6자리는 백만 가지뿐이라 제한 없이는 금방 뚫린다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": ".env 가 깃 추적에서 빠져 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "P",
+      "name": "개인정보 (재실자 위치)",
+      "weight": 6,
+      "section": "security",
+      "composite": false,
+      "universe": 11,
+      "scanned": 11,
+      "passed": 9,
+      "warned": 0,
+      "failed": 2,
+      "scanRate": 1,
+      "passRate": 0.8181818181818182,
+      "ms": 163,
+      "checks": [
+        {
+          "name": "승인 전 브라우저에 재실자 위치가 내려가지 않는다",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 7,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "/_next/static/chunks/2m6q2ttuarhv-.js 에 재실자 id·좌표·호실(roomName)이 들어 있다 — OTP 없이 /_next/static 만 받아도 전원 위치가 보인다",
+            "/_next/static/chunks/0ghbs1-nr_wzq.js 에 재실자 id·좌표·호실(roomName)이 들어 있다 — OTP 없이 /_next/static 만 받아도 전원 위치가 보인다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "승인 전 API 응답에 재실자 정보가 없다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "모바일 데모 화면이 인명 정보를 따로 보여 주지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "V",
+      "name": "의존성·버전",
+      "weight": 3,
+      "section": "security",
+      "composite": false,
+      "universe": 13,
+      "scanned": 13,
+      "passed": 9,
+      "warned": 0,
+      "failed": 4,
+      "scanRate": 1,
+      "passRate": 0.6923076923076923,
+      "ms": 2807,
+      "checks": [
+        {
+          "name": "설치한 패키지를 실제로 쓴다",
+          "universe": 10,
+          "scanned": 10,
+          "passed": 8,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "hls.js 를 깔았는데 어디서도 안 부른다",
+            "tailwind-merge 를 깔았는데 어디서도 안 부른다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "알려진 심각한 취약점이 없다 (운영 의존성)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "치명 1 · 높음 3 · 보통 0 · 낮음 0"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "버전 잠금 파일이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "test 스크립트가 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 0,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "package.json 에 test 가 없다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    }
+  ]
+}

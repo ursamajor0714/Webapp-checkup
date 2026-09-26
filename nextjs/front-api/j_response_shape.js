@@ -1,13 +1,20 @@
-// J. 응답 규격 — 서버가 주는 모양과 화면이 기대하는 모양이 같은가
-// 이 스택에서 무엇으로 볼지는 README.md 의 표에 적는다. 다 만들면 todo 줄을 지운다.
-// 예시: ../../express-ejs/front-api/j_response_shape.js
+// J. 응답 규격 — 모든 API 가 같은 봉투({success, data|message})로 답하고, 서버가 주는 신호를 화면이 읽는가
 const { check } = require('../../common/core');
 
 module.exports = {
-  id: 'J', name: '응답 규격', weight: 5, todo: true,
+  id: 'J', name: '응답 규격', weight: 5,
   async run(ctx) {
-    const checks = [];
-    // checks.push(check('검사 이름', { universe: 전체, scanned: 본 것, passed: 합격, notes: [] }));
-    return { checks };
+    const eps = ['/api/sensors', '/api/floors', '/api/emergency', '/api/sensors?floorId=B2'];
+    let ok = 0; const notes = [];
+    for (const p of eps) {
+      const b = (await ctx.call(p)).body;
+      if (b && typeof b.success === 'boolean' && ('data' in b || 'message' in b || 'approved' in b)) ok++; else notes.push(`${p} 봉투가 다르다`);
+    }
+    const used = /triggerAutoFloorChange/.test(ctx.clientSrc);
+    return { checks: [
+      check('응답 봉투가 일관된다', { universe: eps.length, scanned: eps.length, passed: ok, notes }),
+      check('서버가 주는 신호를 화면이 읽는다', { universe: 1, scanned: 1, passed: used ? 1 : 0,
+        notes: used ? [] : ['PUT 응답의 triggerAutoFloorChange(B2 전기차 화재 시 자동 화면 전환)를 화면이 읽지 않는다'] }),
+    ] };
   },
 };

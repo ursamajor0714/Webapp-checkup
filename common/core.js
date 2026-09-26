@@ -60,9 +60,9 @@ function makeCtx(config, stack = {}) {
       // 호출자가 headers 로 직접 준 Authorization 은 건드리지 않는다 (회원 토큰 시험에 필요하다).
       if (as && as !== 'none' && ctx.tokens[as]) h.Authorization = 'Bearer ' + ctx.tokens[as];
       if (as === 'none' && !(headers && headers.Authorization)) delete h.Authorization;
-      const res = await fetch(config.baseUrl + p, {
-        method, headers: h, body: body === undefined ? undefined : JSON.stringify(body),
-      });
+      const init = { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) };
+      // 긴 검사(tsc·eslint 등) 뒤 keep-alive 소켓이 끊겨 있으면 한 번만 다시 건다 — 제품 탓이 아닌 실패를 막는다
+      const res = await fetch(config.baseUrl + p, init).catch(() => fetch(config.baseUrl + p, init));
       let parsed = null, text = '';
       try { text = await res.text(); parsed = JSON.parse(text); } catch (e) { /* 본문이 JSON 이 아닐 수 있다 */ }
       return { status: res.status, ok: res.ok, body: parsed, text, headers: res.headers, bytes: text.length };

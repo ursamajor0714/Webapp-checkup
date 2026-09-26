@@ -10,7 +10,7 @@
 | `react-spring` | React(Vite) + Spring Boot (+ FastAPI) | Team_Namoo | 틀만 |
 | `django-template` | Django 템플릿 | django-community-crud | 틀만 |
 | `expo-express` | Expo + Express + Prisma | healthcheck-app-frontend / backend | 틀만 |
-| `nextjs` | Next.js App Router | pyroguard2d | 틀만 |
+| `nextjs` | Next.js App Router | pyroguard2d | 24개 영역 완성 (M·Q 해당 없음) |
 | `static-js` | 순수 JS 정적 페이지 | universeproject | 틀만 |
 
 ```
