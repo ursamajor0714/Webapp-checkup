@@ -42,7 +42,18 @@ function scoreOf(results) {
   return { scanRate, quality, raw: Math.round(quality * Math.sqrt(scanRate) * 1000) / 10 };
 }
 
-async function run(toolDir) {
+// 도구 폴더의 영역 목록 (로그인·실행 없이) — 화면이 버튼을 그릴 때 쓴다
+function listProbes(toolDir) {
+  return SECTIONS.flatMap(([dir, label]) => {
+    const d = path.join(toolDir, dir);
+    if (!fs.existsSync(d)) return [];
+    return fs.readdirSync(d).filter(f => f.endsWith('.js')).sort()
+      .map(f => ({ ...require(path.join(d, f)), file: `${dir}/${f}`, section: dir, sectionLabel: label }));
+  });
+}
+
+// 실행 준비 — 설정·로그인·돌릴 영역 고르기
+async function prepare(toolDir, { only = [], singleOnly = false } = {}) {
   const config = require(path.join(toolDir, 'qa.config'));
   const stackFile = path.join(toolDir, 'stack.js');
   const stack = fs.existsSync(stackFile) ? require(stackFile) : {};
@@ -52,51 +63,44 @@ async function run(toolDir) {
   if (stack.login) await stack.login(ctx);
 
   // 네 칸의 프로브를 모은다. todo 인 것은 아직 안 만든 빈 칸이라 점수에서 뺀다.
-  const all = SECTIONS.flatMap(([dir, label]) => {
-    const d = path.join(toolDir, dir);
-    if (!fs.existsSync(d)) return [];
-    return fs.readdirSync(d).filter(f => f.endsWith('.js')).sort()
-      .map(f => ({ ...require(path.join(d, f)), section: dir, sectionLabel: label }));
-  });
+  const all = listProbes(toolDir);
   const todo = all.filter(p => p.todo);
   const probes = all.filter(p => !p.todo)
     .filter(p => !only.length || only.map(s => s.toUpperCase()).includes(p.id))
     .filter(p => !singleOnly || !COMPOSITE.includes(p.id));
+  return { toolDir, config, ctx, probes, todo };
+}
 
-  const results = [];
-  for (const probe of probes) {
-    const t0 = Date.now();
-    let checks = [];
-    let error = null;
-    try {
-      const out = await probe.run(ctx);
-      checks = out.checks;
-    } catch (e) {
-      error = e.message + '\n' + (e.stack || '').split('\n').slice(1, 3).join('\n');
-    }
-    const universe = checks.reduce((s, c) => s + c.universe, 0);
-    const scanned = checks.reduce((s, c) => s + c.scanned, 0);
-    const passed = checks.reduce((s, c) => s + c.passed, 0);
-    const warned = checks.reduce((s, c) => s + (c.warned || 0), 0);
-    const failed = checks.reduce((s, c) => s + c.failed, 0);
-    results.push({
-      id: probe.id, name: probe.name, weight: probe.weight, section: probe.section,
-      composite: COMPOSITE.includes(probe.id),
-      universe, scanned, passed, warned, failed,
-      scanRate: universe ? scanned / universe : 0,
-      // 합격률은 '확인 필요' 를 뺀 나머지에서 센다 (확신할 수 없는 것으로 점수를 깎지 않는다)
-      passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
-      ms: Date.now() - t0, checks, error,
-    });
-    if (!jsonOnly) {
-      const r = results[results.length - 1];
-      const mark = error ? '⚠' : r.failed === 0 ? '✓' : '✗';
-      process.stdout.write(`${mark} ${r.id}. ${r.name}  스캔 ${r.scanned}/${r.universe}` +
-        `  합격 ${r.passed}  불합격 ${r.failed}` + (r.warned ? `  확인필요 ${r.warned}` : '') +
-        `${error ? '  (실행 오류)' : ''}  ${r.ms}ms\n`);
-    }
+// 영역 하나 실행 → 결과 한 줄
+async function runProbe(ctx, probe) {
+  const t0 = Date.now();
+  let checks = [];
+  let error = null;
+  try {
+    const out = await probe.run(ctx);
+    checks = out.checks;
+  } catch (e) {
+    error = e.message + '\n' + (e.stack || '').split('\n').slice(1, 3).join('\n');
   }
+  const universe = checks.reduce((s, c) => s + c.universe, 0);
+  const scanned = checks.reduce((s, c) => s + c.scanned, 0);
+  const passed = checks.reduce((s, c) => s + c.passed, 0);
+  const warned = checks.reduce((s, c) => s + (c.warned || 0), 0);
+  const failed = checks.reduce((s, c) => s + c.failed, 0);
+  return {
+    id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file,
+    composite: COMPOSITE.includes(probe.id),
+    universe, scanned, passed, warned, failed,
+    scanRate: universe ? scanned / universe : 0,
+    // 합격률은 '확인 필요' 를 뺀 나머지에서 센다 (확신할 수 없는 것으로 점수를 깎지 않는다)
+    passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
+    ms: Date.now() - t0, checks, error,
+  };
+}
 
+// 돌린 결과를 합산해 리포트를 만들고 저장한다 (자기 점검·운영 성숙도 포함)
+async function finish(prep, results, { save = true } = {}) {
+  const { toolDir, config, ctx, todo } = prep;
   // ── 통계
   const totUniverse = results.reduce((s, r) => s + r.universe, 0);
   const totScanned = results.reduce((s, r) => s + r.scanned, 0);
@@ -128,7 +132,7 @@ async function run(toolDir) {
   const score = Math.round(rawScore * mat.factor * 10) / 10;
 
   const summary = {
-    target: config.name, at: new Date().toISOString(),
+    target: config.name, baseUrl: config.baseUrl, root: config.root, at: new Date().toISOString(),
     areas: results.length, todo: todo.length, sections,
     universe: totUniverse, scanned: totScanned, passed: totPassed,
     warned: totWarned, failed: totFailed,
@@ -141,8 +145,35 @@ async function run(toolDir) {
 
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  fs.mkdirSync(path.join(toolDir, 'reports'), { recursive: true });
-  fs.writeFileSync(path.join(toolDir, 'reports', `${stamp}.json`), JSON.stringify(report, null, 2));
+  if (save) {
+    fs.mkdirSync(path.join(toolDir, 'reports'), { recursive: true });
+    fs.writeFileSync(path.join(toolDir, 'reports', `${stamp}.json`), JSON.stringify(report, null, 2));
+  }
+
+  return { report, stamp };
+}
+
+async function run(toolDir) {
+  const prep = await prepare(toolDir, { only, singleOnly });
+  const { config, ctx, probes, todo } = prep;
+
+  const results = [];
+  for (const probe of probes) {
+    results.push(await runProbe(ctx, probe));
+    if (!jsonOnly) {
+      const r = results[results.length - 1];
+      const mark = r.error ? '⚠' : r.failed === 0 ? '✓' : '✗';
+      process.stdout.write(`${mark} ${r.id}. ${r.name}  스캔 ${r.scanned}/${r.universe}` +
+        `  합격 ${r.passed}  불합격 ${r.failed}` + (r.warned ? `  확인필요 ${r.warned}` : '') +
+        `${r.error ? '  (실행 오류)' : ''}  ${r.ms}ms\n`);
+    }
+  }
+
+  const { report, stamp } = await finish(prep, results);
+  const { summary, maturity: mat, selfcheck: self } = report;
+  const { sections } = summary;
+  const totUniverse = summary.universe, totScanned = summary.scanned, totPassed = summary.passed, totFailed = summary.failed, totWarned = summary.warned;
+  const rawScore = summary.rawScore, score = summary.score;
 
   if (jsonOnly) { console.log(JSON.stringify(report, null, 2)); return; }
 
@@ -203,4 +234,4 @@ async function run(toolDir) {
   console.log(`\n리포트: reports/${stamp}.json`);
 }
 
-module.exports = { run, scoreOf };
+module.exports = { run, scoreOf, listProbes, prepare, runProbe, finish, SECTIONS };

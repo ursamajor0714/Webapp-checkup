@@ -86,9 +86,23 @@ function makeCtx(config, stack = {}) {
 // failed  : 확실한 결함 = scanned - passed - warned
 //
 // 추정에 불과한 것을 불합격으로 세면 점수가 거짓이 된다. 정직하게 나눠 둔다.
-function check(name, { universe, scanned, passed, notes = [], warned = 0, warnNotes = [], skipped = 0 }) {
+//
+// items (선택) : 본 것 하나하나의 O/X — 화면(ui.js)이 목록으로 보여 준다.
+//               [{ name, ok: true|false|null(확인 필요), detail }]
+function check(name, { universe, scanned, passed, notes = [], warned = 0, warnNotes = [], skipped = 0, items }) {
   return { name, universe, scanned, passed, warned,
-           failed: Math.max(0, scanned - passed - warned), skipped, notes, warnNotes };
+           failed: Math.max(0, scanned - passed - warned), skipped, notes, warnNotes, ...(items ? { items } : {}) };
+}
+
+// O/X 목록으로 check 를 만든다 — 합격·불합격·확인 필요 수를 목록에서 센다
+function checkItems(name, items, { universe } = {}) {
+  const passed = items.filter(i => i.ok === true).length;
+  const warned = items.filter(i => i.ok === null).length;
+  return check(name, {
+    universe: universe ?? items.length, scanned: items.length, passed, warned, items,
+    notes: items.filter(i => i.ok === false).map(i => `${i.name} — ${i.detail}`),
+    warnNotes: items.filter(i => i.ok === null).map(i => `${i.name} — ${i.detail}`),
+  });
 }
 
 // 오늘 기준 며칠 뒤/앞 날짜 (한국시간).
@@ -98,4 +112,4 @@ function kstDay(offset = 0) {
   return new Date(Date.now() + offset * 86400000 + 9 * 3600000).toISOString().slice(0, 10);
 }
 
-module.exports = { walk, makeCtx, check, kstDay };
+module.exports = { walk, makeCtx, check, checkItems, kstDay };
