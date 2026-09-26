@@ -107,10 +107,11 @@
 <div class="progress" id="progress"></div>
 <header>
   <h1>QA 조회</h1>
-  <select id="tool" aria-label="도구"></select>
+  <select id="project" aria-label="프로젝트"></select>
+  <button class="btn" id="openAdd" title="레포 폴더로 프로젝트 추가">＋ 프로젝트 추가</button>
   <span class="target" id="target"></span>
   <span class="spacer"></span>
-  <span class="srv" id="srv"><span class="dot" id="srvDot"></span><span id="srvText">대상 서버 확인 중</span><span id="srvBtns"></span></span>
+  <span class="srv" id="srv"><span class="dot" id="srvDot"></span><span id="srvText">서버 확인 중</span><span id="srvBtns"></span></span>
   <button class="btn" id="openSettings" title="설정">⚙ 설정</button>
   <span class="score" id="score" title="전체 요약 보기"></span>
   <button class="btn primary" id="runAll">전체 검사</button>
@@ -120,18 +121,34 @@
 <dialog id="dlg">
   <div class="dlg-h"><span>⚙ 설정 <span class="hint" id="dlgTool"></span></span><button class="btn run-btn" id="dlgClose">닫기</button></div>
   <div class="dlg-b">
-    <label>대상 레포 폴더 <span class="hint" id="rootHint"></span><input id="fRoot" placeholder="~/Developer/pyroguard2d"></label>
-    <label>대상 주소 <input id="fBase" placeholder="http://localhost:3000"></label>
-    <label>로그인 비밀번호 <span class="hint" id="pwHint"></span><input id="fPw" type="password" autocomplete="off"></label>
-    <label>119 OTP (6자리) <span class="hint" id="otpHint"></span><input id="fOtp" inputmode="numeric" maxlength="6" autocomplete="off"></label>
-    <div class="hint" id="envHint"></div>
+    <label>레포 폴더 <span class="hint" id="rootHint"></span><input id="fRoot" placeholder="~/Developer/my-app"></label>
+    <div id="acct1" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label id="lUser">검사용 계정 아이디 <input id="fUser" autocomplete="off" placeholder="비우면 가입 경로로 자동 생성"></label>
+      <label>비밀번호 <span class="hint" id="pwHint"></span><input id="fPw" type="password" autocomplete="off"></label>
+    </div>
+    <div id="acct2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label>두 번째 계정 아이디 <span class="hint">남의 데이터 접근(IDOR) 검사용</span><input id="fUser2" autocomplete="off"></label>
+      <label>비밀번호 <span class="hint" id="pw2Hint"></span><input id="fPw2" type="password" autocomplete="off"></label>
+    </div>
+    <label id="lOtp">OTP <span class="hint" id="otpHint"></span><input id="fOtp" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <div id="portBox"></div>
+    <div class="hint">여기 입력한 값은 이 컴퓨터의 QA 설정(.qa-local.json)에만 저장되고 저장소에 올라가지 않습니다.</div>
     <div id="dlgMsg" class="hint"></div>
   </div>
   <div class="dlg-f">
     <button class="btn left" id="btnUpdate" title="QA 와 대상 레포를 git pull">⬇ 최신 코드 받기</button>
-    <button class="btn" id="btnRebuild" title="대상 레포를 다시 빌드하고 켠다">다시 빌드해서 켜기</button>
+    <button class="btn" id="btnRemove" title="화면에서 추가한 프로젝트를 목록에서 뺀다 (레포는 그대로)">목록에서 빼기</button>
+    <button class="btn" id="btnRebuild" title="다시 빌드하고 켠다">다시 빌드해서 켜기</button>
     <button class="btn primary" id="btnSave">저장</button>
   </div>
+</dialog>
+<dialog id="addDlg">
+  <div class="dlg-h"><span>＋ 프로젝트 추가</span><button class="btn run-btn" id="addClose">닫기</button></div>
+  <div class="dlg-b">
+    <label>레포 폴더 경로 <span class="hint">예: ~/Developer/my-app — 스택은 알아서 찾습니다</span><input id="aRoot" placeholder="~/Developer/my-app"></label>
+    <div id="addMsg" class="hint"></div>
+  </div>
+  <div class="dlg-f"><button class="btn" id="addCheck">스택 확인</button><button class="btn primary" id="addSave">추가</button></div>
 </dialog>
 <main>
   <aside id="areas"></aside>
@@ -140,7 +157,9 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const state = { tools: [], tool: null, results: {}, report: null, reportAt: null, selected: null, filter: 'all', q: '', running: null, collapsed: {} };
+const state = { projects: [], owasp: {}, project: null, results: {}, report: null, reportAt: null, selected: null, filter: 'all', q: '', running: null, collapsed: {}, server: [] };
+const json = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const cur = () => state.projects.find(x => x.id === state.project);
 
 async function api(path, opt) {
   const r = await fetch(path, opt);
@@ -152,7 +171,6 @@ async function api(path, opt) {
 // 검사(check) 하나를 O/X 행들로 — items 가 있으면 그대로, 없으면 검사 자체를 한 줄로
 function rowsOf(c) {
   if (c.items) return c.items.map(i => ({ name: i.name, detail: i.detail || '', mark: i.ok === true ? 'ok' : i.ok === null ? 'warn' : 'bad' }));
-  // 목록이 없는 검사 — 문제 하나당 한 줄, 통과한 것은 묶어서 한 줄
   const rows = [];
   if (c.failed > 0) (c.notes && c.notes.length ? c.notes : [`${c.failed}건 문제`]).forEach(n => rows.push({ name: c.name, detail: n, mark: 'bad' }));
   (c.warnNotes || []).forEach(n => rows.push({ name: c.name, detail: n, mark: 'warn' }));
@@ -165,12 +183,13 @@ const countOf = r => {
 };
 
 function chipFor(p) {
-  if (p.todo) return '<span class="chip">빈 칸</span>';
-  if (state.running && state.running.current && state.running.current.id === p.id) return '<span class="chip run"><span class="spin"></span> 검사 중</span>';
-  if (state.running && state.running.status === 'running' && (!state.running.ids.length || state.running.ids.includes(p.id)) && !state.running.results.some(r => r.id === p.id)) return '<span class="chip run">대기</span>';
+  const j = state.running;
+  if (j && j.current && j.current.id === p.id) return '<span class="chip run"><span class="spin"></span> 검사 중</span>';
+  if (j && j.status === 'running' && (!j.ids.length || j.ids.includes(p.id)) && !j.results.some(r => r.id === p.id)) return '<span class="chip run">대기</span>';
   const r = state.results[p.id];
   if (!r) return '<span class="chip">미검사</span>';
   if (r.error) return '<span class="chip bad">실행 오류</span>';
+  if (r.skip) return '<span class="chip" title="' + esc(r.skip) + '">해당 없음</span>';
   const n = countOf(r);
   if (n.bad) return `<span class="chip bad">X ${n.bad}</span>`;
   if (n.warn) return `<span class="chip warn">△ ${n.warn}</span>`;
@@ -178,15 +197,19 @@ function chipFor(p) {
 }
 
 function renderAreas() {
-  const t = state.tools.find(x => x.key === state.tool);
-  if (!t) return;
+  const t = cur();
+  if (!t) { $('#areas').innerHTML = ''; return; }
   const busy = state.running && state.running.status === 'running';
-  $('#areas').innerHTML = t.sections.map(sec => {
+  const ow = state.report && state.report.summary && state.report.summary.owasp;
+  const owBad = ow ? ow.filter(x => x.status === '문제').length : null;
+  $('#areas').innerHTML = `<div class="sec"><h3><span>보안 기준</span></h3>
+      <div class="area ${state.selected === '__owasp' ? 'sel' : ''}" data-view="__owasp"><span class="letter">10</span><span class="nm">OWASP Top 10 (2021)</span>${ow ? (owBad ? `<span class="chip bad">문제 ${owBad}</span>` : '<span class="chip ok">O</span>') : '<span class="chip">전체 검사 후</span>'}<span></span></div></div>` +
+    t.sections.map(sec => {
     const sc = state.report && state.report.summary && (state.report.summary.sections || []).find(x => x.dir === sec.dir);
     return `<div class="sec"><h3><span>${esc(sec.label)}</span><span>${sc && sc.score !== null ? esc(sc.score) + '점' : ''}</span></h3>` +
-      sec.probes.map(p => `<div class="area ${p.todo ? 'todo' : ''} ${state.selected === p.id ? 'sel' : ''}" data-id="${esc(p.id)}">
-        <span class="letter">${esc(p.id)}</span><span class="nm" title="${esc(p.name)}">${esc(p.name)}</span>${chipFor(p)}
-        ${p.todo ? '' : `<button class="btn run-btn" data-run="${esc(p.id)}" ${busy ? 'disabled' : ''}>조회</button>`}
+      sec.probes.map(p => `<div class="area ${state.selected === p.id ? 'sel' : ''}" data-id="${esc(p.id)}">
+        <span class="letter">${esc(p.id)}</span><span class="nm" title="${esc(p.name)}${p.origin !== 'common' ? ' (이 프로젝트 전용 검사 포함)' : ''}">${esc(p.name)}${p.origin !== 'common' ? ' ★' : ''}</span>${chipFor(p)}
+        <button class="btn run-btn" data-run="${esc(p.id)}" ${busy ? 'disabled' : ''}>조회</button>
       </div>`).join('') + '</div>';
   }).join('');
 }
@@ -194,15 +217,18 @@ function renderAreas() {
 function renderPanel() {
   const panel = $('#panel');
   if (state.selected === '__summary') return renderSummary();
-  const t = state.tools.find(x => x.key === state.tool);
+  if (state.selected === '__owasp') return renderOwasp();
+  const t = cur();
   const probe = t && t.sections.flatMap(s => s.probes).find(p => p.id === state.selected);
   const r = state.results[state.selected];
   if (!probe) { panel.innerHTML = guide(); return; }
   const busy = state.running && state.running.status === 'running';
-  const head = `<div class="ph"><h2><span class="letter">${esc(probe.id)}</span>${esc(probe.name)}
+  const tags = (probe.owasp || []).map(o => `<span class="chip" title="${esc(state.owasp[o] || '')}">OWASP ${esc(o)}</span>`).join('');
+  const head = `<div class="ph"><h2><span class="letter">${esc(probe.id)}</span>${esc(probe.name)} ${tags}
       <button class="btn run-btn" data-run="${esc(probe.id)}" ${busy ? 'disabled' : ''}>${r ? '다시 조회' : '조회'}</button></h2>`;
   if (!r) { panel.innerHTML = head + `</div><div class="empty">${busy ? '<span class="spin"></span> 검사 중입니다…' : '아직 검사하지 않았습니다. [조회]를 누르세요.'}</div>`; return; }
   if (r.error) { panel.innerHTML = head + `</div><div class="empty" style="color:var(--bad)">실행 오류: ${esc(r.error)}</div>`; return; }
+  if (r.skip) { panel.innerHTML = head + `</div><div class="empty"><b>잴 수 없음 · 해당 없음</b><p>${esc(r.skip)}</p>${r.finding ? `<p style="color:var(--bad)">${esc(r.finding)}</p>` : ''}</div>`; return; }
   const n = countOf(r);
   const f = state.filter, q = state.q.trim().toLowerCase();
   const tabs = [['all', `전체 ${n.all}`], ['bad', `문제 ${n.bad}`], ['ok', `통과 ${n.ok}`], ['warn', `확인 필요 ${n.warn}`]];
@@ -210,26 +236,55 @@ function renderPanel() {
       <span class="chip">검사 ${n.all}건</span><span class="chip ok">O 통과 ${n.ok}</span>
       <span class="chip bad">X 문제 ${n.bad}</span><span class="chip warn">△ 확인 필요 ${n.warn}</span>
       <span class="chip">${esc(r.ms)}ms</span></div>
+    ${r.partial ? `<div class="hint" style="margin-bottom:8px">일부만 쟀습니다: ${esc(r.partial)}</div>` : ''}
+    ${(r.skipped || []).length ? `<details class="hint" style="margin-bottom:8px"><summary>건너뛴 것 ${r.skipped.length}건</summary>${r.skipped.map(esc).join('<br>')}</details>` : ''}
     <div class="tools"><div class="seg">${tabs.map(([k, l]) => `<button data-filter="${k}" class="${f === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <input type="search" id="q" placeholder="항목·내용 검색" value="${esc(state.q)}"></div></div>`;
   let shown = 0;
   r.checks.forEach((c, gi) => {
-    const rows = rowsOf(c).filter(x => (f === 'all' || x.mark === f) && (!q || (x.name + ' ' + x.detail).toLowerCase().includes(q)));
+    const all = rowsOf(c);
+    const rows = all.filter(x => (f === 'all' || x.mark === f) && (!q || (x.name + ' ' + x.detail).toLowerCase().includes(q)));
     if (!rows.length) return;
     shown += rows.length;
     const key = `${r.id}:${gi}`;
-    const cc = { ok: rowsOf(c).filter(x => x.mark === 'ok').length, bad: rowsOf(c).filter(x => x.mark === 'bad').length };
+    const bad = all.filter(x => x.mark === 'bad').length, ok = all.filter(x => x.mark === 'ok').length, warn = all.filter(x => x.mark === 'warn').length;
     const closed = state.collapsed[key] ?? false;
     html += `<div class="group"><div class="gh" data-toggle="${key}"><span class="caret">${closed ? '▸' : '▾'}</span>
-      <span class="gname">${esc(c.name)}</span>${cc.bad ? `<span class="chip bad">X ${cc.bad}</span>` : ''}<span class="chip ok">O ${cc.ok}</span></div>`;
+      <span class="gname">${esc(c.name)}</span>${[].concat(c.owasp || []).map(o => `<span class="chip">${esc(o)}</span>`).join('')}${bad ? `<span class="chip bad">X ${bad}</span>` : ''}${warn ? `<span class="chip warn">△ ${warn}</span>` : ''}<span class="chip ok">O ${ok}</span></div>`;
     if (!closed) {
-      html += '<table>' + rows.map(x => `<tr class="${x.mark === 'bad' ? 'bad' : ''}"><td class="mark ${x.mark}">${x.mark === 'ok' ? 'O' : x.mark === 'bad' ? 'X' : '△'}</td>
+      html += '<table>' + rows.slice(0, 1500).map(x => `<tr class="${x.mark === 'bad' ? 'bad' : ''}"><td class="mark ${x.mark}">${x.mark === 'ok' ? 'O' : x.mark === 'bad' ? 'X' : '△'}</td>
         <td class="item">${esc(x.name)}</td><td class="detail">${esc(x.detail)}</td></tr>`).join('') + '</table>';
     }
     html += '</div>';
   });
   if (!shown) html += `<div class="empty">${f === 'bad' ? '문제가 없습니다. 👍' : '조건에 맞는 항목이 없습니다.'}</div>`;
   panel.innerHTML = html;
+}
+
+// OWASP Top 10 — 항목마다 몇 건을 쟀고, 무엇이 걸렸고, 어느 영역이 재는지
+function renderOwasp() {
+  const ow = state.report && state.report.summary && state.report.summary.owasp;
+  const t = cur();
+  const byTag = {};
+  for (const p of (t ? t.sections.flatMap(s => s.probes) : [])) for (const o of p.owasp || []) (byTag[o] ||= []).push(p);
+  const rowsFor = id => Object.values(state.results).flatMap(r => (r.checks || []).filter(c => [].concat(c.owasp || []).includes(id)).map(c => ({ r, c })));
+  let html = `<div class="ph"><h2>OWASP Top 10 (2021) <span class="chip">${esc(state.reportAt || '전체 검사 전')}</span></h2>
+    <div class="hint">각 검사에 OWASP 항목을 붙여 두었습니다. '못 잼' 은 이 프로젝트에서 해당 영역을 잴 수 없었다는 뜻입니다 (서버 꺼짐·로그인 없음·해당 기능 없음).</div></div>`;
+  html += '<table>' + Object.entries(state.owasp).map(([id, name]) => {
+    const x = ow && ow.find(o => o.id === id);
+    const st = x ? x.status : '미검사';
+    const mark = st === '통과' ? 'ok' : st === '문제' ? 'bad' : st === '확인 필요' ? 'warn' : '';
+    const areas = (byTag[id] || []).map(p => `<a href="#" data-goto="${esc(p.id)}">${esc(p.id)}</a>`).join(' ');
+    return `<tr class="${mark === 'bad' ? 'bad' : ''}"><td class="mark ${mark}">${mark === 'ok' ? 'O' : mark === 'bad' ? 'X' : mark === 'warn' ? '△' : '-'}</td>
+      <td class="item"><b>${esc(id)}</b> ${esc(name)}</td>
+      <td class="detail">${x ? `${esc(st)} · 검사 ${esc(x.scanned)} · 문제 ${esc(x.failed)} · 확인 ${esc(x.warned)}` : esc(st)} · 영역 ${areas || '-'}${x && x.skippedAreas.length ? ` · 못 잰 영역 ${x.skippedAreas.map(esc).join(' ')}` : ''}</td></tr>`;
+  }).join('') + '</table>';
+  for (const [id, name] of Object.entries(state.owasp)) {
+    const bad = rowsFor(id).flatMap(({ r, c }) => rowsOf(c).filter(x => x.mark !== 'ok').map(x => ({ ...x, area: r.id })));
+    if (!bad.length) continue;
+    html += `<div class="group"><div class="gh">${esc(id)} ${esc(name)} — 걸린 것 ${bad.length}</div><table>` + bad.slice(0, 200).map(x => `<tr class="${x.mark === 'bad' ? 'bad' : ''}"><td class="mark ${x.mark}">${x.mark === 'bad' ? 'X' : '△'}</td><td class="item">[${esc(x.area)}] ${esc(x.name)}</td><td class="detail">${esc(x.detail)}</td></tr>`).join('') + '</table></div>';
+  }
+  $('#panel').innerHTML = html;
 }
 
 function renderSummary() {
@@ -241,40 +296,41 @@ function renderSummary() {
     <div class="summary-grid">
       <div class="card"><div class="k">최종 점수</div><div class="v">${esc(s.score)}</div><div class="k">${esc(s.grade)}</div></div>
       <div class="card"><div class="k">제품 점수</div><div class="v">${esc(s.rawScore)}</div></div>
-      <div class="card"><div class="k">검사 / 통과 / 문제</div><div class="v">${esc(s.scanned)} / ${esc(s.passed)} / ${esc(s.failed)}</div></div>
+      <div class="card"><div class="k">검사 / 통과 / 문제</div><div class="v">${esc(s.scanned)} / ${esc(s.passed)} / ${esc(s.failed)}</div><div class="k">자동 생성 ${esc(s.generated ?? '-')} · 확인 필요 ${esc(s.warned)}</div></div>
       <div class="card"><div class="k">운영 성숙도</div><div class="v">${esc(s.maturity.got)}/${esc(s.maturity.total)}</div><div class="k">계수 ${esc(s.maturity.factor)}</div></div>
       ${(s.sections || []).map(x => `<div class="card"><div class="k">${esc(x.label)}</div><div class="v">${x.score === null ? '-' : esc(x.score)}</div></div>`).join('')}
     </div>
+    ${(s.skippedAreas || []).length ? `<div class="group"><div class="gh">잴 수 없었던 영역 (점수에서 뺌)</div><table>${s.skippedAreas.map(a => `<tr><td class="mark">-</td><td class="item">${esc(a.id)} ${esc(a.name || '')}</td><td class="detail">${esc(a.why || a.skip || '')}</td></tr>`).join('')}</table></div>` : ''}
     <div class="group"><div class="gh">운영 성숙도</div><table>${mat.map(i => `<tr class="${i.ok ? '' : 'bad'}"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc(i.weight)}점</td></tr>`).join('')}</table></div>
     <div class="group"><div class="gh">도구 자기 점검</div><table>${self.map(i => `<tr class="${i.ok ? '' : 'bad'}"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc((i.notes || []).join(' / '))}</td></tr>`).join('')}</table></div>`;
 }
 
 function renderHeader() {
-  const t = state.tools.find(x => x.key === state.tool);
-  $('#target').innerHTML = t ? `대상 <b>${esc(t.name)}</b> · ${esc(t.baseUrl)}${t.ready && !t.rootExists ? ' · <span style="color:var(--bad)">레포 폴더를 못 찾음 — ⚙ 설정에서 지정</span>' : ''}` : '';
+  const t = cur();
+  $('#target').innerHTML = t ? `${t.parts.map(p => `<span class="chip" title="${esc(p.dir)}">${esc(p.label)}${p.dir !== '.' ? ' · ' + esc(p.dir) : ''}</span>`).join(' ')}${!t.rootExists ? ' <span style="color:var(--bad)">레포 폴더를 못 찾음 — ⚙ 설정에서 지정</span>' : ''}` : '';
   const s = state.report && state.report.summary;
   $('#score').innerHTML = s ? `<span>최종</span><b>${esc(s.score)}</b><span>${esc(s.grade)}</span>` : '<span>점수 없음</span>';
-  $('#runAll').disabled = !!(state.running && state.running.status === 'running') || !(t && t.ready);
-  $('#srv').style.display = t && t.ready && t.canServe ? '' : 'none';
+  $('#runAll').disabled = !!(state.running && state.running.status === 'running') || !t || !t.rootExists;
+  $('#srv').style.display = state.server.length ? '' : 'none';
 }
 
 function renderStatus() {
   const j = state.running, el = $('#status'), bar = $('#progress');
   if (!j) { el.style.display = 'none'; bar.style.width = 0; return; }
-  const t = state.tools.find(x => x.key === j.tool);
-  const total = j.ids.length || (t ? t.sections.flatMap(s => s.probes).filter(p => !p.todo).length : 1);
+  const t = cur();
+  const total = j.total || j.ids.length || (t ? t.sections.flatMap(s => s.probes).length : 1);
   el.className = 'status-line' + (j.status === 'error' ? ' error' : '');
   el.style.display = 'block';
   if (j.status === 'running') {
-    el.innerHTML = `<span class="spin"></span> 검사 중 ${j.results.length}/${total}${j.current ? ` · ${esc(j.current.id)} ${esc(j.current.name)}` : ' · 로그인·준비'}`;
+    el.innerHTML = `<span class="spin"></span> 검사 중 ${j.results.length}/${total}${j.current ? ` · ${esc(j.current.id)} ${esc(j.current.name)}` : ' · 준비 (경로 찾기·로그인·규칙 뽑기)'}`;
     bar.style.width = `${Math.round(j.results.length / total * 100)}%`;
   } else if (j.status === 'error') {
     el.textContent = `실행 오류: ${j.error}`; bar.style.width = 0;
   } else {
     const secs = Math.round((j.finishedAt - j.startedAt) / 1000);
-    el.textContent = `끝 · ${j.results.length}개 영역 · ${secs}초` + (j.report && j.report.full ? ` · 리포트 저장 ${j.report.file}` : '');
+    el.innerHTML = `끝 · ${j.results.length}개 영역 · ${secs}초` + (j.report && j.report.full ? ` · 리포트 저장 ${esc(j.report.file)}` : '') + ((j.notes || []).length ? `<div class="hint" style="font-weight:400">${j.notes.map(esc).join('<br>')}</div>` : '');
     bar.style.width = 0;
-    setTimeout(() => { if (state.running === j) { state.running = null; renderStatus(); } }, 5000);
+    setTimeout(() => { if (state.running === j) { state.running = null; renderStatus(); } }, 12000);
   }
 }
 
@@ -282,97 +338,95 @@ function renderAll() { renderHeader(); renderAreas(); renderPanel(); renderStatu
 
 // 처음 쓰는 사람을 위한 안내 — 지금 무엇을 누르면 되는지
 function guide() {
-  const t = state.tools.find(x => x.key === state.tool);
-  if (t && !t.ready) {
-    const names = state.tools.filter(x => x.ready).map(x => `<b>${esc(x.name)}</b>`).join(', ');
-    return `<div class="empty"><div style="font-size:16px;color:var(--text);font-weight:700">아직 준비 중인 도구입니다</div>
-      <p><b>${esc(t.name)}</b> 용 검사는 아직 만들지 않았습니다 (빈 틀 ${esc(t.total)}칸).</p>
-      <p>왼쪽 위 목록에서 검사가 들어 있는 도구를 고르세요: ${names}</p></div>`;
-  }
+  const t = cur();
+  if (!t) return `<div class="empty"><div style="font-size:16px;color:var(--text);font-weight:700">프로젝트가 없습니다</div><p>위쪽 <b>＋ 프로젝트 추가</b>에서 레포 폴더를 고르세요.</p></div>`;
   const sv = state.server;
-  const up = sv && sv.up;
+  const up = sv.length && sv.every(p => p.up);
   return `<div class="empty"><div style="font-size:16px;color:var(--text);font-weight:700">${up ? '준비됐습니다' : '시작하기'}</div>
+    <p>${esc(t.name)} — ${t.parts.map(p => esc(p.label)).join(' + ') || '스택을 찾지 못함'}</p>
     <ol class="steps">
-      <li>${state.settings && state.settings.secrets.every(x => x.set) ? '✅' : '①'} <b>⚙ 설정</b>에서 대상 레포 폴더·로그인 비밀번호·OTP 확인</li>
-      <li>${up ? '✅' : '②'} 위쪽 <b>[서버 켜기]</b> — 설치·빌드·실행을 알아서 합니다 (처음엔 1~2분)</li>
-      <li>③ <b>[전체 검사]</b> 또는 왼쪽 영역의 <b>[조회]</b> → 결과가 O / X 목록으로</li>
+      <li>${t.rootExists ? '✅' : '①'} <b>⚙ 설정</b>에서 레포 폴더 확인 · 로그인이 있으면 검사용 계정 (가입 경로가 있으면 비워 둬도 자동으로 만듭니다)</li>
+      <li>${up ? '✅' : '②'} 위쪽 <b>[서버 켜기]</b> — 설치·빌드·실행을 알아서 합니다 (서버 없이도 코드 검사는 됩니다)</li>
+      <li>③ <b>[전체 검사]</b> 또는 왼쪽 영역의 <b>[조회]</b> → 결과가 O / X 목록으로 · 보안은 왼쪽 위 <b>OWASP Top 10</b></li>
     </ol></div>`;
 }
 
 const PHASE = { idle: '꺼짐', installing: '설치 중', building: '빌드 중', starting: '켜는 중', running: '켜짐', stopping: '끄는 중', error: '오류' };
 function renderServer() {
-  const sv = state.server;
-  if (!sv) return;
-  const busy = ['installing', 'building', 'starting', 'stopping'].includes(sv.phase);
-  $('#srvDot').className = 'dot ' + (sv.up ? 'up' : busy ? 'busy' : sv.phase === 'error' ? 'err' : '');
-  $('#srvText').innerHTML = `대상 서버 <b>${esc(sv.up ? '켜짐' : PHASE[sv.phase] || '꺼짐')}</b>`;
-  $('#srvBtns').innerHTML = !sv.canServe ? '' : busy ? '<span class="spin"></span>'
-    : sv.up ? (sv.managed ? '<button class="btn" data-srv="stop">끄기</button>' : '')
-    : '<button class="btn primary" data-srv="start">서버 켜기</button>';
+  const sv = state.server || [];
+  if (!sv.length) { $('#srvbar').className = 'srvbar'; return; }
+  const busy = sv.some(p => ['installing', 'building', 'starting', 'stopping'].includes(p.phase));
+  const upN = sv.filter(p => p.up).length;
+  const err = sv.find(p => p.phase === 'error');
+  $('#srvDot').className = 'dot ' + (upN === sv.length ? 'up' : busy ? 'busy' : err ? 'err' : '');
+  $('#srvText').innerHTML = `서버 <b>${upN}/${sv.length} 켜짐</b>`;
+  $('#srv').title = sv.map(p => `${p.label} ${p.dir} ${p.baseUrl} — ${p.up ? '켜짐' : PHASE[p.phase]}`).join('\n');
+  $('#srvBtns').innerHTML = busy ? '<span class="spin"></span>'
+    : upN < sv.length && sv.some(p => !p.up && p.canServe) ? '<button class="btn primary" data-srv="start">서버 켜기</button>'
+    : sv.some(p => p.managed) ? '<button class="btn" data-srv="stop">끄기</button>' : '';
   const bar = $('#srvbar');
-  const show = busy || sv.phase === 'error';
-  bar.className = 'srvbar' + (show || !$('#srvlog').hidden ? ' on' : '');
-  $('#srvbarTitle').innerHTML = sv.phase === 'error' ? `<span style="color:var(--bad)">✗ ${esc(sv.error || '오류')}</span>` : busy ? `<span class="spin"></span> ${esc(PHASE[sv.phase])}…` : '서버 로그';
-  $('#srvlog').textContent = (sv.log || []).join('\n');
+  bar.className = 'srvbar' + (busy || err || !$('#srvlog').hidden ? ' on' : '');
+  const active = sv.find(p => ['installing', 'building', 'starting'].includes(p.phase));
+  $('#srvbarTitle').innerHTML = err ? `<span style="color:var(--bad)">✗ ${esc(err.label)} (${esc(err.dir)}): ${esc(err.error || '오류')}</span>` : active ? `<span class="spin"></span> ${esc(active.label)} ${esc(PHASE[active.phase])}…` : '서버 로그';
+  $('#srvlog').textContent = sv.map(p => `── ${p.label} (${p.dir}) ${p.baseUrl}\n${(p.log || []).join('\n')}`).join('\n\n');
   if (!$('#srvlog').hidden) $('#srvlog').scrollTop = 1e9;
 }
 
 async function pollServer() {
-  if (!state.tool) return;
-  const sv = await api('/api/server?tool=' + encodeURIComponent(state.tool)).catch(() => null);
-  const wasUp = state.server && state.server.up;
-  state.server = sv;
-  renderServer();
-  if (sv && sv.up !== wasUp && !state.selected) renderPanel();
-  const busy = sv && ['installing', 'building', 'starting', 'stopping'].includes(sv.phase);
+  if (!state.project) return;
+  const mine = state.project;
+  const sv = await api('/api/server?project=' + encodeURIComponent(mine)).catch(() => null);
+  if (mine !== state.project) return;
+  state.server = sv || [];
+  renderServer(); renderHeader();
+  const busy = state.server.some(p => ['installing', 'building', 'starting', 'stopping'].includes(p.phase));
   clearTimeout(state.srvTimer);
   state.srvTimer = setTimeout(pollServer, busy ? 1000 : 4000);
 }
-
 async function serverAction(action, extra = {}) {
-  try {
-    await api('/api/server/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool: state.tool, ...extra }) });
-  } catch (e) { alert(e.message); }
+  try { await api('/api/server/' + action, json({ project: state.project, ...extra })); } catch (e) { alert(e.message); }
   if (action === 'start') { $('#srvlog').hidden = false; $('#toggleLog').textContent = '로그 숨기기'; }
   setTimeout(pollServer, 300);
 }
 
-async function loadSettings() {
-  state.settings = await api('/api/settings?tool=' + encodeURIComponent(state.tool)).catch(() => null);
-}
+// ── 설정
+async function loadSettings() { state.settings = await api('/api/settings?project=' + encodeURIComponent(state.project)).catch(() => null); }
 function fillSettings() {
   const st = state.settings;
   if (!st) return;
-  $('#dlgTool').textContent = state.tool;
-  $('#fRoot').value = st.root || ''; $('#fBase').value = st.baseUrl || '';
-  $('#fPw').value = ''; $('#fOtp').value = '';
-  $('#rootHint').innerHTML = !st.rootExists ? '<span style="color:var(--bad)">— 폴더가 없습니다</span>' : !st.isRepo ? '<span style="color:var(--bad)">— package.json 이 없습니다</span>' : '— 확인됨';
-  const sec = f => st.secrets.find(x => x.field === f) || {};
-  const hint = x => x.set ? `— 저장됨 (${esc(x.from)}) · 바꿀 때만 입력` : '— <span style="color:var(--bad)">비어 있음</span>';
-  $('#pwHint').innerHTML = hint(sec('operatorPassword'));
-  $('#otpHint').innerHTML = hint(sec('otp'));
-  $('#envHint').innerHTML = st.envFile ? (st.envFileExists ? `대상 레포의 <b>${esc(st.envFile)}</b> 를 읽습니다. 여기 입력한 값은 이 컴퓨터의 QA 설정에만 저장됩니다.`
-    : `대상 레포에 <b>${esc(st.envFile)}</b> 가 없습니다 — [서버 켜기] 때 위 비밀번호·OTP 로 만들어 줍니다.`) : '';
+  $('#dlgTool').textContent = state.project;
+  $('#fRoot').value = st.root || '';
+  $('#fUser').value = st.user || ''; $('#fUser2').value = st.user2 || '';
+  $('#fPw').value = ''; $('#fPw2').value = ''; $('#fOtp').value = '';
+  $('#rootHint').innerHTML = st.rootExists ? '— 확인됨' : '<span style="color:var(--bad)">— 폴더가 없습니다</span>';
+  const sec = f => st.secrets.find(x => x.field === f);
+  const hint = x => !x ? '' : x.set ? `— 저장됨 (${esc(x.from)}) · 바꿀 때만 입력` : '— 비어 있음';
+  $('#lUser').style.display = st.passwordOnly ? 'none' : '';
+  $('#acct2').style.display = st.passwordOnly ? 'none' : 'grid';
+  $('#pwHint').innerHTML = hint(sec('password')); $('#pw2Hint').innerHTML = hint(sec('password2'));
+  $('#lOtp').style.display = sec('otp') ? '' : 'none'; $('#otpHint').innerHTML = hint(sec('otp'));
+  $('#portBox').innerHTML = st.parts.length ? '<div style="font-weight:600;font-size:13px;margin-bottom:6px">부분별 포트 <span class="hint">비우면 코드에서 찾은 값</span></div>' + st.parts.map(p => `<label style="display:grid;grid-template-columns:1fr auto 90px;gap:8px;align-items:center;font-weight:400;margin-bottom:4px"><span>${esc(p.stack)} · ${esc(p.dir)}</span><span class="hint">${esc(p.baseUrl || '')}</span><input data-port="${esc(p.dir)}" value="${esc(p.port)}" inputmode="numeric" placeholder="자동"></label>`).join('') : '';
+  const t = cur();
+  $('#btnRemove').style.display = t && t.added && !t.custom ? '' : 'none';
   $('#dlgMsg').textContent = '';
 }
-async function openSettings() { await loadSettings(); fillSettings(); $('#dlg').showModal(); }
-
+async function openSettings() { if (!state.project) return; await loadSettings(); fillSettings(); $('#dlg').showModal(); }
 async function saveSettings() {
   try {
-    state.settings = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tool: state.tool, root: $('#fRoot').value, baseUrl: $('#fBase').value, operatorPassword: $('#fPw').value, otp: $('#fOtp').value }) });
+    const parts = {};
+    document.querySelectorAll('[data-port]').forEach(i => { parts[i.dataset.port] = { port: i.value.trim() }; });
+    state.settings = await api('/api/settings', json({ project: state.project, root: $('#fRoot').value, user: $('#fUser').value, password: $('#fPw').value, user2: $('#fUser2').value, password2: $('#fPw2').value, otp: $('#fOtp').value, parts }));
     fillSettings();
     $('#dlgMsg').innerHTML = '<span style="color:var(--ok)">저장했습니다.</span>';
-    state.tools = await api('/api/tools');
-    renderHeader(); pollServer(); if (!state.selected) renderPanel();
+    await loadProjects();
+    renderHeader(); renderAreas(); pollServer(); if (!state.selected) renderPanel();
     return true;
   } catch (e) { $('#dlgMsg').innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; return false; }
 }
-
 async function updateCode() {
   $('#dlgMsg').innerHTML = '<span class="spin"></span> 최신 코드를 받는 중…';
   try {
-    const r = await api('/api/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool: state.tool }) });
+    const r = await api('/api/update', json({ project: state.project }));
     const line = (name, x) => `${name}: ${x.ok ? (x.changed ? '✅ 새 코드 받음' : '이미 최신') : '✗ ' + esc(x.out)}`;
     $('#dlgMsg').innerHTML = line('QA', r.qa) + '<br>' + line('대상 레포', r.target) +
       (r.targetChanged ? '<br>대상 코드가 바뀌었습니다 — <b>[다시 빌드해서 켜기]</b>를 누르세요.' : '') +
@@ -388,12 +442,33 @@ async function waitAndReload() {
   }
 }
 
-async function loadTool(key) {
-  state.tool = key; state.results = {}; state.report = null; state.selected = null;
-  try { localStorage.setItem('qa-ui-tool', key); } catch (e) {}
+// ── 프로젝트 추가
+async function addProject(dry) {
+  $('#addMsg').innerHTML = '<span class="spin"></span> 찾는 중…';
+  try {
+    const r = await api('/api/projects/add', json({ root: $('#aRoot').value, dry }));
+    if (dry) { $('#addMsg').innerHTML = `찾은 스택: <b>${r.parts.map(esc).join(' + ')}</b> — [추가]를 누르세요`; return; }
+    $('#addDlg').close();
+    await loadProjects();
+    fillSelect();
+    $('#project').value = r.id;
+    await loadProject(r.id);
+    openSettings();
+  } catch (e) { $('#addMsg').innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+}
+
+async function loadProjects() { const r = await api('/api/projects'); state.projects = r.projects; state.owasp = r.owasp; }
+function fillSelect() {
+  $('#project').innerHTML = state.projects.map(t => `<option value="${esc(t.id)}">${esc(t.name)}${t.name !== t.id ? ' — ' + esc(t.id) : ''}${t.rootExists ? '' : ' (폴더 없음)'}</option>`).join('') || '<option value="">(프로젝트 없음)</option>';
+}
+
+async function loadProject(id) {
+  state.project = id; state.results = {}; state.report = null; state.reportAt = null; state.selected = null; state.server = [];
+  try { localStorage.setItem('qa-ui-project', id); } catch (e) {}
+  if (!id) { renderAll(); return; }
   await loadSettings();
   pollServer();
-  const latest = await api('/api/latest?tool=' + encodeURIComponent(key)).catch(() => null);
+  const latest = await api('/api/latest?project=' + encodeURIComponent(id)).catch(() => null);
   if (latest) {
     for (const r of latest.results) state.results[r.id] = r;
     state.report = { summary: latest.summary, selfcheck: latest.selfcheck, maturity: latest.maturity };
@@ -403,27 +478,21 @@ async function loadTool(key) {
 }
 
 async function run(ids) {
-  if (state.server && !state.server.up) { alert('대상 서버가 꺼져 있습니다. 위쪽 [서버 켜기]를 먼저 누르세요.'); return; }
-  try {
-    await api('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tool: state.tool, ids }) });
-  } catch (e) { alert(e.message); return; }
+  const down = state.server.filter(p => !p.up);
+  if (down.length && !confirm(`꺼진 서버가 있습니다 (${down.map(p => p.label + ' ' + p.dir).join(', ')}).\n서버가 필요한 검사는 '잴 수 없음' 으로 나옵니다. 그대로 검사할까요?`)) return;
+  try { await api('/api/run', json({ project: state.project, ids })); } catch (e) { alert(e.message); return; }
   if (ids.length === 1) state.selected = ids[0];
-  // 서버 응답을 기다리지 않고 바로 '검사 중' 으로 — 이전 검사의 '끝' 이 남아 보이지 않게
-  state.running = { status: 'running', tool: state.tool, ids, results: [], current: null };
+  state.running = { status: 'running', project: state.project, ids, results: [], current: null };
   for (const id of ids.length ? ids : Object.keys(state.results)) delete state.results[id];
   renderAll();
   poll();
 }
-
 async function poll() {
   const j = await api('/api/job').catch(() => null);
-  if (!j) return;
-  if (j.tool !== state.tool) return;
+  if (!j || j.project !== state.project) return;
   state.running = j;
   for (const r of j.results) state.results[r.id] = r;
-  if (j.status === 'done' && j.report) {
-    if (j.report.full) { state.report = j.report; state.reportAt = '방금 전체 검사'; }
-  }
+  if (j.status === 'done' && j.report && j.report.full) { state.report = j.report; state.reportAt = '방금 전체 검사'; }
   renderAll();
   if (j.status === 'running') setTimeout(poll, 700);
 }
@@ -431,8 +500,12 @@ async function poll() {
 document.addEventListener('click', e => {
   const runBtn = e.target.closest('[data-run]');
   if (runBtn) { e.stopPropagation(); run([runBtn.dataset.run]); return; }
+  const go = e.target.closest('[data-goto]');
+  if (go) { e.preventDefault(); state.selected = go.dataset.goto; renderAreas(); renderPanel(); return; }
+  const view = e.target.closest('[data-view]');
+  if (view) { state.selected = view.dataset.view; renderAreas(); renderPanel(); return; }
   const area = e.target.closest('.area');
-  if (area && !area.classList.contains('todo')) { state.selected = area.dataset.id; state.filter = 'all'; state.q = ''; renderAreas(); renderPanel(); return; }
+  if (area) { state.selected = area.dataset.id; state.filter = 'all'; state.q = ''; renderAreas(); renderPanel(); return; }
   const fb = e.target.closest('[data-filter]');
   if (fb) { state.filter = fb.dataset.filter; renderPanel(); return; }
   const tg = e.target.closest('[data-toggle]');
@@ -446,30 +519,34 @@ $('#dlgClose').addEventListener('click', () => $('#dlg').close());
 $('#btnSave').addEventListener('click', saveSettings);
 $('#btnUpdate').addEventListener('click', updateCode);
 $('#btnRebuild').addEventListener('click', async () => { if (await saveSettings()) { $('#dlg').close(); serverAction('start', { rebuild: true }); } });
+$('#btnRemove').addEventListener('click', async () => {
+  if (!confirm(`${state.project} 을(를) 목록에서 뺄까요? (레포와 리포트는 그대로)`)) return;
+  try { await api('/api/projects/remove', json({ project: state.project })); } catch (e) { alert(e.message); return; }
+  $('#dlg').close(); await loadProjects(); fillSelect(); await loadProject(state.projects[0] ? state.projects[0].id : null);
+});
+$('#openAdd').addEventListener('click', () => { $('#aRoot').value = ''; $('#addMsg').textContent = ''; $('#addDlg').showModal(); });
+$('#addClose').addEventListener('click', () => $('#addDlg').close());
+$('#addCheck').addEventListener('click', () => addProject(true));
+$('#addSave').addEventListener('click', () => addProject(false));
 $('#toggleLog').addEventListener('click', () => { const pre = $('#srvlog'); pre.hidden = !pre.hidden; $('#toggleLog').textContent = pre.hidden ? '로그 보기' : '로그 숨기기'; renderServer(); });
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { state.q = e.target.value; const pos = e.target.selectionStart; renderPanel(); const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos); }
 });
 $('#runAll').addEventListener('click', () => {
-  if (state.server && !state.server.up) { alert('대상 서버가 꺼져 있습니다. 위쪽 [서버 켜기]를 먼저 누르세요.'); return; }
-  if (confirm('모든 영역을 검사합니다. 대상 서버에 검사용 데이터를 만들고 지웁니다. 계속할까요?')) run([]);
+  if (confirm('모든 영역을 검사합니다. 대상 서버에 검사용 데이터(계정·글 등)를 만들고 지웁니다. 운영 서버가 아닌지 확인하세요. 계속할까요?')) run([]);
 });
-$('#tool').addEventListener('change', e => loadTool(e.target.value));
+$('#project').addEventListener('change', e => loadProject(e.target.value));
 
 (async () => {
-  state.tools = await api('/api/tools');
-  const saved = (() => { try { return localStorage.getItem('qa-ui-tool'); } catch (e) { return null; } })();
-  // 검사가 들어 있는 도구를 앞에, 빈 틀은 뒤에 '(준비 중)' 으로
-  state.tools.sort((a, b) => (b.ready > 0) - (a.ready > 0) || a.key.localeCompare(b.key));
-  const ready = state.tools.filter(t => t.ready > 0);
-  const first = ready.find(t => t.key === saved) || ready.find(t => t.key === 'nextjs') || ready[0] || state.tools[0];
-  $('#tool').innerHTML = state.tools.map(t => `<option value="${esc(t.key)}">${t.ready ? '' : '(준비 중) '}${esc(t.name || t.key)} — ${esc(t.key)}</option>`).join('');
-  $('#tool').value = first.key;
-  await loadTool(first.key);
+  await loadProjects();
+  fillSelect();
+  const saved = (() => { try { return localStorage.getItem('qa-ui-project'); } catch (e) { return null; } })();
+  const first = state.projects.find(t => t.id === saved) || state.projects.find(t => t.rootExists) || state.projects[0];
+  if (!first) { renderAll(); $('#openAdd').click(); return; }
+  $('#project').value = first.id;
+  await loadProject(first.id);
   poll();   // 이미 돌고 있는 검사가 있으면 이어서 본다
-  // 처음 쓰는데 레포 위치나 비밀번호가 없으면 설정 창부터 연다
-  const st = state.settings;
-  if (first.ready && st && (!st.isRepo || st.secrets.some(x => !x.set))) openSettings();
+  if (!first.rootExists) openSettings();   // 레포 위치부터
 })();
 </script>
 </body>

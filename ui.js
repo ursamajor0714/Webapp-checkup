@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // ============================================================
-// QA 조회 화면 — 영역마다 버튼을 누르면 검사가 돌고, 본 것 하나하나가 O/X 로 나온다
+// QA 조회 화면 — 프로젝트를 고르고, 영역마다 버튼을 누르면 검사가 돌고, 본 것 하나하나가 O/X 로 나온다
 //   더블클릭:  QA 실행.command (Mac) · QA 실행.bat (Windows)
 //   직접:      node ui.js [--open]      → http://localhost:4545
 //
 // 화면에서 할 수 있는 것
-//   · ⚙ 설정 — 대상 레포 위치·주소·로그인 비밀번호·OTP (이 컴퓨터의 .qa-local.json 에만 저장)
-//   · [서버 켜기] — 대상 레포에서 설치 → 빌드 → 실행 (qa.config.js 의 serve 블록대로)
+//   · ＋ 프로젝트 추가 — 레포 폴더만 고르면 스택(Next.js·Express·Django·Spring·FastAPI·React·Expo·정적)을 알아서 찾는다
+//   · ⚙ 설정 — 레포 위치·검사용 계정(아이디·비밀번호, 두 번째 계정)·OTP·부분별 포트 (이 컴퓨터의 .qa-local.json 에만 저장)
+//   · [서버 켜기] — 부분(서버·화면)마다 설치 → 빌드 → 실행 (스택이 아는 방법대로)
 //   · [최신 코드 받기] — QA 와 대상 레포를 git pull
 // 이 컴퓨터(127.0.0.1)에서만 열린다 — 검사는 대상 서버의 데이터를 만들고 지우기 때문이다.
 // ============================================================
@@ -16,7 +17,9 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
-const { listProbes, prepare, runProbe, finish, SECTIONS } = require('./common/runner');
+const { prepare, runProbe, finish, listAreas, projectDefs, SECTIONS, OWASP, CRED_KEYS } = require('./common/runner');
+const { loadProject, detectParts } = require('./common/project');
+const { STACKS } = require('./common/stacks');
 
 const PORT = Number(process.env.QA_UI_PORT) || 4545;
 const ROOT = __dirname;
@@ -24,117 +27,81 @@ const LOCAL_FILE = path.join(ROOT, '.qa-local.json');
 const RESTART_CODE = 75;   // 실행 파일(.command/.bat)은 이 코드로 끝나면 화면 서버를 다시 띄운다
 
 // ── 이 컴퓨터만의 설정 (.qa-local.json) ─────────────────────
-const readLocal = () => { try { return JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8')); } catch { return { tools: {} }; } };
+const readLocal = () => {
+  let l;
+  try { l = JSON.parse(fs.readFileSync(LOCAL_FILE, 'utf8')); } catch { return { projects: {} }; }
+  l.projects ??= {};
+  // 예전 화면(스택별 도구) 설정 → 프로젝트 설정으로 한 번 옮긴다
+  if (l.tools && l.tools.nextjs && !l.projects.pyroguard2d) {
+    const o = l.tools.nextjs;
+    l.projects.pyroguard2d = { root: o.root, ...(o.operatorPassword ? { password: o.operatorPassword } : {}), ...(o.otp ? { otp: o.otp } : {}) };
+    delete l.tools; delete l.built;
+    try { fs.writeFileSync(LOCAL_FILE, JSON.stringify(l, null, 2), { mode: 0o600 }); } catch { /* 읽기 전용이면 다음에 */ }
+  }
+  return l;
+};
 const writeLocal = data => fs.writeFileSync(LOCAL_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
 const expandHome = p => (p && p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p);
 
-// 도구 목록 — run.js 가 있는 폴더
-const tools = () => fs.readdirSync(ROOT, { withFileTypes: true })
-  .filter(d => d.isDirectory() && !d.name.startsWith('_') && fs.existsSync(path.join(ROOT, d.name, 'run.js')))
-  .map(d => d.name).sort();
+readLocal();   // 예전 설정이 있으면 지금 옮긴다 (프로젝트 목록이 그 값을 읽는다)
+const defs = () => projectDefs();
+const defOf = id => { const d = defs()[id]; if (!d) throw new Error('없는 프로젝트'); return { ...d, root: expandHome(d.root) }; };
+const known = id => !!defs()[id];
 
-// 대상 레포의 설정 파일(.env.local 등) 읽기 — KEY=값 줄만
-function readEnvFile(file) {
-  const out = {};
-  try {
-    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-      if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '');
-    }
-  } catch { /* 없으면 빈 값 */ }
-  return out;
-}
-
-// 도구 설정 = qa.config.js 기본값 ← 대상 레포 설정 파일 ← 화면에서 저장한 값 (뒤가 이긴다)
-// require 캐시의 같은 객체를 고쳐 쓰므로, 검사(prepare)도 이 값으로 돈다
-const pristine = {};
-function configOf(key) {
-  const cfg = require(path.join(ROOT, key, 'qa.config'));
-  pristine[key] ??= { root: cfg.root, baseUrl: cfg.baseUrl, operatorPassword: cfg.operatorPassword, otp: cfg.otp };
-  Object.assign(cfg, pristine[key]);
-  const mine = readLocal().tools[key] || {};
-  if (mine.root) cfg.root = expandHome(mine.root);
-  if (mine.baseUrl) cfg.baseUrl = mine.baseUrl.replace(/\/+$/, '');
-  const serve = cfg.serve;
-  const envVals = serve && serve.envFile ? readEnvFile(path.join(cfg.root, serve.envFile)) : {};
-  // 값이 어디서 왔는지 기억한다 — 화면에 정확히 보여 주고, 설정 파일을 새로 만들 때는 사람이 준 값만 쓴다
-  cfg.__from = {};
-  for (const [field, envKey] of Object.entries((serve && serve.envMap) || {})) {
-    if (mine[field]) { cfg[field] = mine[field]; cfg.__from[field] = '화면 설정'; }
-    else if (envVals[envKey]) { cfg[field] = envVals[envKey]; cfg.__from[field] = serve.envFile; }
-    else if (cfg[field]) cfg.__from[field] = '환경변수';
-  }
-  return cfg;
-}
-
-function toolInfo(key) {
-  const dir = path.join(ROOT, key);
-  const config = configOf(key);
-  const probes = listProbes(dir);
+// 프로젝트 모양 — 부분(서버·화면)과 영역 목록
+function projectInfo(id) {
+  const def = defOf(id);
+  const rootExists = !!def.root && fs.existsSync(def.root);
+  let parts = [];
+  if (rootExists) parts = loadProject(def).parts.map(p => ({ id: p.id, dir: p.dir, stack: p.stack, label: (STACKS[p.stack] || {}).label || p.stack, kind: p.kind, baseUrl: p.baseUrl, servedBy: p.servedBy || null, native: !!p.native, canServe: !!(STACKS[p.stack] && STACKS[p.stack].serve) && !p.servedBy && !p.native }));
+  const areas = listAreas(def);
   return {
-    key, name: config.name, baseUrl: config.baseUrl, root: config.root,
-    rootExists: fs.existsSync(config.root), canServe: !!config.serve,
-    // 실제로 만든 검사 영역 수 — 0 이면 아직 빈 틀(준비 중)이다
-    ready: probes.filter(p => !p.todo).length, total: probes.length,
-    sections: SECTIONS.map(([sec, label]) => ({
-      dir: sec, label,
-      probes: probes.filter(p => p.section === sec).map(p => ({ id: p.id, name: p.name, weight: p.weight, todo: !!p.todo, file: p.file })),
-    })),
+    id, name: def.name || id, root: def.root, rootExists, added: !!def.added, custom: !!def.dir, parts,
+    ready: areas.filter(p => !p.todo).length,
+    sections: SECTIONS.map(([sec, label]) => ({ dir: sec, label, probes: areas.filter(p => p.section === sec).map(p => ({ id: p.id, name: p.name, weight: p.weight, owasp: p.owasp || [], origin: p.origin })) })),
   };
 }
 
-function settingsOf(key) {
-  const cfg = configOf(key);
-  const mine = readLocal().tools[key] || {};
-  const serve = cfg.serve || {};
-  const envPath = serve.envFile ? path.join(cfg.root, serve.envFile) : null;
+function settingsOf(id) {
+  const def = defOf(id);
+  const mine = readLocal().projects[id] || {};
+  const auth = def.auth || {};
+  const needOtp = 'otp' in auth || !!(def.serveEnv && def.serveEnv.otp);
   return {
-    root: cfg.root, baseUrl: cfg.baseUrl,
-    rootExists: fs.existsSync(cfg.root),
-    isRepo: fs.existsSync(path.join(cfg.root, 'package.json')),
-    envFile: serve.envFile || null, envFileExists: envPath ? fs.existsSync(envPath) : false,
+    root: def.root || '', rootExists: !!def.root && fs.existsSync(def.root),
+    passwordOnly: !!(auth.fields && !auth.fields.user),
+    user: auth.user || '', user2: auth.user2 || '',
     // 비밀번호·OTP 값은 돌려주지 않는다 — 넣었는지와 어디서 왔는지만
-    secrets: Object.keys(serve.envMap || {}).map(field => ({
-      field, set: !!cfg[field], from: cfg.__from[field] || null,
-    })),
+    secrets: ['password', 'password2', ...(needOtp ? ['otp'] : [])].map(k => ({ field: k, set: !!auth[k], from: mine[k] ? '화면 설정' : auth[k] ? '환경변수·설정 파일' : null })),
+    parts: projectInfo(id).parts.filter(p => p.canServe).map(p => ({ dir: p.dir, stack: p.label, port: ((mine.parts || {})[p.dir] || {}).port || '', baseUrl: p.baseUrl })),
   };
 }
 
-// 가장 최근 리포트 — 같은 대상 주소를 잰 것만
-function latestReport(key) {
-  const dir = path.join(ROOT, key, 'reports');
+// 가장 최근 리포트
+function latestReport(id) {
+  const dir = path.join(ROOT, 'reports', id);
   if (!fs.existsSync(dir)) return null;
-  const { baseUrl } = configOf(key);
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().reverse();
-  for (const file of files) {
-    const rep = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
-    const measured = rep.summary && rep.summary.baseUrl;
-    if (measured ? measured === baseUrl : baseUrl === 'http://localhost:3000') return { file, ...rep };
-  }
-  return null;
+  const file = fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().reverse()[0];
+  return file ? { file, ...JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')) } : null;
 }
 
-// ── 대상 서버 켜기·끄기 ─────────────────────────────────
-const servers = {};   // key → { child, phase, log[], error, external }
-
-async function healthy(cfg) {
-  const url = cfg.baseUrl + ((cfg.serve && cfg.serve.health) || '/');
+// ── 대상 서버 켜기·끄기 (부분마다) ─────────────────────────
+const servers = {};   // `${id}:${dir}` → { child, phase, log[], error }
+async function healthy(baseUrl) {
+  if (!baseUrl) return { up: false };
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 1500);
-    const r = await fetch(url, { signal: ctl.signal });
+    const r = await fetch(baseUrl, { signal: ctl.signal, redirect: 'manual' });
     clearTimeout(t);
     return { up: true, status: r.status };
   } catch { return { up: false }; }
 }
-
-function serverState(key) { return servers[key] ??= { child: null, phase: 'idle', log: [], error: null }; }
+const serverState = key => (servers[key] ??= { child: null, phase: 'idle', log: [], error: null });
 function logLine(st, text) {
   for (const line of String(text).split(/\r?\n/)) if (line.trim()) st.log.push(line.replace(/\x1b\[[0-9;]*m/g, ''));
   if (st.log.length > 400) st.log.splice(0, st.log.length - 400);
 }
-
-// 명령 하나를 끝날 때까지 돌리고 출력을 로그에 쌓는다
 function runStep(st, cmd, cwd, env) {
   return new Promise((resolve, reject) => {
     logLine(st, `$ ${cmd.join(' ')}`);
@@ -142,72 +109,80 @@ function runStep(st, cmd, cwd, env) {
     p.stdout.on('data', d => logLine(st, d));
     p.stderr.on('data', d => logLine(st, d));
     p.on('error', e => reject(new Error(`${cmd[0]} 을(를) 실행하지 못했습니다: ${e.message}`)));
-    p.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd.join(' ')} 이(가) 실패했습니다 (code ${code}) — 아래 로그를 보세요`))));
+    p.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd.join(' ')} 이(가) 실패했습니다 (code ${code}) — 로그를 보세요`))));
   });
 }
-
 const gitHead = dir => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim(); } catch { return null; } };
 
-// 대상 레포에 설정 파일이 없으면 화면 설정값으로 만든다 (있으면 절대 덮어쓰지 않는다)
-function ensureEnvFile(cfg, st) {
-  const serve = cfg.serve;
-  if (!serve.envFile) return;
-  const file = path.join(cfg.root, serve.envFile);
-  if (fs.existsSync(file)) return;
-  const missing = Object.keys(serve.envMap || {}).filter(f => !cfg[f]);
-  if (missing.length) throw new Error(`⚙ 설정에서 ${missing.map(f => ({ operatorPassword: '로그인 비밀번호', otp: 'OTP' }[f] || f)).join('·')}를 먼저 넣어 주세요 (대상 레포에 ${serve.envFile} 이 없습니다)`);
-  const lines = [`# QA 화면이 만든 파일 (${new Date().toISOString()}) — 값을 바꿔도 된다`];
-  for (const [field, envKey] of Object.entries(serve.envMap || {})) lines.push(`${envKey}=${cfg[field]}`);
-  for (const [envKey, how] of Object.entries(serve.envExtra || {})) lines.push(`${envKey}=${how === 'random' ? crypto.randomBytes(24).toString('base64url') : how}`);
-  fs.writeFileSync(file, lines.join('\n') + '\n', { mode: 0o600 });
-  logLine(st, `${serve.envFile} 을(를) 만들었습니다`);
+// 대상에 넣을 환경변수 — 프로젝트 설정의 serveEnv (화면 설정값 ↔ 대상의 키) + 포트
+function envFor(def, port) {
+  const env = { ...process.env, PORT: String(port), SERVER_PORT: String(port) };
+  const se = def.serveEnv || {};
+  const auth = def.auth || {};
+  for (const [field, key] of Object.entries(se)) if (field !== 'random' && auth[field]) env[key] = auth[field];
+  const local = readLocal();
+  const saved = (local.generated ||= {});
+  for (const key of se.random || []) {
+    if (process.env[key]) continue;
+    saved[key] ??= crypto.randomBytes(24).toString('base64url');   // 한 번 만든 값은 계속 쓴다 (세션이 안 깨지게)
+    env[key] = saved[key];
+  }
+  writeLocal(local);
+  const missing = Object.entries(se).filter(([f]) => f !== 'random' && !auth[f]).map(([f]) => ({ password: '비밀번호', otp: 'OTP', user: '아이디' }[f] || f));
+  return { env, missing };
 }
 
-async function startServer(key, { rebuild = false } = {}) {
-  const cfg = configOf(key);
-  const st = serverState(key);
+async function startPart(id, dir, { rebuild = false } = {}) {
+  const def = defOf(id);
+  const part = loadProject(def).parts.find(p => p.dir === dir);
+  const st = serverState(`${id}:${dir}`);
   if (['installing', 'building', 'starting'].includes(st.phase)) return;
   st.log = []; st.error = null;
   try {
-    if (!cfg.serve) throw new Error('이 도구에는 서버 켜는 방법(qa.config.js 의 serve)이 없습니다');
-    if (!fs.existsSync(path.join(cfg.root, 'package.json'))) throw new Error(`대상 레포를 찾을 수 없습니다: ${cfg.root} — ⚙ 설정에서 폴더 위치를 고쳐 주세요`);
-    if ((await healthy(cfg)).up) { st.phase = 'running'; st.external = true; logLine(st, '이미 켜져 있습니다'); return; }
-    ensureEnvFile(cfg, st);
-    const env = { ...process.env, PORT: new URL(cfg.baseUrl).port || '3000' };
-    if (!fs.existsSync(path.join(cfg.root, 'node_modules'))) { st.phase = 'installing'; await runStep(st, cfg.serve.install, cfg.root, env); }
-    const local = readLocal();
-    const built = (local.built || {})[key];
-    const head = gitHead(cfg.root);
-    if (rebuild || !fs.existsSync(path.join(cfg.root, '.next', 'BUILD_ID')) || (head && built !== head)) {
-      st.phase = 'building';
-      await runStep(st, cfg.serve.build, cfg.root, env);
-      const l2 = readLocal(); l2.built = { ...(l2.built || {}), [key]: head }; writeLocal(l2);
+    if (!part) throw new Error(`부분을 찾을 수 없습니다: ${dir}`);
+    const plan = STACKS[part.stack].serve && STACKS[part.stack].serve(part.absDir);
+    if (!plan) throw new Error(`${part.stack} 는 켜는 방법을 모릅니다`);
+    if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; logLine(st, '이미 켜져 있습니다'); return; }
+    const port = new URL(part.baseUrl).port || '80';
+    const { env, missing } = envFor(def, port);
+    if (missing.length) throw new Error(`⚙ 설정에서 ${missing.join('·')}를 먼저 넣어 주세요 (서버를 켤 때 필요합니다)`);
+    const sub = a => a.map(x => x.replace('{PORT}', port));
+    if (plan.install && (/^npm$/.test(plan.install[0]) ? !fs.existsSync(path.join(part.absDir, 'node_modules')) : !(readLocal().installed || {})[`${id}:${dir}`])) {
+      st.phase = 'installing'; await runStep(st, sub(plan.install), part.absDir, env);
+      const l = readLocal(); l.installed = { ...(l.installed || {}), [`${id}:${dir}`]: true }; writeLocal(l);
+    }
+    const head = gitHead(part.absDir);
+    const builtKey = `${id}:${dir}`;
+    if (plan.build && (rebuild || (plan.buildMarker && !fs.existsSync(path.join(part.absDir, plan.buildMarker))) || (head && (readLocal().built || {})[builtKey] !== head))) {
+      st.phase = 'building'; await runStep(st, sub(plan.build), part.absDir, env);
+      const l = readLocal(); l.built = { ...(l.built || {}), [builtKey]: head }; writeLocal(l);
     }
     st.phase = 'starting';
-    logLine(st, `$ ${cfg.serve.start.join(' ')}  (PORT=${env.PORT})`);
-    const child = spawn(cfg.serve.start[0], cfg.serve.start.slice(1), { cwd: cfg.root, env, shell: process.platform === 'win32', detached: process.platform !== 'win32' });
-    st.child = child; st.external = false;
+    const cmd = sub(plan.start);
+    logLine(st, `$ ${cmd.join(' ')}  (PORT=${port})`);
+    const child = spawn(cmd[0], cmd.slice(1), { cwd: part.absDir, env, shell: process.platform === 'win32', detached: process.platform !== 'win32' });
+    st.child = child;
     child.stdout.on('data', d => logLine(st, d));
     child.stderr.on('data', d => logLine(st, d));
+    child.on('error', e => { st.error = e.message; });
     child.on('close', code => {
       if (st.child !== child) return;
       st.child = null;
       if (st.phase !== 'stopping') { st.phase = 'error'; st.error = `서버가 꺼졌습니다 (code ${code}) — 로그를 보세요`; } else st.phase = 'idle';
     });
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 180; i++) {
       await new Promise(r => setTimeout(r, 1000));
       if (!st.child) throw new Error(st.error || '서버가 켜지다가 꺼졌습니다');
-      if ((await healthy(cfg)).up) { st.phase = 'running'; logLine(st, `켜졌습니다 — ${cfg.baseUrl}`); return; }
+      if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; logLine(st, `켜졌습니다 — ${part.baseUrl}`); return; }
     }
-    throw new Error('90초 안에 켜지지 않았습니다 — 로그를 보세요');
+    throw new Error('3분 안에 켜지지 않았습니다 — 로그를 보세요');
   } catch (e) {
     st.phase = 'error'; st.error = e.message; logLine(st, '✗ ' + e.message);
   }
 }
-
-function stopServer(key) {
-  const st = serverState(key);
-  if (!st.child) return false;
+function stopKey(key) {
+  const st = servers[key];
+  if (!st || !st.child) return false;
   st.phase = 'stopping';
   try {
     if (process.platform === 'win32') execFileSync('taskkill', ['/pid', String(st.child.pid), '/T', '/F']);
@@ -215,9 +190,22 @@ function stopServer(key) {
   } catch { /* 이미 꺼졌다 */ }
   return true;
 }
-const stopAll = () => { for (const k of Object.keys(servers)) stopServer(k); };
+const stopAll = () => { for (const k of Object.keys(servers)) stopKey(k); };
 process.on('exit', stopAll);
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { stopAll(); process.exit(0); });
+
+async function serverStatus(id) {
+  const info = projectInfo(id);
+  const out = [];
+  for (const p of info.parts.filter(p => p.baseUrl && !p.servedBy && !p.native)) {
+    const st = serverState(`${id}:${p.dir}`);
+    const h = await healthy(p.baseUrl);
+    if (h.up && !['installing', 'building', 'starting'].includes(st.phase)) st.phase = 'running';
+    if (!h.up && st.phase === 'running') st.phase = st.child ? 'starting' : 'idle';
+    out.push({ dir: p.dir, label: p.label, kind: p.kind, baseUrl: p.baseUrl, up: h.up, phase: st.phase, managed: !!st.child, error: st.error, log: st.log.slice(-120), canServe: p.canServe });
+  }
+  return out;
+}
 
 // ── 최신 코드 받기 (git pull) ──────────────────────────────
 function pull(dir) {
@@ -233,19 +221,13 @@ function pull(dir) {
 
 // ── 검사 실행 — 한 번에 하나만 ────────────────────────────
 let job = null;
-
-async function startJob(key, ids) {
-  const dir = path.join(ROOT, key);
-  job = { id: Date.now().toString(36), tool: key, ids, status: 'running', current: null, results: [], report: null, error: null, startedAt: Date.now() };
+async function startJob(id, ids) {
+  job = { id: Date.now().toString(36), project: id, ids, status: 'running', current: null, results: [], report: null, error: null, notes: [], startedAt: Date.now() };
   const my = job;
   try {
-    const cfg = configOf(key);
-    if (!(await healthy(cfg)).up) throw new Error(`대상 서버(${cfg.baseUrl})가 꺼져 있습니다 — 위쪽 [서버 켜기]를 누르세요`);
-    // 로그인 실패 등으로 도구가 process.exit 를 부르면 화면 서버까지 죽는다 — 막고 오류로 돌린다
-    const realExit = process.exit;
-    process.exit = code => { throw new Error(`로그인하지 못했습니다 (code ${code}) — ⚙ 설정의 로그인 비밀번호를 확인하세요`); };
-    let prep;
-    try { prep = await prepare(dir, { only: ids }); } finally { process.exit = realExit; }
+    const prep = await prepare(defOf(id), { only: ids });
+    my.notes = prep.ctx.notes;
+    my.total = prep.probes.length;
     for (const probe of prep.probes) {
       my.current = { id: probe.id, name: probe.name };
       my.results.push(await runProbe(prep.ctx, probe));
@@ -274,89 +256,115 @@ function readBody(req) {
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
   });
 }
-const knownTool = key => tools().includes(key);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const q = url.searchParams;
+  const P = url.pathname;
   try {
     // 다른 사이트가 이 화면 서버를 부르지 못하게 — 같은 출처(localhost:PORT)만
     const origin = req.headers.origin;
     if (req.method !== 'GET' && origin && !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return send(res, 403, { error: 'forbidden' });
 
-    if (req.method === 'GET' && url.pathname === '/') {
-      return send(res, 200, fs.readFileSync(path.join(ROOT, 'common', 'ui', 'index.html'), 'utf8'), 'text/html; charset=utf-8');
+    if (req.method === 'GET' && P === '/') return send(res, 200, fs.readFileSync(path.join(ROOT, 'common', 'ui', 'index.html'), 'utf8'), 'text/html; charset=utf-8');
+    if (req.method === 'GET' && P === '/api/ping') return send(res, 200, { ok: true });
+    if (req.method === 'GET' && P === '/api/projects') {
+      return send(res, 200, { owasp: OWASP, projects: Object.keys(defs()).sort().map(k => { try { return projectInfo(k); } catch (e) { return { id: k, error: e.message, sections: [], parts: [] }; } }) });
     }
-    if (req.method === 'GET' && url.pathname === '/api/ping') return send(res, 200, { ok: true });
-    if (req.method === 'GET' && url.pathname === '/api/tools') {
-      return send(res, 200, tools().map(k => { try { return toolInfo(k); } catch (e) { return { key: k, error: e.message }; } }));
+    // 프로젝트 추가 — 폴더만 받는다. 스택은 감지한다 (미리 보기: dry)
+    if (req.method === 'POST' && P === '/api/projects/add') {
+      const { root, dry } = await readBody(req);
+      const abs = expandHome(String(root || '').trim());
+      if (!abs || !path.isAbsolute(abs)) return send(res, 400, { error: '레포 폴더의 전체 경로를 넣어 주세요 (예: ~/Developer/my-app)' });
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return send(res, 400, { error: `폴더가 없습니다: ${abs}` });
+      const parts = detectParts(abs).map(p => `${(STACKS[p.stack] || {}).label || p.stack}${p.dir !== '.' ? ` (${p.dir})` : ''}`);
+      if (!parts.length) return send(res, 400, { error: '아는 스택을 찾지 못했습니다 — Next.js·Express·Django·Spring·FastAPI·React·Expo·정적 HTML 레포인지 확인해 주세요' });
+      if (dry) return send(res, 200, { parts });
+      const local = readLocal();
+      const existing = Object.entries(defs()).find(([, d]) => d.root && path.resolve(expandHome(d.root)) === path.resolve(abs));
+      let id = existing ? existing[0] : path.basename(abs).toLowerCase().replace(/[^\w.-]+/g, '-');
+      if (!existing) { const base = id; for (let n = 2; defs()[id]; n++) id = `${base}-${n}`; }
+      local.projects[id] = { ...(local.projects[id] || {}), root: abs };
+      writeLocal(local);
+      return send(res, 200, { id, parts });
     }
-    if (req.method === 'GET' && url.pathname === '/api/latest') {
-      if (!knownTool(q.get('tool'))) return send(res, 404, { error: '없는 도구' });
-      return send(res, 200, latestReport(q.get('tool')));
+    if (req.method === 'POST' && P === '/api/projects/remove') {
+      const { project } = await readBody(req);
+      const local = readLocal();
+      if (!local.projects[project]) return send(res, 400, { error: '화면에서 추가한 프로젝트만 뺄 수 있습니다' });
+      delete local.projects[project]; writeLocal(local);
+      return send(res, 200, { ok: true });
     }
-    if (req.method === 'GET' && url.pathname === '/api/job') return send(res, 200, job);
-    if (req.method === 'POST' && url.pathname === '/api/run') {
+    if (req.method === 'GET' && P === '/api/latest') {
+      if (!known(q.get('project'))) return send(res, 404, { error: '없는 프로젝트' });
+      return send(res, 200, latestReport(q.get('project')));
+    }
+    if (req.method === 'GET' && P === '/api/job') return send(res, 200, job);
+    if (req.method === 'POST' && P === '/api/run') {
       if (job && job.status === 'running') return send(res, 409, { error: '이미 검사가 돌고 있습니다. 끝난 뒤 다시 누르세요.' });
-      const { tool, ids = [] } = await readBody(req);
-      if (!knownTool(tool)) return send(res, 400, { error: '없는 도구' });
-      const known = new Set(listProbes(path.join(ROOT, tool)).map(p => p.id));
-      const pick = (Array.isArray(ids) ? ids : []).map(String).filter(i => known.has(i.toUpperCase()));
-      startJob(tool, pick);   // 기다리지 않는다 — 화면은 /api/job 으로 진행을 본다
+      const { project, ids = [] } = await readBody(req);
+      if (!known(project)) return send(res, 400, { error: '없는 프로젝트' });
+      const valid = new Set(listAreas(defOf(project)).map(p => p.id));
+      const pick = (Array.isArray(ids) ? ids : []).map(String).map(s => s.toUpperCase()).filter(i => valid.has(i));
+      startJob(project, pick);   // 기다리지 않는다 — 화면은 /api/job 으로 진행을 본다
       return send(res, 202, { ok: true });
     }
 
     // 설정
-    if (req.method === 'GET' && url.pathname === '/api/settings') {
-      if (!knownTool(q.get('tool'))) return send(res, 404, { error: '없는 도구' });
-      return send(res, 200, settingsOf(q.get('tool')));
+    if (req.method === 'GET' && P === '/api/settings') {
+      if (!known(q.get('project'))) return send(res, 404, { error: '없는 프로젝트' });
+      return send(res, 200, settingsOf(q.get('project')));
     }
-    if (req.method === 'POST' && url.pathname === '/api/settings') {
+    if (req.method === 'POST' && P === '/api/settings') {
       const body = await readBody(req);
-      if (!knownTool(body.tool)) return send(res, 400, { error: '없는 도구' });
-      if (body.otp && !/^\d{6}$/.test(body.otp)) return send(res, 400, { error: 'OTP 는 6자리 숫자입니다' });
-      if (body.baseUrl && !/^https?:\/\/[^\s]+$/.test(body.baseUrl)) return send(res, 400, { error: '주소는 http:// 로 시작해야 합니다' });
+      if (!known(body.project)) return send(res, 400, { error: '없는 프로젝트' });
+      if (body.otp && !/^\d{4,8}$/.test(body.otp)) return send(res, 400, { error: 'OTP 는 숫자입니다' });
       const local = readLocal();
-      const mine = { ...(local.tools[body.tool] || {}) };
-      for (const k of ['root', 'baseUrl', 'operatorPassword', 'otp']) {
-        if (typeof body[k] === 'string' && body[k].trim()) mine[k] = body[k].trim();
-        if (body.clear && body.clear.includes(k)) delete mine[k];
+      const mine = { ...(local.projects[body.project] || {}) };
+      for (const k of ['root', ...CRED_KEYS]) {
+        if (typeof body[k] === 'string' && body[k].trim()) mine[k] = k === 'root' ? expandHome(body[k].trim()) : body[k].trim();
+        if (Array.isArray(body.clear) && body.clear.includes(k)) delete mine[k];
       }
-      local.tools[body.tool] = mine;
+      if (body.parts && typeof body.parts === 'object') {
+        mine.parts = { ...(mine.parts || {}) };
+        for (const [dir, v] of Object.entries(body.parts)) {
+          const port = Number(v && v.port);
+          if (port >= 1 && port <= 65535) mine.parts[dir] = { port }; else if (v && v.port === '') delete mine.parts[dir];
+        }
+      }
+      local.projects[body.project] = mine;
       writeLocal(local);
-      return send(res, 200, settingsOf(body.tool));
+      return send(res, 200, settingsOf(body.project));
     }
 
     // 대상 서버
-    if (req.method === 'GET' && url.pathname === '/api/server') {
-      const key = q.get('tool');
-      if (!knownTool(key)) return send(res, 404, { error: '없는 도구' });
-      const cfg = configOf(key);
-      const st = serverState(key);
-      const h = await healthy(cfg);
-      if (h.up && !['installing', 'building', 'starting'].includes(st.phase)) { if (st.phase !== 'running') st.external = !st.child; st.phase = 'running'; }
-      if (!h.up && st.phase === 'running') st.phase = st.child ? 'starting' : 'idle';
-      return send(res, 200, { up: h.up, status: h.status, phase: st.phase, managed: !!st.child, external: !!st.external && !st.child, error: st.error, log: st.log.slice(-120), baseUrl: cfg.baseUrl, canServe: !!cfg.serve });
+    if (req.method === 'GET' && P === '/api/server') {
+      if (!known(q.get('project'))) return send(res, 404, { error: '없는 프로젝트' });
+      return send(res, 200, await serverStatus(q.get('project')));
     }
-    if (req.method === 'POST' && url.pathname === '/api/server/start') {
-      const { tool, rebuild } = await readBody(req);
-      if (!knownTool(tool)) return send(res, 400, { error: '없는 도구' });
-      startServer(tool, { rebuild: !!rebuild });
-      return send(res, 202, { ok: true });
+    if (req.method === 'POST' && P === '/api/server/start') {
+      const { project, dir, rebuild } = await readBody(req);
+      if (!known(project)) return send(res, 400, { error: '없는 프로젝트' });
+      const parts = (await serverStatus(project)).filter(p => p.canServe && !p.up && (!dir || p.dir === dir));
+      // 서버(API)를 먼저, 화면은 그 뒤에
+      (async () => { for (const p of parts.sort((a, b) => (a.kind === 'client') - (b.kind === 'client'))) await startPart(project, p.dir, { rebuild: !!rebuild }); })();
+      return send(res, 202, { ok: true, starting: parts.map(p => p.dir) });
     }
-    if (req.method === 'POST' && url.pathname === '/api/server/stop') {
-      const { tool } = await readBody(req);
-      if (!knownTool(tool)) return send(res, 400, { error: '없는 도구' });
-      return send(res, 200, { stopped: stopServer(tool) });
+    if (req.method === 'POST' && P === '/api/server/stop') {
+      const { project, dir } = await readBody(req);
+      if (!known(project)) return send(res, 400, { error: '없는 프로젝트' });
+      let n = 0;
+      for (const k of Object.keys(servers)) if (k.startsWith(project + ':') && (!dir || k === `${project}:${dir}`)) n += stopKey(k) ? 1 : 0;
+      return send(res, 200, { stopped: n });
     }
 
     // 최신 코드 받기 — QA 가 바뀌면 화면 서버를 다시 띄운다 (실행 파일이 되살린다)
-    if (req.method === 'POST' && url.pathname === '/api/update') {
-      const { tool } = await readBody(req);
-      if (!knownTool(tool)) return send(res, 400, { error: '없는 도구' });
-      const cfg = configOf(tool);
+    if (req.method === 'POST' && P === '/api/update') {
+      const { project } = await readBody(req);
+      if (!known(project)) return send(res, 400, { error: '없는 프로젝트' });
+      const def = defOf(project);
       const qa = pull(ROOT);
-      const target = fs.existsSync(cfg.root) ? pull(cfg.root) : { dir: cfg.root, ok: false, out: '폴더가 없습니다' };
+      const target = def.root && fs.existsSync(def.root) ? pull(def.root) : { dir: def.root, ok: false, out: '폴더가 없습니다' };
       const restart = qa.ok && qa.changed && process.env.QA_UI_LAUNCHER === '1';
       send(res, 200, { qa, target, restart, targetChanged: !!target.changed });
       if (restart) setTimeout(() => { stopAll(); process.exit(RESTART_CODE); }, 300);

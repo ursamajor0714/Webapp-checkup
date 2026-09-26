@@ -3,3 +3,6 @@ node_modules/
 
 # 화면(ui.js) 설정 — 비밀번호가 들어가므로 올리지 않는다
 .qa-local.json
+
+# 검사 결과 (프로젝트별)
+/reports/
