@@ -39,6 +39,21 @@ module.exports = {
       universe: getById.length, scanned: getById.length, passed: notFound, notes: wrong,
     }));
 
+    // ── 2-b. 없는 것을 고치거나 지우라고 하면 '됐다' 고 하지 않는가
+    // 200 으로 '수정 완료' 라고 답하면 화면은 성공 알림을 띄우고, 사용자는 저장된 줄 안다.
+    // 404 가 맞고, 값부터 검사해서 400 으로 먼저 거절하는 것도 거짓말은 아니므로 통과로 센다.
+    const writeById = idRoutes.filter(r => r.method !== 'GET');
+    let honest = 0; const lied = [];
+    for (const r of writeById) {
+      const p = r.path.replace(/:[a-zA-Z_]+/g, '99999999');
+      const res = await ctx.call(p, { method: r.method, body: {} });
+      if (res.status === 404 || res.status === 400) honest++;
+      else lied.push(`${r.method} ${p} → ${res.status}`);
+    }
+    checks.push(check('없는 id 를 고치거나 지우면 성공이라고 하지 않는다', {
+      universe: writeById.length, scanned: writeById.length, passed: honest, notes: lied,
+    }));
+
     // ── 3. 본문이 깨졌을 때
     const broken = [
       ['빈 본문', undefined],

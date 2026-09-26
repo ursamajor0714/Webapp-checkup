@@ -92,14 +92,50 @@ module.exports = {
       universe: bad.length, scanned: bad.length, passed: rejected, notes: accepted,
     });
 
-    // ── 4. 로그인 시도 제한이 있는가 (정적 — 실제로 잠그면 이후 검사가 다 막힌다)
-    const authSrc = ctx.read('backend/routes/auth.js');
-    const hasLimit = /MAX_LOGIN_ATTEMPTS/.test(authSrc) && /lockUntil/.test(authSrc);
-    const c4 = check('로그인 무차별 대입 제한이 있다', {
-      universe: 1, scanned: 1, passed: hasLimit ? 1 : 0,
-      notes: hasLimit ? [] : ['로그인 실패 횟수 제한이 없다'],
+    // ── 4. 로그인을 계속 틀리면 실제로 잠그는가
+    // 잠금은 IP 별이다. QA 의 진짜 IP 를 잠그면 뒤 검사가 전부 막히므로, 가짜 IP 를
+    // X-Forwarded-For 로 붙여 그 IP 만 잠근다. 서버가 'trust proxy' 로 이 헤더를 믿기 때문에
+    // 로컬에서만 통하는 방법이다 — 배포 서버에서는 프록시가 진짜 IP 를 덧붙인다.
+    // ponytail: trust proxy 설정이 바뀌면 진짜 IP 가 잠긴다. 그때는 H 의 쿠키 검사가 429 로 깨지는 것으로 드러난다.
+    const loginEndpoints = [
+      ['/api/admin/login', { password: 'qa-wrong-password' }],
+      ['/api/contract/login', { password: 'qa-wrong-password' }],
+      ['/api/member/login', { name: 'QA없는회원', password: '0000' }],
+    ];
+    let locked = 0; const notLocked = [];
+    for (const [i, [p, body]] of loginEndpoints.entries()) {
+      const fakeIp = `10.99.${i}.${Math.floor(Math.random() * 250) + 1}`;
+      let last = null;
+      for (let n = 0; n < 6; n++) {
+        last = await ctx.call(p, { method: 'POST', as: 'none', body, headers: { 'X-Forwarded-For': fakeIp } });
+      }
+      if (last.status === 429) locked++;
+      else notLocked.push(`${p} 를 6번 틀려도 잠기지 않는다 (마지막 응답 ${last.status})`);
+    }
+    const c4 = check('로그인을 계속 틀리면 잠근다', {
+      universe: loginEndpoints.length, scanned: loginEndpoints.length, passed: locked, notes: notLocked,
     });
 
-    return { checks: [c1, c2, c2b, c3, c4] };
+    // ── 5. 로그아웃하면 그 토큰이 더는 통하지 않는가
+    // 쿠키만 지우고 서버가 토큰을 기억하고 있으면, 로그아웃 전에 토큰을 가져간 사람은 계속 들어온다.
+    // (공용 PC 에서 로그아웃하고 자리를 떴는데 세션이 살아 있는 상황)
+    const fresh = await ctx.call('/api/admin/login', { method: 'POST', as: 'none',
+      body: { password: ctx.config.adminPassword } });
+    const tok = fresh.body && fresh.body.token;
+    let c5;
+    if (!tok) {
+      c5 = check('로그아웃한 토큰은 거부한다', { universe: 1, scanned: 0, passed: 0,
+        notes: ['검사용 로그인이 안 돼서 보지 못했다'] });
+    } else {
+      const auth = { Authorization: 'Bearer ' + tok, Cookie: 'adminToken=' + tok };
+      await ctx.call('/api/admin/logout', { method: 'POST', as: 'none', headers: auth });
+      const after = await ctx.call('/api/members', { as: 'none', headers: auth });
+      c5 = check('로그아웃한 토큰은 거부한다', {
+        universe: 1, scanned: 1, passed: after.status === 401 ? 1 : 0,
+        notes: after.status === 401 ? [] : [`로그아웃한 토큰으로 /api/members → ${after.status} — 서버가 토큰을 지우지 않는다`],
+      });
+    }
+
+    return { checks: [c1, c2, c2b, c3, c4, c5] };
   },
 };

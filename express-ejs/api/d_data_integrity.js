@@ -150,6 +150,65 @@ module.exports = {
       }));
     }
 
+    // ── 8. 문자 템플릿: 만들기 → 보이기 → 고치기 → 기본 지정 → 지우기
+    // 문자 발송 탭이 쓰는 기능인데 다른 영역이 한 번도 부르지 않았다.
+    // 기본 템플릿은 분류마다 하나여야 한다 — 둘이 되면 화면이 어느 것을 쓸지 모른다.
+    {
+      const steps = []; const cat = 'QA분류';
+      const mk = await ctx.call('/api/sms/templates', { method: 'POST', body: { category: cat, title: 'QA제목', content: 'QA내용' } });
+      const tid = mk.body && mk.body.id;
+      const list = () => ctx.call('/api/sms/templates?category=' + encodeURIComponent(cat)).then(r => r.body || []);
+      const seen = tid && (await list()).find(t => t.id === tid);
+      steps.push([!!seen, '만든 템플릿이 목록에 보인다']);
+      if (tid) {
+        await ctx.call(`/api/sms/templates/${tid}`, { method: 'PUT', body: { title: 'QA제목2', content: 'QA내용2' } });
+        const edited = (await list()).find(t => t.id === tid);
+        steps.push([!!edited && edited.title === 'QA제목2' && edited.content === 'QA내용2', '고친 제목·내용이 저장된다']);
+        const mk2 = await ctx.call('/api/sms/templates', { method: 'POST', body: { category: cat, title: 'QA둘째', content: 'QA' } });
+        await ctx.call(`/api/sms/templates/${tid}/default`, { method: 'PUT' });
+        if (mk2.body && mk2.body.id) await ctx.call(`/api/sms/templates/${mk2.body.id}/default`, { method: 'PUT' });
+        const defaults = (await list()).filter(t => t.is_default);
+        steps.push([defaults.length === 1, `기본 템플릿이 분류에 하나다 (지금 ${defaults.length}개)`]);
+        await ctx.call(`/api/sms/templates/${tid}`, { method: 'DELETE' });
+        if (mk2.body && mk2.body.id) await ctx.call(`/api/sms/templates/${mk2.body.id}`, { method: 'DELETE' });
+        steps.push([!(await list()).some(t => t.id === tid), '지운 템플릿이 목록에서 사라진다']);
+      }
+      checks.push(check('문자 템플릿을 만들고 고치고 지운 결과가 그대로 남는다', {
+        universe: 4, scanned: steps.length, passed: steps.filter(s => s[0]).length,
+        notes: steps.filter(s => !s[0]).map(s => s[1] + ' — 안 됨'),
+      }));
+    }
+
+    // ── 9. 운동복 대여: 등록 → 연장 → 반납 → 완전 삭제
+    // 서비스는 끝났지만 경로와 화면은 살아 있다. 살아 있는 한 맞게 돌아야 한다.
+    {
+      const steps = [];
+      const mk = await ctx.call('/api/uniforms', { method: 'POST', body: {
+        member_id: null, member_name: 'QA운동복', start_date: kstDay(0), end_date: kstDay(30),
+        months: 1, amount: 10000, payment_method: '카드' } });
+      const uid = mk.body && mk.body.id;
+      const find = async () => ((await ctx.call('/api/uniforms')).body || []).find(u => u.id === uid);
+      steps.push([!!(uid && await find()), '등록한 대여가 목록에 보인다']);
+      if (uid) {
+        await ctx.call(`/api/uniforms/${uid}/extend`, { method: 'POST', body: {
+          months: 1, new_end_date: kstDay(60), amount: 10000, payment_method: '카드' } });
+        const ext = await find();
+        steps.push([!!ext && String(ext.end_date).slice(0, 10) === kstDay(60) && Number(ext.months) === 2,
+          '연장하면 끝나는 날과 개월 수가 바뀐다']);
+        await ctx.call(`/api/uniforms/${uid}`, { method: 'DELETE', body: { refund_amount: 0 } });
+        steps.push([(await find() || {}).status === 'returned', '반납하면 상태가 반납으로 바뀐다']);
+        await ctx.call(`/api/uniforms/${uid}/purge`, { method: 'DELETE' });
+        steps.push([!(await find()), '완전 삭제하면 목록에서 사라진다']);
+        // 뒷정리 — 이력은 purge 가 안 지운다(매출 기록이라 남기는 것). 검사가 만든 것만 지운다.
+        const hist = ((await ctx.call('/api/uniforms/history')).body || []).filter(h => h.uniform_id === uid);
+        for (const h of hist) await ctx.call(`/api/uniforms/history/${h.id}`, { method: 'DELETE' });
+      }
+      checks.push(check('운동복 대여를 등록·연장·반납·삭제한 결과가 그대로 남는다', {
+        universe: 4, scanned: steps.length, passed: steps.filter(s => s[0]).length,
+        notes: steps.filter(s => !s[0]).map(s => s[1] + ' — 안 됨'),
+      }));
+    }
+
     // ── 7. 스키마에 외래키가 선언돼 있는가
     const db = ctx.read('backend/db.js');
     const tables = [...db.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map(m => m[1]);

@@ -88,6 +88,61 @@ module.exports = {
       notes: blank.map(() => '빈 목록인데 아무 설명이 없다'),
     }));
 
+    // ── 6. 접근성 기본 — 화면을 못 보는 사람(스크린리더), 폰으로 보는 사람도 읽을 수 있는가
+    // 대기업 기준(100)에는 접근성 점검이 들어 있다. 여기서는 소스만으로 확실히 가려지는 것만 본다.
+    const src = all.map(f => ctx.readAbs(f)).join('\n');
+    // 페이지마다 언어·폰 화면 설정 (partials 는 조각이라 뺀다)
+    const pages = views.filter(f => !/partials/.test(f));
+    const pageBad = [];
+    for (const f of pages) {
+      const s = ctx.readAbs(f);
+      if (!/<html[^>]*\slang=/.test(s)) pageBad.push(`${ctx.rel(f)}: <html lang> 이 없다 — 스크린리더가 한국어로 안 읽는다`);
+      if (!/name="viewport"/.test(s)) pageBad.push(`${ctx.rel(f)}: viewport 가 없다 — 폰에서 글씨가 깨알만 해진다`);
+    }
+    checks.push(check('페이지마다 언어와 폰 화면 설정이 있다', {
+      universe: pages.length * 2, scanned: pages.length * 2, passed: pages.length * 2 - pageBad.length, notes: pageBad,
+    }));
+    // 그림에 대체 글
+    const imgs = [...src.matchAll(/<img\b[^>]*>/g)].map(m => m[0]);
+    const noAlt = imgs.filter(t => !/\salt=/.test(t));
+    checks.push(check('그림에 대체 글(alt)이 있다', {
+      universe: imgs.length, scanned: imgs.length, passed: imgs.length - noAlt.length,
+      notes: noAlt.map(t => t.slice(0, 70)),
+    }));
+    // 글자 없는 버튼 (아이콘만 있는 버튼은 스크린리더가 '버튼' 이라고만 읽는다)
+    const buttons = [...src.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+    const mute = buttons.filter(([, attrs, inner]) =>
+      !/aria-label=|title=/.test(attrs) && !/[가-힣A-Za-z0-9]|\$\{|<%/.test(inner.replace(/<[^>]+>/g, '')));
+    checks.push(check('버튼에 읽을 수 있는 이름이 있다', {
+      universe: buttons.length, scanned: buttons.length, passed: buttons.length - mute.length,
+      notes: mute.map(m => m[0].replace(/\s+/g, ' ').slice(0, 70)),
+    }));
+    // 입력칸 이름표 — <label for>·aria-label·<label> 로 감싼 것만 확실하다.
+    // 확인 필요로 두는 것:
+    //  · placeholder 만 있다 — 글을 치면 사라진다
+    //  · 바로 앞에 <label>글</label> 이 있지만 for 로 연결 안 됐다 — 눈으로는 보이지만 스크린리더는 모른다
+    //    (for="id" 한 줄이면 고쳐진다)
+    const labelFor = new Set([...src.matchAll(/<label[^>]*\sfor="([^"]+)"/g)].map(m => m[1]));
+    const inputs = [...src.matchAll(/<(input|select|textarea)\b([^>]*)>/g)]
+      .filter(([, , a]) => !/type="(hidden|submit|button|checkbox|radio)"/.test(a));
+    let labeled = 0; const phOnly = []; const bare = [];
+    for (const m of inputs) {
+      const [tag, , a] = m;
+      const id = (a.match(/\sid="([^"]+)"/) || [])[1];
+      // <label>이름 <input></label> 처럼 감싸는 것도 이름표다
+      const before = src.slice(0, m.index);
+      const wrapped = before.lastIndexOf('<label') > before.lastIndexOf('</label>');
+      if (wrapped || /aria-label=|aria-labelledby=/.test(a) || (id && labelFor.has(id))) labeled++;
+      else if (/placeholder=/.test(a)) phOnly.push('placeholder 만 있다 — ' + tag.slice(0, 70));
+      else if (/<\/label>\s*(<br\s*\/?>\s*)?$/.test(before)) phOnly.push('앞 <label> 이 for 로 연결 안 됐다 — ' + tag.slice(0, 70));
+      else bare.push(tag.replace(/\s+/g, ' ').slice(0, 70));
+    }
+    checks.push(check('입력칸에 이름표가 있다', {
+      universe: inputs.length, scanned: inputs.length, passed: labeled,
+      warned: phOnly.length, warnNotes: phOnly,
+      notes: bare.map(t => '이름표가 없다 — ' + t),
+    }));
+
     return { checks };
   },
 };
