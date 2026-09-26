@@ -45,6 +45,8 @@ module.exports = {
       if (c && c.strict) return { name: k, ok: true, detail: `스키마: ${c.source}` };
       if (r.builtin) return { name: k, ok: true, detail: '프레임워크 기본 화면 (로그인·비밀번호 폼은 프레임워크가 검증한다)' };
       if (/(^|\/)(logout|signout)(\/|$)/i.test(r.path)) return { name: k, ok: true, detail: '본문을 쓰지 않는 경로' };
+      // 처리 코드가 본문을 아예 읽지 않는 경로 (없는 경로 404 받기, 버튼 하나짜리 동작 등)
+      if (r.handler && !/\b(req|request)\s*\.\s*(body|json|formData|text|POST|data)\b|readJson|\bbody\b|@RequestBody|request\.(POST|data)/.test(r.handler)) return { name: k, ok: true, detail: '본문을 읽지 않는 경로' };
       if (entityRoutes.has(k)) return { name: k, ok: true, detail: '프로젝트 설정의 규칙으로 위에서 끝까지 쟀다' };
       if (c && c.customValidator) return { name: k, ok: null, detail: `${c.customValidator} 로 손수 검사 — 규칙을 코드에서 읽을 수 없어 틀린 값을 만들 수 없다 (설정에 규칙을 적으면 전부 잰다)` };
       return { name: k, ok: false, detail: '검증 스키마·검증 함수를 찾지 못했다 — 서버가 받은 값을 그대로 쓸 수 있다' };
