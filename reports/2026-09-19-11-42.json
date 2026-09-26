@@ -1,0 +1,367 @@
+{
+  "summary": {
+    "target": "CrossFit Grove 관리 시스템",
+    "at": "2026-09-19T11:42:54.215Z",
+    "areas": 3,
+    "universe": 2394,
+    "scanned": 2394,
+    "passed": 2393,
+    "warned": 1,
+    "failed": 0,
+    "scanRate": 100,
+    "qualityRate": 100,
+    "rawScore": 100,
+    "maturity": {
+      "got": 4,
+      "total": 18,
+      "factor": 0.65
+    },
+    "score": 65,
+    "grade": "중급",
+    "tier": "중급"
+  },
+  "tiers": {
+    "대기업": {
+      "min": 90,
+      "max": 100,
+      "note": "네이버·카카오·토스 같은 곳의 서비스. 전담 QA 조직과 CI 가 있다."
+    },
+    "중급": {
+      "min": 60,
+      "max": 89,
+      "note": "개발자 몇 명이 붙은 스타트업·중소기업 제품. 아픈 곳만 자동 검사."
+    },
+    "초급": {
+      "min": 30,
+      "max": 59,
+      "note": "1인 개발·외주 납품 직후. 기능은 되지만 회귀 검사가 없다."
+    },
+    "미완성": {
+      "min": 0,
+      "max": 29,
+      "note": "개발 중이거나 주요 흐름이 끊긴 상태."
+    }
+  },
+  "grades": [
+    {
+      "min": 90,
+      "label": "대기업 수준",
+      "desc": "26개 영역 전부 자동 검사 + CI + 상시 감시. 사람이 빠뜨릴 구조가 아니다."
+    },
+    {
+      "min": 75,
+      "label": "중급 상위",
+      "desc": "돈·권한·개인정보처럼 아픈 곳은 자동 검사로 지킨다. 감시와 부하 시험이 없다."
+    },
+    {
+      "min": 60,
+      "label": "중급",
+      "desc": "주요 흐름은 돌고 큰 구멍은 없다. 검사는 사람이 기억해서 돌린다."
+    },
+    {
+      "min": 45,
+      "label": "초급 상위",
+      "desc": "기능은 다 되지만 검사가 눈으로 하는 수준. 고치면 다른 데가 깨지는지 모른다."
+    },
+    {
+      "min": 30,
+      "label": "초급",
+      "desc": "만든 사람만 쓸 수 있는 상태. 돈이나 권한이 틀려도 한참 뒤에 안다."
+    },
+    {
+      "min": 0,
+      "label": "미완성",
+      "desc": "주요 흐름이 끊겨 있다."
+    }
+  ],
+  "maturity": {
+    "items": [
+      {
+        "key": "ci",
+        "weight": 3,
+        "label": "배포할 때마다 자동으로 검사가 돈다 (CI)",
+        "ok": false
+      },
+      {
+        "key": "tests",
+        "weight": 3,
+        "label": "레포 안에 자동 테스트가 있다",
+        "ok": false
+      },
+      {
+        "key": "qaSuite",
+        "weight": 2,
+        "label": "이 QA 같은 회귀 검사 도구가 붙어 있다",
+        "ok": true
+      },
+      {
+        "key": "monitor",
+        "weight": 2,
+        "label": "장애를 사람보다 먼저 알려 주는 감시가 있다",
+        "ok": false
+      },
+      {
+        "key": "staging",
+        "weight": 2,
+        "label": "운영과 분리된 시험 환경이 있다",
+        "ok": false
+      },
+      {
+        "key": "docs",
+        "weight": 1,
+        "label": "결정과 작업 내용이 문서로 남는다",
+        "ok": true
+      },
+      {
+        "key": "deploy",
+        "weight": 1,
+        "label": "배포 절차가 코드로 적혀 있다",
+        "ok": true
+      },
+      {
+        "key": "audit",
+        "weight": 1,
+        "label": "의존성 취약점을 정기적으로 본다",
+        "ok": false
+      },
+      {
+        "key": "backup",
+        "weight": 2,
+        "label": "DB 백업·복구 절차가 있다",
+        "ok": false
+      },
+      {
+        "key": "rollback",
+        "weight": 1,
+        "label": "배포를 되돌리는 방법이 적혀 있다",
+        "ok": false
+      }
+    ],
+    "got": 4,
+    "total": 18,
+    "ratio": 0.2222222222222222,
+    "factor": 0.65
+  },
+  "results": [
+    {
+      "id": "G",
+      "name": "화면 연결 (DOM·핸들러)",
+      "weight": 6,
+      "composite": false,
+      "universe": 997,
+      "scanned": 997,
+      "passed": 997,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 14,
+      "checks": [
+        {
+          "name": "스크립트가 찾는 DOM id 가 화면에 있다",
+          "universe": 453,
+          "scanned": 453,
+          "passed": 453,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "버튼이 부르는 함수가 정의돼 있다",
+          "universe": 211,
+          "scanned": 211,
+          "passed": 211,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "한 페이지에 실리는 전역 함수 이름이 겹치지 않는다",
+          "universe": 290,
+          "scanned": 290,
+          "passed": 290,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 읽는 스크립트 파일이 존재한다",
+          "universe": 25,
+          "scanned": 25,
+          "passed": 25,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "표의 헤더 칸 수와 colspan 이 맞는다",
+          "universe": 18,
+          "scanned": 18,
+          "passed": 18,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "I",
+      "name": "주입 (XSS · SQL)",
+      "weight": 7,
+      "composite": false,
+      "universe": 311,
+      "scanned": 311,
+      "passed": 311,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 455,
+      "checks": [
+        {
+          "name": "SQL 에 값을 문자열로 붙이지 않는다",
+          "universe": 172,
+          "scanned": 172,
+          "passed": 172,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "주입 문자열을 넣어도 DB 가 멀쩡하다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "members 테이블 정상"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "화면에 값을 넣을 때 escape 한다",
+          "universe": 113,
+          "scanned": 113,
+          "passed": 113,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "저장된 위험 문자열을 화면이 escape 해서 그린다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "속성으로 받은 값을 escape 없이 innerHTML 에 넣지 않는다",
+          "universe": 20,
+          "scanned": 20,
+          "passed": 20,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "U",
+      "name": "화면 문구·한국어",
+      "weight": 3,
+      "composite": false,
+      "universe": 1086,
+      "scanned": 1086,
+      "passed": 1085,
+      "warned": 1,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 7,
+      "checks": [
+        {
+          "name": "변수 뒤에 조사를 그대로 붙이지 않았다",
+          "universe": 900,
+          "scanned": 900,
+          "passed": 900,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "사용자 문구에 개발 용어가 없다",
+          "universe": 34,
+          "scanned": 34,
+          "passed": 34,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "지우는 버튼이 확인을 받는다",
+          "universe": 14,
+          "scanned": 14,
+          "passed": 14,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 오류 메시지가 한국어다",
+          "universe": 91,
+          "scanned": 91,
+          "passed": 91,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "빈 목록에 안내 문구가 있다",
+          "universe": 47,
+          "scanned": 47,
+          "passed": 46,
+          "warned": 1,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [
+            "문구를 부르는 쪽에서 넘긴다 — 내용은 그쪽을 봐야 안다"
+          ]
+        }
+      ],
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "summary": {
+    "target": "CrossFit Grove 관리 시스템",
+    "at": "2026-09-25T04:04:27.465Z",
+    "areas": 1,
+    "universe": 246,
+    "scanned": 246,
+    "passed": 246,
+    "warned": 0,
+    "failed": 0,
+    "scanRate": 100,
+    "qualityRate": 100,
+    "rawScore": 100,
+    "maturity": {
+      "got": 4,
+      "total": 18,
+      "factor": 0.65
+    },
+    "score": 65,
+    "grade": "중급",
+    "tier": "중급"
+  },
+  "tiers": {
+    "대기업": {
+      "min": 90,
+      "max": 100,
+      "note": "네이버·카카오·토스 같은 곳의 서비스. 전담 QA 조직과 CI 가 있다."
+    },
+    "중급": {
+      "min": 60,
+      "max": 89,
+      "note": "개발자 몇 명이 붙은 스타트업·중소기업 제품. 아픈 곳만 자동 검사."
+    },
+    "초급": {
+      "min": 30,
+      "max": 59,
+      "note": "1인 개발·외주 납품 직후. 기능은 되지만 회귀 검사가 없다."
+    },
+    "미완성": {
+      "min": 0,
+      "max": 29,
+      "note": "개발 중이거나 주요 흐름이 끊긴 상태."
+    }
+  },
+  "grades": [
+    {
+      "min": 90,
+      "label": "대기업 수준",
+      "desc": "26개 영역 전부 자동 검사 + CI + 상시 감시. 사람이 빠뜨릴 구조가 아니다."
+    },
+    {
+      "min": 75,
+      "label": "중급 상위",
+      "desc": "돈·권한·개인정보처럼 아픈 곳은 자동 검사로 지킨다. 감시와 부하 시험이 없다."
+    },
+    {
+      "min": 60,
+      "label": "중급",
+      "desc": "주요 흐름은 돌고 큰 구멍은 없다. 검사는 사람이 기억해서 돌린다."
+    },
+    {
+      "min": 45,
+      "label": "초급 상위",
+      "desc": "기능은 다 되지만 검사가 눈으로 하는 수준. 고치면 다른 데가 깨지는지 모른다."
+    },
+    {
+      "min": 30,
+      "label": "초급",
+      "desc": "만든 사람만 쓸 수 있는 상태. 돈이나 권한이 틀려도 한참 뒤에 안다."
+    },
+    {
+      "min": 0,
+      "label": "미완성",
+      "desc": "주요 흐름이 끊겨 있다."
+    }
+  ],
+  "maturity": {
+    "items": [
+      {
+        "key": "ci",
+        "weight": 3,
+        "label": "배포할 때마다 자동으로 검사가 돈다 (CI)",
+        "ok": false
+      },
+      {
+        "key": "tests",
+        "weight": 3,
+        "label": "레포 안에 자동 테스트가 있다",
+        "ok": false
+      },
+      {
+        "key": "qaSuite",
+        "weight": 2,
+        "label": "이 QA 같은 회귀 검사 도구가 붙어 있다",
+        "ok": true
+      },
+      {
+        "key": "monitor",
+        "weight": 2,
+        "label": "장애를 사람보다 먼저 알려 주는 감시가 있다",
+        "ok": false
+      },
+      {
+        "key": "staging",
+        "weight": 2,
+        "label": "운영과 분리된 시험 환경이 있다",
+        "ok": false
+      },
+      {
+        "key": "docs",
+        "weight": 1,
+        "label": "결정과 작업 내용이 문서로 남는다",
+        "ok": true
+      },
+      {
+        "key": "deploy",
+        "weight": 1,
+        "label": "배포 절차가 코드로 적혀 있다",
+        "ok": true
+      },
+      {
+        "key": "audit",
+        "weight": 1,
+        "label": "의존성 취약점을 정기적으로 본다",
+        "ok": false
+      },
+      {
+        "key": "backup",
+        "weight": 2,
+        "label": "DB 백업·복구 절차가 있다",
+        "ok": false
+      },
+      {
+        "key": "rollback",
+        "weight": 1,
+        "label": "배포를 되돌리는 방법이 적혀 있다",
+        "ok": false
+      }
+    ],
+    "got": 4,
+    "total": 18,
+    "ratio": 0.2222222222222222,
+    "factor": 0.65
+  },
+  "results": [
+    {
+      "id": "A",
+      "name": "API 계약 (화면↔서버 경로)",
+      "weight": 5,
+      "composite": false,
+      "universe": 246,
+      "scanned": 246,
+      "passed": 246,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 71,
+      "checks": [
+        {
+          "name": "화면이 부르는 경로가 서버에 있다",
+          "universe": 53,
+          "scanned": 53,
+          "passed": 53,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 라우트가 화면에서 쓰인다 (죽은 API 찾기)",
+          "universe": 77,
+          "scanned": 77,
+          "passed": 77,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "파라미터 없는 GET 이 전부 응답한다",
+          "universe": 23,
+          "scanned": 23,
+          "passed": 23,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 보내는 항목을 서버가 읽는다",
+          "universe": 93,
+          "scanned": 93,
+          "passed": 93,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,2122 @@
+{
+  "summary": {
+    "target": "CrossFit Grove 관리 시스템",
+    "at": "2026-09-25T04:13:23.904Z",
+    "areas": 26,
+    "universe": 3730,
+    "scanned": 3730,
+    "passed": 3692,
+    "warned": 23,
+    "failed": 15,
+    "scanRate": 100,
+    "qualityRate": 99.6,
+    "rawScore": 99.6,
+    "maturity": {
+      "got": 4,
+      "total": 18,
+      "factor": 0.65
+    },
+    "score": 64.7,
+    "grade": "중급",
+    "tier": "중급"
+  },
+  "tiers": {
+    "대기업": {
+      "min": 90,
+      "max": 100,
+      "note": "네이버·카카오·토스 같은 곳의 서비스. 전담 QA 조직과 CI 가 있다."
+    },
+    "중급": {
+      "min": 60,
+      "max": 89,
+      "note": "개발자 몇 명이 붙은 스타트업·중소기업 제품. 아픈 곳만 자동 검사."
+    },
+    "초급": {
+      "min": 30,
+      "max": 59,
+      "note": "1인 개발·외주 납품 직후. 기능은 되지만 회귀 검사가 없다."
+    },
+    "미완성": {
+      "min": 0,
+      "max": 29,
+      "note": "개발 중이거나 주요 흐름이 끊긴 상태."
+    }
+  },
+  "grades": [
+    {
+      "min": 90,
+      "label": "대기업 수준",
+      "desc": "26개 영역 전부 자동 검사 + CI + 상시 감시. 사람이 빠뜨릴 구조가 아니다."
+    },
+    {
+      "min": 75,
+      "label": "중급 상위",
+      "desc": "돈·권한·개인정보처럼 아픈 곳은 자동 검사로 지킨다. 감시와 부하 시험이 없다."
+    },
+    {
+      "min": 60,
+      "label": "중급",
+      "desc": "주요 흐름은 돌고 큰 구멍은 없다. 검사는 사람이 기억해서 돌린다."
+    },
+    {
+      "min": 45,
+      "label": "초급 상위",
+      "desc": "기능은 다 되지만 검사가 눈으로 하는 수준. 고치면 다른 데가 깨지는지 모른다."
+    },
+    {
+      "min": 30,
+      "label": "초급",
+      "desc": "만든 사람만 쓸 수 있는 상태. 돈이나 권한이 틀려도 한참 뒤에 안다."
+    },
+    {
+      "min": 0,
+      "label": "미완성",
+      "desc": "주요 흐름이 끊겨 있다."
+    }
+  ],
+  "maturity": {
+    "items": [
+      {
+        "key": "ci",
+        "weight": 3,
+        "label": "배포할 때마다 자동으로 검사가 돈다 (CI)",
+        "ok": false
+      },
+      {
+        "key": "tests",
+        "weight": 3,
+        "label": "레포 안에 자동 테스트가 있다",
+        "ok": false
+      },
+      {
+        "key": "qaSuite",
+        "weight": 2,
+        "label": "이 QA 같은 회귀 검사 도구가 붙어 있다",
+        "ok": true
+      },
+      {
+        "key": "monitor",
+        "weight": 2,
+        "label": "장애를 사람보다 먼저 알려 주는 감시가 있다",
+        "ok": false
+      },
+      {
+        "key": "staging",
+        "weight": 2,
+        "label": "운영과 분리된 시험 환경이 있다",
+        "ok": false
+      },
+      {
+        "key": "docs",
+        "weight": 1,
+        "label": "결정과 작업 내용이 문서로 남는다",
+        "ok": true
+      },
+      {
+        "key": "deploy",
+        "weight": 1,
+        "label": "배포 절차가 코드로 적혀 있다",
+        "ok": true
+      },
+      {
+        "key": "audit",
+        "weight": 1,
+        "label": "의존성 취약점을 정기적으로 본다",
+        "ok": false
+      },
+      {
+        "key": "backup",
+        "weight": 2,
+        "label": "DB 백업·복구 절차가 있다",
+        "ok": false
+      },
+      {
+        "key": "rollback",
+        "weight": 1,
+        "label": "배포를 되돌리는 방법이 적혀 있다",
+        "ok": false
+      }
+    ],
+    "got": 4,
+    "total": 18,
+    "ratio": 0.2222222222222222,
+    "factor": 0.65
+  },
+  "selfcheck": {
+    "items": [
+      {
+        "label": "프로브에 고정 날짜가 없다",
+        "ok": true,
+        "notes": []
+      },
+      {
+        "label": "프로브 형식이 맞다",
+        "ok": true,
+        "notes": []
+      },
+      {
+        "label": "검사가 만든 데이터를 치웠다",
+        "ok": true,
+        "notes": []
+      }
+    ]
+  },
+  "results": [
+    {
+      "id": "A",
+      "name": "API 계약 (화면↔서버 경로)",
+      "weight": 5,
+      "composite": false,
+      "universe": 220,
+      "scanned": 220,
+      "passed": 220,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 68,
+      "checks": [
+        {
+          "name": "화면이 부르는 경로가 서버에 있다",
+          "universe": 53,
+          "scanned": 53,
+          "passed": 53,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 라우트가 화면에서 쓰인다 (죽은 API 찾기)",
+          "universe": 77,
+          "scanned": 77,
+          "passed": 77,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "파라미터 없는 GET 이 전부 응답한다",
+          "universe": 23,
+          "scanned": 23,
+          "passed": 23,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 보내는 항목을 서버가 읽는다",
+          "universe": 67,
+          "scanned": 67,
+          "passed": 67,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "B",
+      "name": "인증 (로그인 없이 접근)",
+      "weight": 6,
+      "composite": false,
+      "universe": 205,
+      "scanned": 205,
+      "passed": 205,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 171,
+      "checks": [
+        {
+          "name": "보호가 필요한 라우트에 인증 장치가 붙어 있다",
+          "universe": 102,
+          "scanned": 102,
+          "passed": 102,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "토큰 없이 부르면 실제로 막힌다",
+          "universe": 98,
+          "scanned": 98,
+          "passed": 98,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "실제 기록을 토큰 없이 지울 수 없다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "가짜 토큰을 거부한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "로그인 무차별 대입 제한이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "C",
+      "name": "권한 (코치 열람 범위)",
+      "weight": 7,
+      "composite": false,
+      "universe": 49,
+      "scanned": 49,
+      "passed": 49,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 232,
+      "checks": [
+        {
+          "name": "권한이 없으면 전부 막힌다",
+          "universe": 13,
+          "scanned": 13,
+          "passed": 13,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "권한을 하나만 주면 그 곳만 열린다",
+          "universe": 13,
+          "scanned": 13,
+          "passed": 13,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "권한을 섞어 줘도 정확히 그만큼만 열린다 (복합)",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "코치가 스스로 권한을 늘리지 못한다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면의 권한 키가 서버 목록과 일치한다",
+          "universe": 16,
+          "scanned": 16,
+          "passed": 16,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "없는 권한 키와 중복을 걸러낸다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "D",
+      "name": "데이터 무결성",
+      "weight": 6,
+      "composite": false,
+      "universe": 72,
+      "scanned": 72,
+      "passed": 72,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 596,
+      "checks": [
+        {
+          "name": "여러 번 쓰는 API 가 트랜잭션을 쓴다",
+          "universe": 14,
+          "scanned": 14,
+          "passed": 14,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "등록에서 보낸 칸이 그대로 저장된다",
+          "universe": 10,
+          "scanned": 10,
+          "passed": 10,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "정보 수정에서 보낸 칸이 그대로 저장된다",
+          "universe": 10,
+          "scanned": 10,
+          "passed": 10,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "같은 이름 신규 등록을 막는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "삭제하면 딸린 기록까지 사라진다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "부모가 없는 기록(고아)이 없다",
+          "universe": 13,
+          "scanned": 13,
+          "passed": 13,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "스키마에 외래키가 선언돼 있다",
+          "universe": 23,
+          "scanned": 23,
+          "passed": 23,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "테이블 23개 중 외래키 선언 2건"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "E",
+      "name": "에러 처리",
+      "weight": 5,
+      "composite": false,
+      "universe": 71,
+      "scanned": 71,
+      "passed": 71,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 176,
+      "checks": [
+        {
+          "name": "숫자가 아닌 id 에 500 이 아니다",
+          "universe": 55,
+          "scanned": 55,
+          "passed": 55,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "없는 id 는 404(또는 빈 목록)",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "깨진 요청 본문에 500 이 아니다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "오류 메시지가 한국어로 온다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "전역 오류 처리기가 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "오류 응답에 내부 사정이 안 보인다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "F",
+      "name": "입력 검증",
+      "weight": 6,
+      "composite": false,
+      "universe": 15,
+      "scanned": 15,
+      "passed": 15,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 25,
+      "checks": [
+        {
+          "name": "말이 안 되는 값을 서버가 거절한다",
+          "universe": 10,
+          "scanned": 10,
+          "passed": 10,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "달력에 없는 날짜를 어떻게 다루는가",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "없는 날짜를 거절한다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "사진 형식·크기를 검사한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "비밀번호 규칙이 정해져 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "8자 이상 + 영소문자 + 숫자"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "G",
+      "name": "화면 연결 (DOM·핸들러)",
+      "weight": 6,
+      "composite": false,
+      "universe": 998,
+      "scanned": 998,
+      "passed": 998,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 8,
+      "checks": [
+        {
+          "name": "스크립트가 찾는 DOM id 가 화면에 있다",
+          "universe": 453,
+          "scanned": 453,
+          "passed": 453,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "버튼이 부르는 함수가 정의돼 있다",
+          "universe": 212,
+          "scanned": 212,
+          "passed": 212,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "한 페이지에 실리는 전역 함수 이름이 겹치지 않는다",
+          "universe": 290,
+          "scanned": 290,
+          "passed": 290,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 읽는 스크립트 파일이 존재한다",
+          "universe": 25,
+          "scanned": 25,
+          "passed": 25,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "표의 헤더 칸 수와 colspan 이 맞는다",
+          "universe": 18,
+          "scanned": 18,
+          "passed": 18,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "H",
+      "name": "HTTP 보안 헤더",
+      "weight": 4,
+      "composite": false,
+      "universe": 36,
+      "scanned": 36,
+      "passed": 36,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 8,
+      "checks": [
+        {
+          "name": "페이지마다 보안 헤더가 붙는다",
+          "universe": 30,
+          "scanned": 30,
+          "passed": 30,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 종류를 헤더로 알리지 않는다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "메인 페이지 CSP 가 인라인 스크립트를 막는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "script-src: script-src 'self'"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "로그인 쿠키에 보호 설정이 붙는다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "I",
+      "name": "주입 (XSS · SQL)",
+      "weight": 7,
+      "composite": false,
+      "universe": 313,
+      "scanned": 313,
+      "passed": 313,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 220,
+      "checks": [
+        {
+          "name": "SQL 에 값을 문자열로 붙이지 않는다",
+          "universe": 174,
+          "scanned": 174,
+          "passed": 174,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "주입 문자열을 넣어도 DB 가 멀쩡하다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "members 테이블 정상"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "화면에 값을 넣을 때 escape 한다",
+          "universe": 113,
+          "scanned": 113,
+          "passed": 113,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "저장된 위험 문자열을 화면이 escape 해서 그린다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "속성으로 받은 값을 escape 없이 innerHTML 에 넣지 않는다",
+          "universe": 20,
+          "scanned": 20,
+          "passed": 20,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "J",
+      "name": "응답 규격",
+      "weight": 5,
+      "composite": false,
+      "universe": 50,
+      "scanned": 50,
+      "passed": 50,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 40,
+      "checks": [
+        {
+          "name": "JSON 응답이 JSON 으로 온다",
+          "universe": 23,
+          "scanned": 23,
+          "passed": 23,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "목록 API 가 배열을 준다",
+          "universe": 11,
+          "scanned": 11,
+          "passed": 11,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 읽는 키가 응답에 있다",
+          "universe": 13,
+          "scanned": 13,
+          "passed": 13,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "개수·금액이 숫자 타입으로 온다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "K",
+      "name": "비밀 노출",
+      "weight": 7,
+      "composite": false,
+      "universe": 105,
+      "scanned": 105,
+      "passed": 105,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 10,
+      "checks": [
+        {
+          "name": "코드에 비밀번호·키가 박혀 있지 않다",
+          "universe": 73,
+          "scanned": 73,
+          "passed": 73,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": ".env 가 깃 추적에서 빠져 있다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "응답에 비밀번호 해시가 없다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "브라우저가 받는 파일에 비밀이 없다",
+          "universe": 25,
+          "scanned": 25,
+          "passed": 25,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "관리자 비밀번호가 환경변수에서 온다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "L",
+      "name": "로깅·관측성",
+      "weight": 3,
+      "composite": false,
+      "universe": 40,
+      "scanned": 40,
+      "passed": 40,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 10,
+      "checks": [
+        {
+          "name": "처리되지 않은 오류를 기록한다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "상태 확인 경로가 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "/ping → pong"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "로그에 개인정보·비밀을 찍지 않는다",
+          "universe": 34,
+          "scanned": 34,
+          "passed": 34,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "평범한 요청에 서버 오류가 안 난다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "전체 실행이 끝난 뒤 서버 로그를 함께 본다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "M",
+      "name": "금액 계산",
+      "weight": 8,
+      "composite": false,
+      "universe": 27,
+      "scanned": 27,
+      "passed": 27,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 343,
+      "checks": [
+        {
+          "name": "가계부 안에서 합계가 맞는다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "매출 내역과 가계부 수입이 같다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "두 화면 모두 1,365,000원"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "DB 원본 합계와 화면 수입이 맞는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "DB 합계 1,365,000원 = 화면 1,365,000원"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "홈 화면과 홈 응답에 금액이 없다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "0원짜리 빈 줄이 매출 목록에 없다",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "고정비를 펼칠 때 없는 날짜를 만들지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "1월 31일 고정비 → 2월은 말일로 당겨짐"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "저장된 값이 말이 된다",
+          "universe": 7,
+          "scanned": 7,
+          "passed": 7,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "달마다 순익 = 수입 − 지출",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "N",
+      "name": "탐색·라우팅",
+      "weight": 4,
+      "composite": false,
+      "universe": 52,
+      "scanned": 52,
+      "passed": 52,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 28,
+      "checks": [
+        {
+          "name": "모든 페이지가 열린다",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면 안 링크가 살아 있다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "스크립트·스타일 파일이 받아진다",
+          "universe": 32,
+          "scanned": 32,
+          "passed": 32,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "탭 버튼이 가리키는 화면이 있다",
+          "universe": 8,
+          "scanned": 8,
+          "passed": 8,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "없는 주소에 404 가 난다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "O",
+      "name": "응답 크기·응답 속도",
+      "weight": 5,
+      "composite": false,
+      "universe": 16,
+      "scanned": 16,
+      "passed": 16,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 20,
+      "checks": [
+        {
+          "name": "목록 응답이 크기 예산 안에 든다",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "회원 목록 3.4KB (예산 120KB)",
+            "홈 통계 0.1KB (예산 64KB)",
+            "계약서 목록 1.0KB (예산 200KB)",
+            "락커 현황 21.9KB (예산 64KB)",
+            "매출 내역 0.9KB (예산 256KB)",
+            "가계부 1.0KB (예산 256KB)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "목록이 사진 본문을 싣지 않는다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "회원 500명까지 목록이 감당 가능하다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "지금 6명 3.4KB → 한 명당 약 573B, 500명이면 약 0.27MB"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "주요 조회가 1초 안에 돌아온다",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "요청 본문 크기에 상한이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "limit: '12mb'"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "P",
+      "name": "개인정보 최소 노출",
+      "weight": 6,
+      "composite": false,
+      "universe": 32,
+      "scanned": 32,
+      "passed": 32,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 20,
+      "checks": [
+        {
+          "name": "로그인 없이 개인정보가 안 나간다",
+          "universe": 23,
+          "scanned": 23,
+          "passed": 23,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "회원 목록이 필요한 칸만 내려준다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "코치는 본인 정보만 건드린다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "목록에 서명·사진 원본이 없다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "동의 없이 계약서를 받지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "회원은 본인 것만 본다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Q",
+      "name": "쿼리 효율 (N+1·인덱스)",
+      "weight": 4,
+      "composite": false,
+      "universe": 173,
+      "scanned": 173,
+      "passed": 159,
+      "warned": 0,
+      "failed": 14,
+      "scanRate": 1,
+      "passRate": 0.9190751445086706,
+      "ms": 200,
+      "checks": [
+        {
+          "name": "반복문 안에서 DB 를 두드리지 않는다",
+          "universe": 98,
+          "scanned": 98,
+          "passed": 96,
+          "warned": 0,
+          "failed": 2,
+          "skipped": 0,
+          "notes": [
+            "/api/contract-members (backend/routes/contracts.js) — 반복문 안에서 DB 조회",
+            "/api/schedule/generate (backend/routes/schedule.js) — 반복문 안에서 DB 조회"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "자주 찾는 칸에 인덱스가 있다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 0,
+          "warned": 0,
+          "failed": 3,
+          "skipped": 0,
+          "notes": [
+            "테이블 23개 · 인덱스 24개",
+            "member_id 로 자주 찾는데 인덱스가 없다",
+            "locker_id 로 자주 찾는데 인덱스가 없다",
+            "registration_id 로 자주 찾는데 인덱스가 없다"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "쌓이는 표를 통째로 퍼 오지 않는다",
+          "universe": 71,
+          "scanned": 71,
+          "passed": 62,
+          "warned": 0,
+          "failed": 9,
+          "skipped": 0,
+          "notes": [
+            "applications 조회에 LIMIT 이 없다 (backend/routes/applications.js)",
+            "applications 조회에 LIMIT 이 없다 (backend/routes/applications.js)",
+            "contracts 조회에 LIMIT 이 없다 (backend/routes/contracts.js)",
+            "count_usage 조회에 LIMIT 이 없다 (backend/routes/counts.js)",
+            "count_usage 조회에 LIMIT 이 없다 (backend/routes/counts.js)",
+            "member_messages 조회에 LIMIT 이 없다 (backend/routes/messages.js)",
+            "member_messages 조회에 LIMIT 이 없다 (backend/routes/messages.js)",
+            "sms_logs 조회에 LIMIT 이 없다 (backend/routes/sms.js)",
+            "sms_logs 조회에 LIMIT 이 없다 (backend/routes/sms.js)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "반복 조회 시간이 튀지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "평균 1ms · 최대 2ms (2/1/1/1/1ms)"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "R",
+      "name": "동시성 (같은 순간 두 번)",
+      "weight": 6,
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 4,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 153,
+      "checks": [
+        {
+          "name": "같은 락커 동시 배정은 한 번만 성공한다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "동시 배정 4건 중 1건 수락 · 이번에 늘어난 배정 이력 1건"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "같은 이름 동시 등록이 한 명만 만든다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "동시 등록 3건 중 1건 수락 · DB 에 1명"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "같은 것을 연달아 지워도 터지지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "동시 삭제 3건 중 1건 200, 500 없음: true"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "배정 같은 곳에 행 잠금이 걸려 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "SELECT ... FOR UPDATE 사용"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "S",
+      "name": "상태 전이 (등록·홀딩·환불)",
+      "weight": 6,
+      "composite": false,
+      "universe": 9,
+      "scanned": 9,
+      "passed": 9,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 41,
+      "checks": [
+        {
+          "name": "등록 직후 상태가 맞는다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "홀딩을 걸면 만료일이 그만큼 밀린다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "홀딩을 지우면 정확히 되돌아온다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "환불한 만큼 지출이 늘어난다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "횟수권 1회 차감이 정확하다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "T",
+      "name": "시간·날짜",
+      "weight": 5,
+      "composite": false,
+      "universe": 16,
+      "scanned": 16,
+      "passed": 15,
+      "warned": 0,
+      "failed": 1,
+      "scanRate": 1,
+      "passRate": 0.9375,
+      "ms": 32,
+      "checks": [
+        {
+          "name": "한국 시간 기준으로 날짜를 정한다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "고정비가 달력에 있는 날짜로만 펼쳐진다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "없는 달·날짜 조회에 터지지 않는다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "달 경계에서 합계가 새지 않는다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "일별 조회가 그 하루만 준다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "사용자가 적은 날짜대로 그 달에 잡힌다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 1,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "환불: 2026-08-16 로 적었는데 2026-08 지출은 0원만 늘고 2026-09 가 50000원 늘었다 — 적은 날짜가 무시된다"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "U",
+      "name": "화면 문구·한국어",
+      "weight": 3,
+      "composite": false,
+      "universe": 1093,
+      "scanned": 1093,
+      "passed": 1092,
+      "warned": 1,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 7,
+      "checks": [
+        {
+          "name": "변수 뒤에 조사를 그대로 붙이지 않았다",
+          "universe": 906,
+          "scanned": 906,
+          "passed": 906,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "사용자 문구에 개발 용어가 없다",
+          "universe": 34,
+          "scanned": 34,
+          "passed": 34,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "지우는 버튼이 확인을 받는다",
+          "universe": 14,
+          "scanned": 14,
+          "passed": 14,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 오류 메시지가 한국어다",
+          "universe": 92,
+          "scanned": 92,
+          "passed": 92,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "빈 목록에 안내 문구가 있다",
+          "universe": 47,
+          "scanned": 47,
+          "passed": 46,
+          "warned": 1,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [
+            "문구를 부르는 쪽에서 넘긴다 — 내용은 그쪽을 봐야 안다"
+          ]
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "V",
+      "name": "의존성·버전",
+      "weight": 3,
+      "composite": false,
+      "universe": 10,
+      "scanned": 10,
+      "passed": 10,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 376,
+      "checks": [
+        {
+          "name": "설치한 패키지를 실제로 쓴다",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "알려진 심각한 취약점이 없다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "치명 0 · 높음 0 · 보통 2 · 낮음 0 (전체 4)"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "버전 잠금 파일이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "실행 명령이 정의돼 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "의존성이 지나치게 많지 않다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "직접 의존성 6개 (cors, dotenv, ejs, exceljs, express, pg) · 개발용 1개"
+          ],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "W",
+      "name": "업무 흐름 (E2E)",
+      "weight": 8,
+      "composite": true,
+      "universe": 20,
+      "scanned": 20,
+      "passed": 20,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 93,
+      "checks": [
+        {
+          "name": "신규 가입 한 바퀴 (계약서→등록→락커→매출)",
+          "universe": 8,
+          "scanned": 8,
+          "passed": 8,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "코치 한 바퀴 (직원등록→권한→로그인→열람)",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 9,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "신청 한 바퀴 (휴관일 차단)",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "X",
+      "name": "기능 간섭 (복합)",
+      "weight": 9,
+      "composite": true,
+      "universe": 12,
+      "scanned": 12,
+      "passed": 12,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 152,
+      "checks": [
+        {
+          "name": "회원·락커·가계부를 한꺼번에 얹어도 합계가 맞는다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "회원권 환불이 락커·수입을 건드리지 않는다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "홀딩을 걸었다 지우면 락커 기간이 제자리로 온다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "코치를 등록해도 회원 수·매출이 안 흔들린다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "시험 데이터를 지우면 숫자가 원래대로 돌아온다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Y",
+      "name": "화면 간 숫자 일관성",
+      "weight": 7,
+      "composite": true,
+      "universe": 11,
+      "scanned": 11,
+      "passed": 11,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 209,
+      "checks": [
+        {
+          "name": "여러 화면이 같은 숫자를 말한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "환불이 지출로 정확히 넘어간다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "이번 달 환불 0원"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "API 목록 개수가 DB 와 맞는다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "매출 엑셀을 받을 수 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "10.6KB"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "같은 요청에 같은 답이 온다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Z",
+      "name": "빈 상태·경계값",
+      "weight": 4,
+      "composite": false,
+      "universe": 81,
+      "scanned": 81,
+      "passed": 59,
+      "warned": 22,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 127,
+      "checks": [
+        {
+          "name": "데이터가 없는 기간을 조회해도 터지지 않는다",
+          "universe": 6,
+          "scanned": 6,
+          "passed": 6,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "빈 기간의 합계가 0 이다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "목록을 그릴 때 빈 경우를 대비한다",
+          "universe": 67,
+          "scanned": 67,
+          "passed": 45,
+          "warned": 22,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [
+            "frontend/public/js/admin-members.js: allMembers.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/admin-members.js: list.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/admin-patchnotes.js: PATCH_NOTES.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/admin-pricing.js: pricingData.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/admin-pricing.js: plans.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/admin-schedule.js: bulkTimes.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/admin-schedule.js: dayCals.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/contract.js: pricingData.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/contract.js: plans.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/contract.js: periods.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/index.js: DAYS.map() 앞에 빈 목록 대비가 없다",
+            "frontend/public/js/index.js: DAYS.map() 앞에 빈 목록 대비가 없다"
+          ]
+        },
+        {
+          "name": "극단값을 넣어도 화면이 안 깨진다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "빈 DB 에 기본 데이터가 시딩된다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    }
+  ]
+}

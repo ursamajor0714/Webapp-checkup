@@ -1,0 +1,156 @@
+{
+  "summary": {
+    "target": "CrossFit Grove 관리 시스템",
+    "at": "2026-09-18T11:56:12.247Z",
+    "areas": 1,
+    "universe": 214,
+    "scanned": 214,
+    "passed": 196,
+    "warned": 17,
+    "failed": 1,
+    "scanRate": 100,
+    "qualityRate": 99.5,
+    "score": 99.5,
+    "grade": "대기업 수준",
+    "tier": "대기업"
+  },
+  "tiers": {
+    "대기업": {
+      "min": 90,
+      "max": 100,
+      "note": "네이버·카카오·토스 같은 곳의 서비스. 전담 QA 조직과 CI 가 있다."
+    },
+    "중급": {
+      "min": 60,
+      "max": 89,
+      "note": "개발자 몇 명이 붙은 스타트업·중소기업 제품. 아픈 곳만 자동 검사."
+    },
+    "초급": {
+      "min": 30,
+      "max": 59,
+      "note": "1인 개발·외주 납품 직후. 기능은 되지만 회귀 검사가 없다."
+    },
+    "미완성": {
+      "min": 0,
+      "max": 29,
+      "note": "개발 중이거나 주요 흐름이 끊긴 상태."
+    }
+  },
+  "grades": [
+    {
+      "min": 90,
+      "label": "대기업 수준",
+      "desc": "26개 영역 전부 자동 검사 + CI + 상시 감시. 사람이 빠뜨릴 구조가 아니다."
+    },
+    {
+      "min": 75,
+      "label": "중급 상위",
+      "desc": "돈·권한·개인정보처럼 아픈 곳은 자동 검사로 지킨다. 감시와 부하 시험이 없다."
+    },
+    {
+      "min": 60,
+      "label": "중급",
+      "desc": "주요 흐름은 돌고 큰 구멍은 없다. 검사는 사람이 기억해서 돌린다."
+    },
+    {
+      "min": 45,
+      "label": "초급 상위",
+      "desc": "기능은 다 되지만 검사가 눈으로 하는 수준. 고치면 다른 데가 깨지는지 모른다."
+    },
+    {
+      "min": 30,
+      "label": "초급",
+      "desc": "만든 사람만 쓸 수 있는 상태. 돈이나 권한이 틀려도 한참 뒤에 안다."
+    },
+    {
+      "min": 0,
+      "label": "미완성",
+      "desc": "주요 흐름이 끊겨 있다."
+    }
+  ],
+  "results": [
+    {
+      "id": "I",
+      "name": "주입 (XSS · SQL)",
+      "weight": 7,
+      "composite": false,
+      "universe": 214,
+      "scanned": 214,
+      "passed": 196,
+      "warned": 17,
+      "failed": 1,
+      "scanRate": 1,
+      "passRate": 0.9949238578680203,
+      "ms": 282,
+      "checks": [
+        {
+          "name": "SQL 에 값을 문자열로 붙이지 않는다",
+          "universe": 168,
+          "scanned": 168,
+          "passed": 167,
+          "warned": 0,
+          "failed": 1,
+          "skipped": 0,
+          "notes": [
+            "backend/routes/holding.js: `SELECT start_date FROM holding_requests WHERE member_id=? AND status <> 'rejected' AND st"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "주입 문자열을 넣어도 DB 가 멀쩡하다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "members 테이블 정상"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "화면에 값을 넣을 때 escape 한다",
+          "universe": 40,
+          "scanned": 40,
+          "passed": 23,
+          "warned": 17,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [
+            "frontend/public/js/admin-ledger.js: ${emptyText} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/admin-members.js: ${editPhoto} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/admin-members.js: ${name} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/admin-patchnotes.js: ${fg} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/admin-patchnotes.js: ${bg} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/contract.js: ${photoData} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/index.js: ${calYear} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/index.js: ${calMonth} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/index.js: ${joinCalYear} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/index.js: ${joinCalMonth} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/index.js: ${dateStr} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/index.js: ${dateStr} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/visit.js: ${calYear} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/visit.js: ${calMonth} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/visit.js: ${dateStr} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/visit.js: ${dateStr} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험",
+            "frontend/public/js/visit.js: ${classInfo} 를 escape 없이 넣는다 — 사람이 넣은 글자면 위험"
+          ]
+        },
+        {
+          "name": "저장된 위험 문자열을 화면이 escape 해서 그린다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    }
+  ]
+}
