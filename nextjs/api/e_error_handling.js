@@ -1,5 +1,6 @@
 // E. 에러 처리 — 잘못된 요청에 500 이 아니라 4xx 로, 없는 것에는 404 로 답하는가
-const { check } = require('../../common/core');
+const { check, checkItems } = require('../../common/core');
+const { sensorContract } = require('../contract');
 const { snapshot, restore, raw } = require('../helpers');
 
 module.exports = {
@@ -23,6 +24,10 @@ module.exports = {
       if (r.status === want) ok++; else notes.push(`${n} → ${r.status} (${want} 이 맞다)`);
     }
     await restore(ctx, snap);
-    return { checks: [check('잘못된 요청에 맞는 상태 코드로 답한다', { universe: cases.length, scanned: cases.length, passed: ok, notes })] };
+    const gen = await sensorContract(ctx);
+    return { checks: [
+      check('잘못된 요청에 맞는 상태 코드로 답한다', { universe: cases.length, scanned: cases.length, passed: ok, notes }),
+      checkItems('자동 생성 · 이상한 본문 모양', gen.shapes),
+    ] };
   },
 };

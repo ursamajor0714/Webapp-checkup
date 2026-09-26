@@ -1,6 +1,7 @@
 // B. 인증 — 로그인 없이 보호된 API 에 닿는가
 // 이 스택: app/api 의 모든 경로를 토큰 없이 두드려 본다. 열려 있어도 되는 것은 qa.config.js 의 publicRoutes 에 이유와 함께 적는다.
-const { check } = require('../../common/core');
+const { check, checkItems } = require('../../common/core');
+const { authMatrix } = require('../../common/contract');
 const { snapshot, restore, approve } = require('../helpers');
 
 module.exports = {
@@ -25,7 +26,12 @@ module.exports = {
     const revokeOpen = rv.status < 400;
     await restore(ctx, snap);
     const hasAuth = /jwtVerify|createHmac|timingSafeEqual|verifySession|getSession/.test(ctx.serverSrc + (ctx.exists('proxy.ts') ? ctx.read('proxy.ts') : ''));
+    // 자동 생성 — 모든 경로 × 메서드 × 가짜 토큰 종류 (+ 진짜 토큰은 통과하는지)
+    const matrix = await authMatrix(ctx, { routes: ctx.routes(), publicRoutes: ctx.config.publicRoutes,
+      bodyFor: r => (r.path === '/api/sensors' ? { id: 'qa-gen-nobody', type: 'CCTV', floorId: '1F', x: 1, y: 1, status: 'NORMAL' } : {}) });
+    await restore(ctx, snap);
     return { checks: [
+      checkItems('자동 생성 · 인증 매트릭스 (경로 × 토큰 종류)', matrix),
       check('보호돼야 할 API 가 토큰 없이 닫혀 있다', { universe: target.length, scanned: target.length, passed: target.length - open.length, notes: open }),
       check('119 상황 종료(REVOKE)에 인증이 필요하다', { universe: 1, scanned: 1, passed: revokeOpen ? 0 : 1,
         notes: revokeOpen ? ['아무나 {action:"REVOKE"} 로 현장 소방관의 인명 정보 조회를 끊을 수 있다'] : [] }),

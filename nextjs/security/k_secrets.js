@@ -23,7 +23,7 @@ module.exports = {
     // 틀린 OTP 응답이 정답을 알려 주는가 + 계속 틀려도 계속 받아 주는가 (attacker 단말로)
     const tries = []; for (let i = 0; i < 12; i++) tries.push(await raw(ctx, '/api/emergency',
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ otp: String(100000 + i) }) }, 'attacker'));
-    const hint = tries.some(t => t.text.includes(ctx.config.otp));
+    const hint = !!ctx.config.otp && tries.some(t => t.text.includes(ctx.config.otp));
     checks.push(check('실패 응답이 정답을 알려 주지 않는다', { universe: 1, scanned: 1, passed: hint ? 0 : 1,
       notes: hint ? ['OTP 가 틀리면 응답 message 에 정답을 그대로 적어 돌려준다'] : [] }));
     const locked = tries.slice(5).every(t => t.status === 429 || t.status === 423);

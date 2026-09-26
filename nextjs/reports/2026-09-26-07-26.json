@@ -1,0 +1,4421 @@
+{
+  "summary": {
+    "target": "PyroGuard 2D 방재 관제",
+    "baseUrl": "http://localhost:3000",
+    "root": "/home/user/pyroguard2d",
+    "at": "2026-09-26T07:26:04.535Z",
+    "areas": 24,
+    "todo": 0,
+    "sections": [
+      {
+        "dir": "front",
+        "label": "순수 프론트",
+        "areas": 4,
+        "todo": 0,
+        "score": 100
+      },
+      {
+        "dir": "front-api",
+        "label": "API 받아오는 프론트",
+        "areas": 3,
+        "todo": 0,
+        "score": 100
+      },
+      {
+        "dir": "api",
+        "label": "API 기능",
+        "areas": 10,
+        "todo": 0,
+        "score": 100
+      },
+      {
+        "dir": "security",
+        "label": "보안",
+        "areas": 7,
+        "todo": 0,
+        "score": 100
+      }
+    ],
+    "universe": 1006,
+    "scanned": 1006,
+    "passed": 1006,
+    "warned": 0,
+    "failed": 0,
+    "scanRate": 100,
+    "qualityRate": 100,
+    "rawScore": 100,
+    "maturity": {
+      "got": 10,
+      "total": 18,
+      "factor": 0.8
+    },
+    "score": 80,
+    "grade": "중급 상위",
+    "tier": "중급"
+  },
+  "tiers": {
+    "대기업": {
+      "min": 90,
+      "max": 100,
+      "note": "네이버·카카오·토스 같은 곳의 서비스. 전담 QA 조직과 CI 가 있다."
+    },
+    "중급": {
+      "min": 60,
+      "max": 89,
+      "note": "개발자 몇 명이 붙은 스타트업·중소기업 제품. 아픈 곳만 자동 검사."
+    },
+    "초급": {
+      "min": 30,
+      "max": 59,
+      "note": "1인 개발·외주 납품 직후. 기능은 되지만 회귀 검사가 없다."
+    },
+    "미완성": {
+      "min": 0,
+      "max": 29,
+      "note": "개발 중이거나 주요 흐름이 끊긴 상태."
+    }
+  },
+  "grades": [
+    {
+      "min": 90,
+      "label": "대기업 수준",
+      "desc": "26개 영역 전부 자동 검사 + CI + 상시 감시. 사람이 빠뜨릴 구조가 아니다."
+    },
+    {
+      "min": 75,
+      "label": "중급 상위",
+      "desc": "돈·권한·개인정보처럼 아픈 곳은 자동 검사로 지킨다. 감시와 부하 시험이 없다."
+    },
+    {
+      "min": 60,
+      "label": "중급",
+      "desc": "주요 흐름은 돌고 큰 구멍은 없다. 검사는 사람이 기억해서 돌린다."
+    },
+    {
+      "min": 45,
+      "label": "초급 상위",
+      "desc": "기능은 다 되지만 검사가 눈으로 하는 수준. 고치면 다른 데가 깨지는지 모른다."
+    },
+    {
+      "min": 30,
+      "label": "초급",
+      "desc": "만든 사람만 쓸 수 있는 상태. 돈이나 권한이 틀려도 한참 뒤에 안다."
+    },
+    {
+      "min": 0,
+      "label": "미완성",
+      "desc": "주요 흐름이 끊겨 있다."
+    }
+  ],
+  "maturity": {
+    "items": [
+      {
+        "key": "ci",
+        "weight": 3,
+        "label": "배포할 때마다 자동으로 검사가 돈다 (CI)",
+        "ok": true
+      },
+      {
+        "key": "tests",
+        "weight": 3,
+        "label": "레포 안에 자동 테스트가 있다",
+        "ok": true
+      },
+      {
+        "key": "qaSuite",
+        "weight": 2,
+        "label": "이 QA 같은 회귀 검사 도구가 붙어 있다",
+        "ok": false
+      },
+      {
+        "key": "monitor",
+        "weight": 2,
+        "label": "장애를 사람보다 먼저 알려 주는 감시가 있다",
+        "ok": false
+      },
+      {
+        "key": "staging",
+        "weight": 2,
+        "label": "운영과 분리된 시험 환경이 있다",
+        "ok": false
+      },
+      {
+        "key": "docs",
+        "weight": 1,
+        "label": "결정과 작업 내용이 문서로 남는다",
+        "ok": true
+      },
+      {
+        "key": "deploy",
+        "weight": 1,
+        "label": "배포 절차가 코드로 적혀 있다",
+        "ok": false
+      },
+      {
+        "key": "audit",
+        "weight": 1,
+        "label": "의존성 취약점을 정기적으로 본다",
+        "ok": true
+      },
+      {
+        "key": "backup",
+        "weight": 2,
+        "label": "DB 백업·복구 절차가 있다",
+        "ok": true
+      },
+      {
+        "key": "rollback",
+        "weight": 1,
+        "label": "배포를 되돌리는 방법이 적혀 있다",
+        "ok": false
+      }
+    ],
+    "got": 10,
+    "total": 18,
+    "ratio": 0.5555555555555556,
+    "factor": 0.8
+  },
+  "selfcheck": {
+    "items": [
+      {
+        "label": "검사가 만든 센서를 치웠다",
+        "ok": true,
+        "notes": []
+      },
+      {
+        "label": "119 승인을 해제 상태로 돌려놨다",
+        "ok": true,
+        "notes": []
+      },
+      {
+        "label": "센서 수가 시드(92)와 같다",
+        "ok": true,
+        "notes": [
+          "현재 92"
+        ]
+      }
+    ]
+  },
+  "results": [
+    {
+      "id": "G",
+      "name": "빌드·타입·린트",
+      "weight": 6,
+      "section": "front",
+      "file": "front/g_dom_wiring.js",
+      "composite": false,
+      "universe": 74,
+      "scanned": 74,
+      "passed": 74,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 9214,
+      "checks": [
+        {
+          "name": "import 하는 패키지가 package.json 에 선언돼 있다",
+          "universe": 8,
+          "scanned": 8,
+          "passed": 8,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "타입 선언이 갖춰져 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "tsc --noEmit 통과",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "eslint 오류 없는 파일",
+          "universe": 63,
+          "scanned": 63,
+          "passed": 63,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "오류 0 · 경고 23"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "Next 16 규약 (middleware → proxy)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "N",
+      "name": "탐색·자원 연결",
+      "weight": 4,
+      "section": "front",
+      "file": "front/n_navigation.js",
+      "composite": false,
+      "universe": 11,
+      "scanned": 11,
+      "passed": 11,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 71,
+      "checks": [
+        {
+          "name": "페이지·링크·도면·이미지가 열린다",
+          "universe": 11,
+          "scanned": 11,
+          "passed": 11,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "proxy(middleware)가 가리키는 자원이 실제로 있다",
+          "universe": 0,
+          "scanned": 0,
+          "passed": 0,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "U",
+      "name": "문구·문서 정합",
+      "weight": 3,
+      "section": "front",
+      "file": "front/u_copy.js",
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 4,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 8,
+      "checks": [
+        {
+          "name": "문구가 사실과 맞다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Z",
+      "name": "빈 상태·경계값",
+      "weight": 4,
+      "section": "front",
+      "file": "front/z_zero_state.js",
+      "composite": false,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 3,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 141,
+      "checks": [
+        {
+          "name": "빈 상태·경계값을 정직하게 보고한다",
+          "universe": 3,
+          "scanned": 3,
+          "passed": 3,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "A",
+      "name": "API 계약 (화면↔서버 경로)",
+      "weight": 5,
+      "section": "front-api",
+      "file": "front-api/a_api_contract.js",
+      "composite": false,
+      "universe": 18,
+      "scanned": 18,
+      "passed": 18,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 25,
+      "checks": [
+        {
+          "name": "화면이 부르는 경로가 서버에 있다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 라우트가 화면에서 쓰인다 (죽은 API 찾기)",
+          "universe": 7,
+          "scanned": 7,
+          "passed": 7,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "파라미터 없는 GET 이 전부 응답한다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 보내는 항목을 서버가 읽는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "J",
+      "name": "응답 규격",
+      "weight": 5,
+      "section": "front-api",
+      "file": "front-api/j_response_shape.js",
+      "composite": false,
+      "universe": 5,
+      "scanned": 5,
+      "passed": 5,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 18,
+      "checks": [
+        {
+          "name": "응답 봉투가 일관된다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버가 주는 신호를 화면이 읽는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "Y",
+      "name": "숫자 일관성",
+      "weight": 7,
+      "section": "front-api",
+      "file": "front-api/y_consistency.js",
+      "composite": true,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 4,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 87,
+      "checks": [
+        {
+          "name": "같은 숫자를 모두가 같게 말한다",
+          "universe": 4,
+          "scanned": 4,
+          "passed": 4,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "D",
+      "name": "데이터 무결성",
+      "weight": 6,
+      "section": "api",
+      "file": "api/d_data_integrity.js",
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 4,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 65,
+      "checks": [
+        {
+          "name": "POST 가 기존 센서를 조용히 덮어쓰지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "새 센서에 서버 시각(updatedAt)이 찍힌다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "PUT 이 스키마 밖 필드를 저장하지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "센서 배치가 서버 재시작 뒤에도 남는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "E",
+      "name": "에러 처리",
+      "weight": 5,
+      "section": "api",
+      "file": "api/e_error_handling.js",
+      "composite": false,
+      "universe": 18,
+      "scanned": 18,
+      "passed": 18,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 5629,
+      "checks": [
+        {
+          "name": "잘못된 요청에 맞는 상태 코드로 답한다",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 9,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "자동 생성 · 이상한 본문 모양",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 9,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [],
+          "items": [
+            {
+              "name": "등록 본문 · 빈 객체 {}",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 배열 []",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 문자열 \"x\"",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 숫자 1",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · null",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 깨진 JSON",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 빈 본문",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 아주 깊은 중첩",
+              "ok": true,
+              "detail": "400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 본문 · 스키마 밖 필드",
+              "ok": true,
+              "detail": "201 · 저장 안 함"
+            }
+          ]
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "F",
+      "name": "입력 검증",
+      "weight": 6,
+      "section": "api",
+      "file": "api/f_validation.js",
+      "composite": false,
+      "universe": 564,
+      "scanned": 564,
+      "passed": 564,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 255,
+      "checks": [
+        {
+          "name": "서버가 말이 안 되는 값을 거절한다 (손으로 고른 사례)",
+          "universe": 15,
+          "scanned": 15,
+          "passed": 15,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "자동 생성 · 센서 등록 필드별 값",
+          "universe": 199,
+          "scanned": 199,
+          "passed": 199,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [],
+          "items": [
+            {
+              "name": "등록 · type 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · type null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · type 목록 값 EXTINGUISHER",
+              "ok": true,
+              "detail": "보냄 \"EXTINGUISHER\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 HYDRANT",
+              "ok": true,
+              "detail": "보냄 \"HYDRANT\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 WATER_PRESSURE",
+              "ok": true,
+              "detail": "보냄 \"WATER_PRESSURE\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 ARC",
+              "ok": true,
+              "detail": "보냄 \"ARC\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 LEAK",
+              "ok": true,
+              "detail": "보냄 \"LEAK\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 EMERGENCY_DOOR",
+              "ok": true,
+              "detail": "보냄 \"EMERGENCY_DOOR\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 CCTV",
+              "ok": true,
+              "detail": "보냄 \"CCTV\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 값 CUSTOM",
+              "ok": true,
+              "detail": "보냄 \"CUSTOM\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · type 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · type 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"extinguisher\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · type 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · type 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · floorId 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · floorId null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · floorId 목록 값 OUTSIDE",
+              "ok": true,
+              "detail": "보냄 \"OUTSIDE\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 ROOF",
+              "ok": true,
+              "detail": "보냄 \"ROOF\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 17F",
+              "ok": true,
+              "detail": "보냄 \"17F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 16F",
+              "ok": true,
+              "detail": "보냄 \"16F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 15F",
+              "ok": true,
+              "detail": "보냄 \"15F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 14F",
+              "ok": true,
+              "detail": "보냄 \"14F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 13F",
+              "ok": true,
+              "detail": "보냄 \"13F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 12F",
+              "ok": true,
+              "detail": "보냄 \"12F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 11F",
+              "ok": true,
+              "detail": "보냄 \"11F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 10F",
+              "ok": true,
+              "detail": "보냄 \"10F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 9F",
+              "ok": true,
+              "detail": "보냄 \"9F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 8F",
+              "ok": true,
+              "detail": "보냄 \"8F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 7F",
+              "ok": true,
+              "detail": "보냄 \"7F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 6F",
+              "ok": true,
+              "detail": "보냄 \"6F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 5F",
+              "ok": true,
+              "detail": "보냄 \"5F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 4F",
+              "ok": true,
+              "detail": "보냄 \"4F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 3F",
+              "ok": true,
+              "detail": "보냄 \"3F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 2F",
+              "ok": true,
+              "detail": "보냄 \"2F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 1F",
+              "ok": true,
+              "detail": "보냄 \"1F\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 B1",
+              "ok": true,
+              "detail": "보냄 \"B1\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 B2",
+              "ok": true,
+              "detail": "보냄 \"B2\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 값 B3",
+              "ok": true,
+              "detail": "보냄 \"B3\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · floorId 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · floorId 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"outside\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · floorId 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · floorId 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · x 최댓값(100)",
+              "ok": true,
+              "detail": "보냄 100 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · x 중간값",
+              "ok": true,
+              "detail": "보냄 50 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · x 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 최댓값 초과(101)",
+              "ok": true,
+              "detail": "보냄 101 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · x 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · y 최댓값(100)",
+              "ok": true,
+              "detail": "보냄 100 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · y 중간값",
+              "ok": true,
+              "detail": "보냄 50 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · y 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 최댓값 초과(101)",
+              "ok": true,
+              "detail": "보냄 101 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · y 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · status 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · status null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · status 목록 값 NORMAL",
+              "ok": true,
+              "detail": "보냄 \"NORMAL\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · status 목록 값 MAINTENANCE",
+              "ok": true,
+              "detail": "보냄 \"MAINTENANCE\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · status 목록 값 ALARM",
+              "ok": true,
+              "detail": "보냄 \"ALARM\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · status 목록 값 OFFLINE",
+              "ok": true,
+              "detail": "보냄 \"OFFLINE\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · status 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · status 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"normal\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · status 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · status 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · name 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · name 정상 값",
+              "ok": true,
+              "detail": "보냄 \"qa\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 최대 길이(100자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaaaaa…\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 최대 길이 초과(101자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaaaaa…\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · name 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 공백만",
+              "ok": true,
+              "detail": "보냄 \"   \" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 숫자 타입",
+              "ok": true,
+              "detail": "보냄 12345 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · name 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · name 배열 타입",
+              "ok": true,
+              "detail": "보냄 [\"a\"] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · name 한글·이모지",
+              "ok": true,
+              "detail": "보냄 \"가나다🔥\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 주입 문자열 <script>alert(",
+              "ok": true,
+              "detail": "보냄 \"<script>alert(1)</sc…\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 주입 문자열 ' OR 1=1 --",
+              "ok": true,
+              "detail": "보냄 \"' OR 1=1 --\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 주입 문자열 {{7*7}}",
+              "ok": true,
+              "detail": "보냄 \"{{7*7}}\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · name 주입 문자열 ../../etc/pass",
+              "ok": true,
+              "detail": "보냄 \"../../etc/passwd\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · customEmoji 정상 값",
+              "ok": true,
+              "detail": "보냄 \"qa\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 최대 길이(16자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaa\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 최대 길이 초과(17자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaa\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · customEmoji 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 공백만",
+              "ok": true,
+              "detail": "보냄 \"   \" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 숫자 타입",
+              "ok": true,
+              "detail": "보냄 12345 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · customEmoji 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · customEmoji 배열 타입",
+              "ok": true,
+              "detail": "보냄 [\"a\"] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · customEmoji 한글·이모지",
+              "ok": true,
+              "detail": "보냄 \"가나다🔥\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 주입 문자열 <script>alert(",
+              "ok": true,
+              "detail": "보냄 \"<script>alert(1)</sc…\" · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · customEmoji 주입 문자열 ' OR 1=1 --",
+              "ok": true,
+              "detail": "보냄 \"' OR 1=1 --\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 주입 문자열 {{7*7}}",
+              "ok": true,
+              "detail": "보냄 \"{{7*7}}\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · customEmoji 주입 문자열 ../../etc/pass",
+              "ok": true,
+              "detail": "보냄 \"../../etc/passwd\" · 기대 5xx 아님 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · powerStatus 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · powerStatus null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · powerStatus 목록 값 ON",
+              "ok": true,
+              "detail": "보냄 \"ON\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · powerStatus 목록 값 OFF",
+              "ok": true,
+              "detail": "보냄 \"OFF\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · powerStatus 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · powerStatus 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"on\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · powerStatus 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · powerStatus 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · autoCloseDelay null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · autoCloseDelay 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · autoCloseDelay 최댓값(600)",
+              "ok": true,
+              "detail": "보냄 600 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · autoCloseDelay 중간값",
+              "ok": true,
+              "detail": "보냄 300 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · autoCloseDelay 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 최댓값 초과(601)",
+              "ok": true,
+              "detail": "보냄 601 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · autoCloseDelay 소수(1.5)",
+              "ok": true,
+              "detail": "보냄 1.5 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · doorState 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · doorState null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · doorState 목록 값 LOCKED",
+              "ok": true,
+              "detail": "보냄 \"LOCKED\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · doorState 목록 값 UNLOCKED",
+              "ok": true,
+              "detail": "보냄 \"UNLOCKED\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · doorState 목록 값 OPENED",
+              "ok": true,
+              "detail": "보냄 \"OPENED\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · doorState 목록 값 CLOSED",
+              "ok": true,
+              "detail": "보냄 \"CLOSED\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · doorState 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · doorState 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"locked\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · doorState 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · doorState 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · value null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · value 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · value 최댓값(100000)",
+              "ok": true,
+              "detail": "보냄 100000 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · value 중간값",
+              "ok": true,
+              "detail": "보냄 50000 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · value 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 최댓값 초과(100001)",
+              "ok": true,
+              "detail": "보냄 100001 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · value 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov 빠짐",
+              "ok": true,
+              "detail": "보냄 (빠짐) · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "등록 · fov 정상 값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov 빈 객체 {}",
+              "ok": true,
+              "detail": "보냄 {} · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov 배열 타입",
+              "ok": true,
+              "detail": "보냄 [] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov 문자열",
+              "ok": true,
+              "detail": "보냄 \"x\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 최솟값(1)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":1,\"angle\":180.5,\"rotation\":1 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov distance 최댓값(100)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":100,\"angle\":180.5,\"rotation\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov distance 중간값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov distance 최솟값 미만(0)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":0,\"angle\":180.5,\"rotation\":1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 최댓값 초과(101)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":101,\"angle\":180.5,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":1e+308,\"angle\":180.5,\"rotati · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 {\"distance\":\"5\",\"angle\":180.5,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 문자열",
+              "ok": true,
+              "detail": "보냄 {\"distance\":\"abc\",\"angle\":180.5,\"rotatio · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 불리언 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":true,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov distance 배열 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":[1],\"angle\":180.5,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 최솟값(1)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":1,\"rotation\":18 · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov angle 최댓값(360)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":360,\"rotation\": · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov angle 중간값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov angle 최솟값 미만(0)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":0,\"rotation\":18 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 최댓값 초과(361)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":361,\"rotation\": · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":1e+308,\"rotatio · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":\"5\",\"rotation\": · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 문자열",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":\"abc\",\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 불리언 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":true,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov angle 배열 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":[1],\"rotation\": · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov rotation 최댓값(360)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov rotation 중간값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · fov rotation 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 최댓값 초과(361)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 문자열",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 불리언 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · fov rotation 배열 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 최대 길이(80자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaaaaa…\" · 기대 저장 · 201 저장 · 왕복 일치"
+            },
+            {
+              "name": "등록 · id 최대 길이 초과(81자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaaaaa…\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 공백만",
+              "ok": true,
+              "detail": "보냄 \"   \" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 숫자 타입",
+              "ok": true,
+              "detail": "보냄 12345 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 배열 타입",
+              "ok": true,
+              "detail": "보냄 [\"a\"] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 한글·이모지",
+              "ok": true,
+              "detail": "보냄 \"가나다🔥\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 주입 문자열 <script>alert(",
+              "ok": true,
+              "detail": "보냄 \"<script>alert(1)</sc…\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 주입 문자열 ' OR 1=1 --",
+              "ok": true,
+              "detail": "보냄 \"' OR 1=1 --\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 주입 문자열 {{7*7}}",
+              "ok": true,
+              "detail": "보냄 \"{{7*7}}\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · id 주입 문자열 ../../etc/pass",
+              "ok": true,
+              "detail": "보냄 \"../../etc/passwd\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "등록 · 규칙 위반: 전원 꺼진 비상문은 잠글 수 없다",
+              "ok": true,
+              "detail": "보냄 {\"type\":\"EMERGENCY_DOOR\",\"floorId\":\"1F\", · 기대 거절 · 400 거절 · 변화 없음"
+            }
+          ]
+        },
+        {
+          "name": "자동 생성 · 센서 수정 필드별 값",
+          "universe": 174,
+          "scanned": 174,
+          "passed": 174,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [],
+          "items": [
+            {
+              "name": "수정 · type null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · type 목록 값 EXTINGUISHER",
+              "ok": true,
+              "detail": "보냄 \"EXTINGUISHER\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 HYDRANT",
+              "ok": true,
+              "detail": "보냄 \"HYDRANT\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 WATER_PRESSURE",
+              "ok": true,
+              "detail": "보냄 \"WATER_PRESSURE\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 ARC",
+              "ok": true,
+              "detail": "보냄 \"ARC\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 LEAK",
+              "ok": true,
+              "detail": "보냄 \"LEAK\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 EMERGENCY_DOOR",
+              "ok": true,
+              "detail": "보냄 \"EMERGENCY_DOOR\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 CCTV",
+              "ok": true,
+              "detail": "보냄 \"CCTV\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 값 CUSTOM",
+              "ok": true,
+              "detail": "보냄 \"CUSTOM\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · type 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · type 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"extinguisher\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · type 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · type 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · floorId null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · floorId 목록 값 OUTSIDE",
+              "ok": true,
+              "detail": "보냄 \"OUTSIDE\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 ROOF",
+              "ok": true,
+              "detail": "보냄 \"ROOF\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 17F",
+              "ok": true,
+              "detail": "보냄 \"17F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 16F",
+              "ok": true,
+              "detail": "보냄 \"16F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 15F",
+              "ok": true,
+              "detail": "보냄 \"15F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 14F",
+              "ok": true,
+              "detail": "보냄 \"14F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 13F",
+              "ok": true,
+              "detail": "보냄 \"13F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 12F",
+              "ok": true,
+              "detail": "보냄 \"12F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 11F",
+              "ok": true,
+              "detail": "보냄 \"11F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 10F",
+              "ok": true,
+              "detail": "보냄 \"10F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 9F",
+              "ok": true,
+              "detail": "보냄 \"9F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 8F",
+              "ok": true,
+              "detail": "보냄 \"8F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 7F",
+              "ok": true,
+              "detail": "보냄 \"7F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 6F",
+              "ok": true,
+              "detail": "보냄 \"6F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 5F",
+              "ok": true,
+              "detail": "보냄 \"5F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 4F",
+              "ok": true,
+              "detail": "보냄 \"4F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 3F",
+              "ok": true,
+              "detail": "보냄 \"3F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 2F",
+              "ok": true,
+              "detail": "보냄 \"2F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 1F",
+              "ok": true,
+              "detail": "보냄 \"1F\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 B1",
+              "ok": true,
+              "detail": "보냄 \"B1\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 B2",
+              "ok": true,
+              "detail": "보냄 \"B2\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 값 B3",
+              "ok": true,
+              "detail": "보냄 \"B3\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · floorId 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · floorId 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"outside\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · floorId 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · floorId 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · x 최댓값(100)",
+              "ok": true,
+              "detail": "보냄 100 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · x 중간값",
+              "ok": true,
+              "detail": "보냄 50 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · x 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 최댓값 초과(101)",
+              "ok": true,
+              "detail": "보냄 101 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · x 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · y 최댓값(100)",
+              "ok": true,
+              "detail": "보냄 100 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · y 중간값",
+              "ok": true,
+              "detail": "보냄 50 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · y 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 최댓값 초과(101)",
+              "ok": true,
+              "detail": "보냄 101 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · y 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · status null",
+              "ok": true,
+              "detail": "보냄 null · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · status 목록 값 NORMAL",
+              "ok": true,
+              "detail": "보냄 \"NORMAL\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · status 목록 값 MAINTENANCE",
+              "ok": true,
+              "detail": "보냄 \"MAINTENANCE\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · status 목록 값 ALARM",
+              "ok": true,
+              "detail": "보냄 \"ALARM\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · status 목록 값 OFFLINE",
+              "ok": true,
+              "detail": "보냄 \"OFFLINE\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · status 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · status 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"normal\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · status 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · status 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · name null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · name 정상 값",
+              "ok": true,
+              "detail": "보냄 \"qa\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 최대 길이(100자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaaaaa…\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 최대 길이 초과(101자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaaaaa…\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · name 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 공백만",
+              "ok": true,
+              "detail": "보냄 \"   \" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 숫자 타입",
+              "ok": true,
+              "detail": "보냄 12345 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · name 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · name 배열 타입",
+              "ok": true,
+              "detail": "보냄 [\"a\"] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · name 한글·이모지",
+              "ok": true,
+              "detail": "보냄 \"가나다🔥\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 주입 문자열 <script>alert(",
+              "ok": true,
+              "detail": "보냄 \"<script>alert(1)</sc…\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 주입 문자열 ' OR 1=1 --",
+              "ok": true,
+              "detail": "보냄 \"' OR 1=1 --\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 주입 문자열 {{7*7}}",
+              "ok": true,
+              "detail": "보냄 \"{{7*7}}\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · name 주입 문자열 ../../etc/pass",
+              "ok": true,
+              "detail": "보냄 \"../../etc/passwd\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · customEmoji 정상 값",
+              "ok": true,
+              "detail": "보냄 \"qa\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 최대 길이(16자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaa\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 최대 길이 초과(17자)",
+              "ok": true,
+              "detail": "보냄 \"aaaaaaaaaaaaaaaaa\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · customEmoji 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 공백만",
+              "ok": true,
+              "detail": "보냄 \"   \" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 숫자 타입",
+              "ok": true,
+              "detail": "보냄 12345 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · customEmoji 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · customEmoji 배열 타입",
+              "ok": true,
+              "detail": "보냄 [\"a\"] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · customEmoji 한글·이모지",
+              "ok": true,
+              "detail": "보냄 \"가나다🔥\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 주입 문자열 <script>alert(",
+              "ok": true,
+              "detail": "보냄 \"<script>alert(1)</sc…\" · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · customEmoji 주입 문자열 ' OR 1=1 --",
+              "ok": true,
+              "detail": "보냄 \"' OR 1=1 --\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 주입 문자열 {{7*7}}",
+              "ok": true,
+              "detail": "보냄 \"{{7*7}}\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · customEmoji 주입 문자열 ../../etc/pass",
+              "ok": true,
+              "detail": "보냄 \"../../etc/passwd\" · 기대 5xx 아님 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · powerStatus null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · powerStatus 목록 값 ON",
+              "ok": true,
+              "detail": "보냄 \"ON\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · powerStatus 목록 값 OFF",
+              "ok": true,
+              "detail": "보냄 \"OFF\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · powerStatus 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · powerStatus 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"on\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · powerStatus 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · powerStatus 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · autoCloseDelay 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · autoCloseDelay 최댓값(600)",
+              "ok": true,
+              "detail": "보냄 600 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · autoCloseDelay 중간값",
+              "ok": true,
+              "detail": "보냄 300 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · autoCloseDelay 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 최댓값 초과(601)",
+              "ok": true,
+              "detail": "보냄 601 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · autoCloseDelay 소수(1.5)",
+              "ok": true,
+              "detail": "보냄 1.5 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · doorState null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · doorState 목록 값 LOCKED",
+              "ok": true,
+              "detail": "보냄 \"LOCKED\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · doorState 목록 값 UNLOCKED",
+              "ok": true,
+              "detail": "보냄 \"UNLOCKED\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · doorState 목록 값 OPENED",
+              "ok": true,
+              "detail": "보냄 \"OPENED\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · doorState 목록 값 CLOSED",
+              "ok": true,
+              "detail": "보냄 \"CLOSED\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · doorState 목록 밖 값",
+              "ok": true,
+              "detail": "보냄 \"QA_BOGUS\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · doorState 소문자로 바꾼 값",
+              "ok": true,
+              "detail": "보냄 \"locked\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · doorState 빈 문자열",
+              "ok": true,
+              "detail": "보냄 \"\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · doorState 숫자 타입",
+              "ok": true,
+              "detail": "보냄 0 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · value 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 0 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · value 최댓값(100000)",
+              "ok": true,
+              "detail": "보냄 100000 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · value 중간값",
+              "ok": true,
+              "detail": "보냄 50000 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · value 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 -1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value 최댓값 초과(100001)",
+              "ok": true,
+              "detail": "보냄 100001 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 1e+308 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 \"5\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value 문자열",
+              "ok": true,
+              "detail": "보냄 \"abc\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value 불리언 타입",
+              "ok": true,
+              "detail": "보냄 true · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · value 배열 타입",
+              "ok": true,
+              "detail": "보냄 [1] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov null",
+              "ok": true,
+              "detail": "보냄 null · 기대 5xx 아님 · 400 거절"
+            },
+            {
+              "name": "수정 · fov 정상 값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov 빈 객체 {}",
+              "ok": true,
+              "detail": "보냄 {} · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov 배열 타입",
+              "ok": true,
+              "detail": "보냄 [] · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov 문자열",
+              "ok": true,
+              "detail": "보냄 \"x\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 최솟값(1)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":1,\"angle\":180.5,\"rotation\":1 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov distance 최댓값(100)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":100,\"angle\":180.5,\"rotation\" · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov distance 중간값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov distance 최솟값 미만(0)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":0,\"angle\":180.5,\"rotation\":1 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 최댓값 초과(101)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":101,\"angle\":180.5,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":1e+308,\"angle\":180.5,\"rotati · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 {\"distance\":\"5\",\"angle\":180.5,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 문자열",
+              "ok": true,
+              "detail": "보냄 {\"distance\":\"abc\",\"angle\":180.5,\"rotatio · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 불리언 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":true,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov distance 배열 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":[1],\"angle\":180.5,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 최솟값(1)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":1,\"rotation\":18 · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov angle 최댓값(360)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":360,\"rotation\": · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov angle 중간값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov angle 최솟값 미만(0)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":0,\"rotation\":18 · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 최댓값 초과(361)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":361,\"rotation\": · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":1e+308,\"rotatio · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":\"5\",\"rotation\": · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 문자열",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":\"abc\",\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 불리언 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":true,\"rotation\" · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov angle 배열 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":[1],\"rotation\": · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 최솟값(0)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov rotation 최댓값(360)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov rotation 중간값",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 저장 · 200 저장 · 왕복 일치"
+            },
+            {
+              "name": "수정 · fov rotation 최솟값 미만(-1)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 최댓값 초과(361)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 아주 큰 수(1e308)",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 숫자 모양 문자열(\"5\")",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 문자열",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 불리언 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · fov rotation 배열 타입",
+              "ok": true,
+              "detail": "보냄 {\"distance\":50.5,\"angle\":180.5,\"rotation · 기대 거절 · 400 거절 · 변화 없음"
+            },
+            {
+              "name": "수정 · 규칙 위반: 전원 꺼진 비상문은 잠글 수 없다",
+              "ok": true,
+              "detail": "보냄 {\"powerStatus\":\"OFF\",\"doorState\":\"LOCKED · 기대 거절 · 400 거절 · 변화 없음"
+            }
+          ]
+        },
+        {
+          "name": "자동 생성 · 목록 값 조합 (페어와이즈)",
+          "universe": 176,
+          "scanned": 176,
+          "passed": 176,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [],
+          "items": [
+            {
+              "name": "조합 · EXTINGUISHER / OUTSIDE / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / ROOF / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 17F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 16F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 15F / NORMAL / OFF / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 14F / NORMAL / ON / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 13F / NORMAL / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 12F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 11F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 10F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 9F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 8F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 7F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 6F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 5F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 4F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 3F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 2F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / 1F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / B1 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / B2 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EXTINGUISHER / B3 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / OUTSIDE / MAINTENANCE / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / ROOF / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 17F / OFFLINE / OFF / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 16F / ALARM / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 15F / MAINTENANCE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 14F / MAINTENANCE / OFF / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 13F / MAINTENANCE / OFF / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 12F / MAINTENANCE / OFF / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 11F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 10F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 9F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 8F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 7F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 6F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 5F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 4F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 3F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 2F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / 1F / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / B1 / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / B2 / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · HYDRANT / B3 / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / OUTSIDE / ALARM / OFF / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / ROOF / OFFLINE / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 17F / NORMAL / ON / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 16F / MAINTENANCE / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 15F / ALARM / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 14F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 13F / ALARM / ON / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 12F / ALARM / ON / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 11F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 10F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 9F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 8F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 7F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 6F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 5F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 4F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 3F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 2F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / 1F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / B1 / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / B2 / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · WATER_PRESSURE / B3 / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / OUTSIDE / OFFLINE / ON / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / ROOF / ALARM / OFF / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 17F / MAINTENANCE / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 16F / NORMAL / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 15F / OFFLINE / ON / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 14F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 13F / OFFLINE / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 12F / OFFLINE / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 11F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 10F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 9F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 8F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 7F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 6F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 5F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 4F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 3F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 2F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / 1F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / B1 / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / B2 / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · ARC / B3 / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / OUTSIDE / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / ROOF / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 17F / ALARM / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 16F / OFFLINE / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 15F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 14F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 13F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 12F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 11F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 10F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 9F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 8F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 7F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 6F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 5F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 4F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 3F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 2F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / 1F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / B1 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / B2 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · LEAK / B3 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / OUTSIDE / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / ROOF / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 17F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 16F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 15F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 14F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 13F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 12F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 11F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 10F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 9F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 8F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 7F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 6F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 5F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 4F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 3F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 2F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / 1F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / B1 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / B2 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · EMERGENCY_DOOR / B3 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / OUTSIDE / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / ROOF / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 17F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 16F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 15F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 14F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 13F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 12F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 11F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 10F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 9F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 8F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 7F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 6F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 5F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 4F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 3F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 2F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / 1F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / B1 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / B2 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CCTV / B3 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / OUTSIDE / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / ROOF / MAINTENANCE / OFF / UNLOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 17F / ALARM / ON / OPENED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 16F / OFFLINE / ON / CLOSED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 15F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 14F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 13F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 12F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 11F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 10F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 9F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 8F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 7F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 6F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 5F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 4F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 3F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 2F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / 1F / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / B1 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / B2 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            },
+            {
+              "name": "조합 · CUSTOM / B3 / NORMAL / ON / LOCKED",
+              "ok": true,
+              "detail": "201 저장 · 왕복 일치"
+            }
+          ]
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "L",
+      "name": "로깅·관측성",
+      "weight": 3,
+      "section": "api",
+      "file": "api/l_logging.js",
+      "composite": false,
+      "universe": 10,
+      "scanned": 10,
+      "passed": 10,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 8,
+      "checks": [
+        {
+          "name": "서버 catch 가 오류를 기록한다",
+          "universe": 7,
+          "scanned": 7,
+          "passed": 7,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면이 저장 실패를 삼키지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "상태 확인 경로가 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "인명정보 열람·해제·센서 변경에 감사 로그가 남는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "O",
+      "name": "응답 크기·속도",
+      "weight": 5,
+      "section": "api",
+      "file": "api/o_payload.js",
+      "composite": false,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 3,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 46,
+      "checks": [
+        {
+          "name": "요청 본문 크기에 상한이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "센서 목록 응답이 가볍다 (<100KB, <300ms)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "16278B · 2ms"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "폴링이 바뀐 것이 없으면 본문을 다시 받지 않는다 (ETag → 304)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "R",
+      "name": "동시성",
+      "weight": 6,
+      "section": "api",
+      "file": "api/r_race.js",
+      "composite": false,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 3,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 98,
+      "checks": [
+        {
+          "name": "동시 부분수정이 서로를 지우지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "같은 id 동시 등록은 하나만 성공한다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "낡은 화면의 수정이 최신 값을 덮지 않는다 (낙관적 잠금)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "S",
+      "name": "상태 전이",
+      "weight": 6,
+      "section": "api",
+      "file": "api/s_state.js",
+      "composite": false,
+      "universe": 5,
+      "scanned": 5,
+      "passed": 5,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 62,
+      "checks": [
+        {
+          "name": "상태 전이가 규칙대로 움직인다",
+          "universe": 5,
+          "scanned": 5,
+          "passed": 5,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "T",
+      "name": "시간·날짜 (KST)",
+      "weight": 5,
+      "section": "api",
+      "file": "api/t_time.js",
+      "composite": false,
+      "universe": 29,
+      "scanned": 29,
+      "passed": 29,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 6,
+      "checks": [
+        {
+          "name": "화면에 보이는 날짜·시각이 UTC 가 아니다",
+          "universe": 28,
+          "scanned": 28,
+          "passed": 28,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "표시 시간대가 명시돼 있다 (Asia/Seoul)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "W",
+      "name": "업무 흐름: EV 화재 → 119 → 종료",
+      "weight": 8,
+      "section": "api",
+      "file": "api/w_workflow.js",
+      "composite": true,
+      "universe": 9,
+      "scanned": 9,
+      "passed": 9,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 46,
+      "checks": [
+        {
+          "name": "화재 대응 흐름이 끝까지 이어진다",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 9,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "X",
+      "name": "기능 간섭 (다중 단말)",
+      "weight": 9,
+      "section": "api",
+      "file": "api/x_interference.js",
+      "composite": true,
+      "universe": 3,
+      "scanned": 3,
+      "passed": 3,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 1684,
+      "checks": [
+        {
+          "name": "다른 단말이 지운 센서가 이 화면에서도 사라진다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버가 거절한 수정을 화면이 되돌린다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "단말 간 폴링 주기가 같다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "B",
+      "name": "인증",
+      "weight": 6,
+      "section": "security",
+      "file": "security/b_auth.js",
+      "composite": false,
+      "universe": 51,
+      "scanned": 51,
+      "passed": 51,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 190,
+      "checks": [
+        {
+          "name": "자동 생성 · 인증 매트릭스 (경로 × 토큰 종류)",
+          "universe": 42,
+          "scanned": 42,
+          "passed": 42,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": [],
+          "items": [
+            {
+              "name": "GET /api/emergency · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/emergency · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/emergency · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/emergency · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/emergency · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/emergency · 진짜 토큰",
+              "ok": true,
+              "detail": "200 인증 통과"
+            },
+            {
+              "name": "POST /api/emergency · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/emergency · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/emergency · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/emergency · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/emergency · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/emergency · 진짜 토큰",
+              "ok": true,
+              "detail": "400 인증 통과"
+            },
+            {
+              "name": "GET /api/floors · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/floors · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/floors · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/floors · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/floors · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/floors · 진짜 토큰",
+              "ok": true,
+              "detail": "200 인증 통과"
+            },
+            {
+              "name": "GET /api/sensors · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/sensors · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/sensors · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/sensors · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/sensors · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "GET /api/sensors · 진짜 토큰",
+              "ok": true,
+              "detail": "200 인증 통과"
+            },
+            {
+              "name": "POST /api/sensors · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/sensors · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/sensors · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/sensors · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/sensors · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "POST /api/sensors · 진짜 토큰",
+              "ok": true,
+              "detail": "201 인증 통과"
+            },
+            {
+              "name": "PUT /api/sensors · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "PUT /api/sensors · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "PUT /api/sensors · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "PUT /api/sensors · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "PUT /api/sensors · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "PUT /api/sensors · 진짜 토큰",
+              "ok": true,
+              "detail": "200 인증 통과"
+            },
+            {
+              "name": "DELETE /api/sensors · 토큰 없음",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "DELETE /api/sensors · 엉터리 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "DELETE /api/sensors · 형식 다른 헤더",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "DELETE /api/sensors · 서명 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "DELETE /api/sensors · 내용 변조 토큰",
+              "ok": true,
+              "detail": "401 차단"
+            },
+            {
+              "name": "DELETE /api/sensors · 진짜 토큰",
+              "ok": true,
+              "detail": "200 인증 통과"
+            }
+          ]
+        },
+        {
+          "name": "보호돼야 할 API 가 토큰 없이 닫혀 있다",
+          "universe": 7,
+          "scanned": 7,
+          "passed": 7,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "119 상황 종료(REVOKE)에 인증이 필요하다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "인증 수단(세션·토큰 검증)이 서버에 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "C",
+      "name": "권한 (119 OTP 승인 범위)",
+      "weight": 7,
+      "section": "security",
+      "file": "security/c_authorization.js",
+      "composite": false,
+      "universe": 4,
+      "scanned": 4,
+      "passed": 4,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 52,
+      "checks": [
+        {
+          "name": "승인이 요청한 단말에만 적용된다 (전역 승인 아님)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "승인에 만료 시간이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "인명 좌표는 서버 승인 뒤에만 내려온다 (화면에서만 숨기지 않는다)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "화면의 승인 상태가 서버 상태에서 온다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "H",
+      "name": "HTTP 보안 헤더",
+      "weight": 4,
+      "section": "security",
+      "file": "security/h_headers.js",
+      "composite": false,
+      "universe": 21,
+      "scanned": 21,
+      "passed": 21,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 29,
+      "checks": [
+        {
+          "name": "페이지마다 보안 헤더가 붙는다",
+          "universe": 18,
+          "scanned": 18,
+          "passed": 18,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "서버 종류를 헤더로 알리지 않는다",
+          "universe": 2,
+          "scanned": 2,
+          "passed": 2,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "상태를 바꾸는 API 가 아무 출처에나 열려 있지 않다 (CORS)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "I",
+      "name": "주입",
+      "weight": 7,
+      "section": "security",
+      "file": "security/i_injection.js",
+      "composite": false,
+      "universe": 36,
+      "scanned": 36,
+      "passed": 36,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 3,
+      "checks": [
+        {
+          "name": "HTML 을 직접 꽂는 싱크가 없다",
+          "universe": 35,
+          "scanned": 35,
+          "passed": 35,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "외부 URL 을 넣는 iframe 이 제한돼 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "K",
+      "name": "비밀 노출",
+      "weight": 7,
+      "section": "security",
+      "file": "security/k_secrets.js",
+      "composite": false,
+      "universe": 105,
+      "scanned": 105,
+      "passed": 105,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 44,
+      "checks": [
+        {
+          "name": "코드에 비밀번호·키가 박혀 있지 않다",
+          "universe": 51,
+          "scanned": 51,
+          "passed": 51,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "OTP 가 코드·화면에 박혀 있지 않다 (환경변수)",
+          "universe": 51,
+          "scanned": 51,
+          "passed": 51,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "실패 응답이 정답을 알려 주지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "OTP 를 연달아 틀리면 잠긴다 (무차별 대입 방지)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": ".env 가 깃 추적에서 빠져 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "P",
+      "name": "개인정보 (재실자 위치)",
+      "weight": 6,
+      "section": "security",
+      "file": "security/p_privacy.js",
+      "composite": false,
+      "universe": 10,
+      "scanned": 10,
+      "passed": 10,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 62,
+      "checks": [
+        {
+          "name": "승인 전 브라우저에 재실자 위치가 내려가지 않는다",
+          "universe": 8,
+          "scanned": 8,
+          "passed": 8,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "승인 전 API 응답에 재실자 정보가 없다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "모바일 데모 화면이 인명 정보를 따로 보여 주지 않는다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "V",
+      "name": "의존성·버전",
+      "weight": 3,
+      "section": "security",
+      "file": "security/v_dependencies.js",
+      "composite": false,
+      "universe": 12,
+      "scanned": 12,
+      "passed": 12,
+      "warned": 0,
+      "failed": 0,
+      "scanRate": 1,
+      "passRate": 1,
+      "ms": 584,
+      "checks": [
+        {
+          "name": "설치한 패키지를 실제로 쓴다",
+          "universe": 9,
+          "scanned": 9,
+          "passed": 9,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "알려진 심각한 취약점이 없다 (운영 의존성)",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [
+            "치명 0 · 높음 0 · 보통 0 · 낮음 0"
+          ],
+          "warnNotes": []
+        },
+        {
+          "name": "버전 잠금 파일이 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        },
+        {
+          "name": "test 스크립트가 있다",
+          "universe": 1,
+          "scanned": 1,
+          "passed": 1,
+          "warned": 0,
+          "failed": 0,
+          "skipped": 0,
+          "notes": [],
+          "warnNotes": []
+        }
+      ],
+      "error": null
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 // F. 입력 검증 — 말이 안 되는 값을 서버가 거절하는가
-const { check } = require('../../common/core');
+// 손으로 고른 사례 + contract.js 의 규칙에서 자동으로 만든 케이스 (필드 × 값 유형 × 조합)
+const { check, checkItems } = require('../../common/core');
+const { sensorContract } = require('../contract');
 const { snapshot, restore, sensors } = require('../helpers');
 
 const base = { id: 'qa-f', type: 'CCTV', floorId: '1F', x: 50, y: 50, status: 'NORMAL', name: 'QA' };
@@ -43,6 +45,13 @@ module.exports = {
     if (!ghost) ok++; else notes.push('숫자 id(12345) 센서가 DELETE ?id=12345 로 지워지지 않는다 — 서버 재시작 전까지 영구 잔류');
     await restore(ctx, snap);
     const total = posts.length + puts.length + 2;
-    return { checks: [check('서버가 말이 안 되는 값을 거절한다', { universe: total, scanned: total, passed: ok, notes })] };
+    // 계약(contract.js)에서 자동으로 만든 케이스 — 필드 × 값 유형, 목록 값 조합
+    const gen = await sensorContract(ctx);
+    return { checks: [
+      check('서버가 말이 안 되는 값을 거절한다 (손으로 고른 사례)', { universe: total, scanned: total, passed: ok, notes }),
+      checkItems('자동 생성 · 센서 등록 필드별 값', gen.create),
+      checkItems('자동 생성 · 센서 수정 필드별 값', gen.update),
+      checkItems('자동 생성 · 목록 값 조합 (페어와이즈)', gen.combos),
+    ] };
   },
 };
