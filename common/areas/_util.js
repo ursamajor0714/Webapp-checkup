@@ -6,7 +6,7 @@ const { walk, read } = require('../stacks/util');
 const owasp = (tag, c) => Object.assign(c, { owasp: tag });
 // 부분(서버·화면)의 소스 파일과 언어 규칙
 // 운영 코드만 — 테스트·시드·목·예제·설정 스크립트는 뺀다 (배포되지 않는 코드의 비밀번호·N+1 은 결함이 아니다)
-const NOT_SHIPPED = /\.(test|spec|stories)\.|(^|[\\/])(tests?|__tests__|__mocks__|mocks?|fixtures?|seeds?|examples?|migrations|e2e|cypress|playwright)[\\/]|(^|[\\/])(?:\w+[._-])?(test|seed|mock|fixture|sample)s?(?:[._-]\w+|data|helpers?|utils?)?\.(js|ts|py|java)$|\.min\.js$|(vite|webpack|babel|jest|metro|eslint|tailwind|postcss|next)\.config\./i;
+const NOT_SHIPPED = /\.(test|spec|stories)\.|(^|[\\/])(tests?|__tests__|__mocks__|mocks?|fixtures?|seeds?|examples?|migrations|e2e|cypress|playwright)[\\/]|(^|[\\/])(?:\w+[._-])?(test|seed|mock|fixture|sample|dummy)s?(?:[._-]\w+|data|helpers?|utils?)*\.(js|ts|py|java)$|\.min\.js$|(vite|webpack|babel|jest|metro|eslint|tailwind|postcss|next)\.config\./i;
 const sources = (ctx, part) => walk(part.absDir, ctx.lang(part).exts).filter(f => !NOT_SHIPPED.test(ctx.rel(f)));
 // 정규식 규칙을 파일들에 대 본다 → 걸린 [파일:줄 — 설명]
 function scan(ctx, files, re, what) {

@@ -26,6 +26,7 @@ class Session {
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+const timings = [];
 // 요청 하나 — 세션의 쿠키·토큰·CSRF 를 붙이고, 받은 쿠키를 담는다
 async function request(baseUrl, sess, p, { method = 'GET', body, headers = {}, form, raw, redirect = 'manual' } = {}) {
   const h = { ...headers };
@@ -43,9 +44,12 @@ async function request(baseUrl, sess, p, { method = 'GET', body, headers = {}, f
   else if (body !== undefined) { payload = JSON.stringify(body); h['Content-Type'] ??= 'application/json'; }
   const go = () => fetch(baseUrl + p, { method, headers: h, body: payload, redirect });
   // 긴 검사 뒤 keep-alive 소켓이 끊겨 있으면 한 번만 다시 건다
+  const t0 = Date.now();
   const res = await go().catch(() => go());
   if (sess) sess.absorb(res);
   const text = await res.text().catch(() => '');
+  // 응답 시간 기록 — '느린 API' 영역이 경로별로 모아 본다 (주입·거대 본문처럼 일부러 이상한 요청도 섞여 있다)
+  if (timings.length < 50000) timings.push({ method, path: p.split('?')[0], ms: Date.now() - t0, status: res.status, big: (payload ? String(payload).length : 0) > 100000 });
   let parsed = null; try { parsed = JSON.parse(text); } catch { /* JSON 이 아닐 수 있다 */ }
   return { status: res.status, ok: res.ok, body: parsed, text, headers: res.headers, bytes: text.length, location: res.headers.get('location') };
 }
@@ -123,4 +127,4 @@ async function register(baseUrl, auth, registerRoute, fieldsGuess = []) {
   return { ok, acct, status: r.status, why: ok ? '' : `가입 실패 (${r.status}) ${String(r.text).slice(0, 100)}` };
 }
 
-module.exports = { Session, request, login, register, findToken, prepareCsrf };
+module.exports = { Session, request, login, register, findToken, prepareCsrf, timings };

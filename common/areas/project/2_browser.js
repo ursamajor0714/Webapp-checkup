@@ -7,7 +7,7 @@ const { checkItems } = require('../_util');
 const { openBrowser, startPages, newContext } = require('../../browser');
 
 const MAX_PAGES = 25;
-const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date|\{\{\s*[\w.]+\s*\}\}|\$\{[\w.]+\}/;
+const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date|\{\{\s*[\w.]+\s*\}\}|\$\{[\w.]+\}|\uFFFD|(?:Ã[\u0080-\u00BF]){2}|(?:ì|í|ë|ê)[\u0080-\u00BF][\u0080-\u00BF]/;   // 마지막 둘: 깨진 글자(�)·UTF-8 을 잘못 읽은 한글
 
 module.exports = {
   id: '2', name: '브라우저 실행 오류', weight: 7,
@@ -16,7 +16,7 @@ module.exports = {
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다 — 서버를 켜거나, 끈 채로 돌리면 QA 가 켠다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
-    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [];
+    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [], fwItems = [], storm = [], meta = [];
     const skipped = [];
     try {
       const base0 = ctx.baseUrl(start[0].part);
@@ -31,9 +31,15 @@ module.exports = {
         if (seen.has(key)) continue; seen.add(key);
         const where = new URL(url).pathname + new URL(url).search;
         const page = await context.newPage();
-        const pErr = [], pReq = [];
+        const pErr = [], pReq = [], fw = [];
+        let reqCount = 0; page.on('request', () => reqCount++);
         page.on('pageerror', e => pErr.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
-        page.on('console', m => { if (m.type() === 'error') pErr.push({ kind: '콘솔 오류', text: m.text().split('\n')[0] }); });
+        page.on('console', m => {
+          const t = m.text();
+          // 프레임워크가 알려 주는 진짜 버그 — 경고(warning)로 나와도 모은다
+          if (/hydrat|did not match|Each child in a list should have a unique "?key|Cannot update a component .* while rendering|Maximum update depth|Can't perform a React state update on an unmounted|validateDOMNesting|is not a valid DOM|\[Vue warn\]/i.test(t)) fw.push({ text: t.split('\n')[0] });
+          else if (m.type() === 'error') pErr.push({ kind: '콘솔 오류', text: t.split('\n')[0] });
+        });
         page.on('requestfailed', r => {
           const f = r.failure() && r.failure().errorText; if (!f || /ERR_ABORTED|NS_BINDING_ABORTED|cancelled/i.test(f)) return;
           const same = new URL(r.url()).origin === new URL(url).origin;
@@ -61,6 +67,9 @@ module.exports = {
         // 'Failed to load resource' 는 아래 요청 검사가 주소와 함께 따로 판정한다 (403 은 권한상 정상일 수 있다)
         if (uniq.length) for (const e of uniq.slice(0, 8)) errs.push({ name, ok: e.kind === '콘솔 오류' && /favicon|Download the React DevTools|\[HMR\]|\[Fast Refresh\]|Failed to load resource|net::ERR_/i.test(e.text) ? null : false, detail: `${e.kind}: ${e.text.slice(0, 220)}` });
         else errs.push({ name, ok: status < 400 || status === 0 ? true : false, detail: status >= 400 ? `페이지가 ${status}` : '예외·콘솔 오류 없음' });
+        const ufw = [...new Map(fw.map(e => [e.text.slice(0, 80), e])).values()];
+        if (ufw.length) for (const e of ufw.slice(0, 5)) fwItems.push({ name, ok: /hydrat|did not match|Maximum update depth|Cannot update a component/i.test(e.text) ? false : null, detail: e.text.slice(0, 220) });
+        else fwItems.push({ name, ok: true, detail: '프레임워크 경고 없음' });
         // 2) 요청
         const ur = [...new Map(pReq.map(r => [r.text, r])).values()];
         if (ur.length) for (const r of ur.slice(0, 10)) reqs.push({ name, ok: r.ok, detail: r.ok === null ? `${r.text} — 화면이 부른 요청이 실패로 끝났다 (의도인지 확인)` : r.text });
@@ -75,11 +84,22 @@ module.exports = {
           const links = [...document.querySelectorAll('a[href]')].map(a => a.href).filter(h => h.startsWith(location.origin));
           return { hits: [...new Set(hits)].slice(0, 6), broken: [...new Set(broken)].slice(0, 6), links: [...new Set(links)] };
         }, JUNK.source).catch(() => ({ hits: [], broken: [], links: [] }));
-        if (info.hits.length) for (const h of info.hits) junk.push({ name, ok: false, detail: `화면에 "${h.slice(0, 160)}" — 값이 비어 있거나 잘못 합쳐졌다` });
+        if (info.hits.length) for (const h of info.hits) junk.push({ name, ok: false, detail: `화면에 "${h.slice(0, 160)}" — ${/\uFFFD|Ã|ì|í|ë|ê/.test(h) && !/undefined|NaN|object/.test(h) ? '글자가 깨졌다 (인코딩·글꼴 문제)' : '값이 비어 있거나 잘못 합쳐졌다'}` });
         else junk.push({ name, ok: true, detail: 'undefined·NaN·[object Object] 없음' });
         if (info.broken.length) for (const s of info.broken) imgs.push({ name, ok: false, detail: `깨진 이미지: ${s}` });
         else imgs.push({ name, ok: true, detail: '깨진 이미지 없음' });
         for (const l of info.links) if (!/logout|signout|delete|remove/i.test(l) && !seen.has(l.replace(/#.*$/, ''))) queue.push({ url: l, from: where });
+        // 가만히 10초 두었을 때의 요청 수 — 폴링이 너무 잦거나 무한 반복이면 서버·배터리를 태운다 (시작 화면만)
+        if (!from && storm.length < 3) {   // 시간이 들어 앞의 3개 화면만
+          const r0 = reqCount; await page.waitForTimeout(10000); const n = reqCount - r0;
+          storm.push({ name: where, ok: n > 60 ? false : n > 20 ? null : true, detail: `가만히 둔 10초 동안 요청 ${n}개${n > 60 ? ' — 무한 반복으로 보인다 (useEffect 의존성·재시도 루프 확인)' : n > 20 ? ' — 폴링이 잦다 (단말 수만큼 서버 부하가 늘어난다)' : ''}` });
+          const m = await page.evaluate(() => ({ title: document.title.trim(), desc: (document.querySelector('meta[name="description"]') || {}).content || '', og: !!document.querySelector('meta[property="og:title"]'),
+            icon: !!document.querySelector('link[rel~="icon"]'), viewport: !!document.querySelector('meta[name="viewport"]'), lang: document.documentElement.lang })).catch(() => null);
+          if (m) {
+            const miss = [!m.title && '제목(<title>)', !m.viewport && 'viewport', !m.lang && '<html lang>', !m.desc && '설명(meta description)', !m.og && '공유 미리보기(og:title)', !m.icon && '파비콘'].filter(Boolean);
+            meta.push({ name: where, ok: !m.title || !m.viewport ? false : miss.length ? null : true, detail: miss.length ? `없음: ${miss.join(', ')}${!m.title ? ' — 탭·즐겨찾기에 주소만 보인다' : ''}` : `제목 "${m.title.slice(0, 40)}" · 설명·공유 미리보기·파비콘 있음` });
+          }
+        }
         // 4) 무게·속도 — 시작 화면만. 개발 서버(vite dev·next dev)는 압축·묶음 전이라 부풀어 보인다
         if (!from) {
           const m = await page.evaluate(() => {
@@ -117,6 +137,9 @@ module.exports = {
       checkItems('이미지가 깨지지 않는다', imgs),
       checkItems('모바일 폭(375px)에서 가로로 넘치지 않는다', mobile.length ? mobile : [{ name: '모바일', ok: null, detail: '열지 못함' }]),
       ...(perf.length ? [checkItems('화면이 가볍고 빨리 뜬다 (JS 1.5MB·4초 이하)', perf)] : []),
+      checkItems('프레임워크 경고가 없다 (하이드레이션 불일치·React key·무한 갱신)', fwItems),
+      ...(storm.length ? [checkItems('가만히 둔 화면이 요청을 쏟아내지 않는다 (10초)', storm)] : []),
+      ...(meta.length ? [checkItems('제목·설명·공유 미리보기·파비콘이 있다', meta)] : []),
     ], skipped };
   },
 };

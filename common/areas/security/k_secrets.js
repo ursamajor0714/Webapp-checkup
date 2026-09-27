@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 // K. 비밀·암호화 — OWASP A02(암호화 실패) · A05(설정)
 //   코드·설정에 박힌 비밀(키·비밀번호·환경변수 기본값), 깃에 올라간 .env, 약한 해시·예측 가능한 토큰,
 //   비밀번호를 해시하는 라이브러리를 쓰는가
@@ -9,6 +11,43 @@ const GENERIC = [
   [/\bsk-[A-Za-z0-9]{20,}/, 'API 키로 보이는 문자열'], [/\bghp_[A-Za-z0-9]{30,}/, 'GitHub 토큰'], [/xox[bap]-[A-Za-z0-9-]{10,}/, 'Slack 토큰'],
   [/(?:postgres|postgresql|mysql|mongodb(?:\+srv)?):\/\/[^:\s'"]+:[^@\s'"]+@(?!localhost|127\.0\.0\.1)[^\s'"/]+/, '운영 DB 접속 문자열에 비밀번호'],
 ];
+
+const HIST = [
+  [/AKIA[0-9A-Z]{16}/, 'AWS 액세스 키'], [/-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/, '개인키'],
+  [/\bsk-(?:live|proj|ant)?[-_A-Za-z0-9]{20,}/, 'API 키 (sk-…)'], [/\bghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}/, 'GitHub 토큰'], [/xox[bap]-[A-Za-z0-9-]{10,}/, 'Slack 토큰'],
+  [/AIza[0-9A-Za-z_-]{35}/, 'Google API 키'], [/(?:postgres|postgresql|mysql|mongodb(?:\+srv)?):\/\/[^:\s'"]+:[^@\s'"]{4,}@(?!localhost|127\.0\.0\.1)[^\s'"/]+/, '운영 DB 접속 주소(비밀번호 포함)'],
+  [/\b(?:password|passwd|secret|api[_-]?key|jwt[_-]?secret|secret[_-]?key|access[_-]?token)\b\s*[:=]\s*['"](?![^'"]*(?:example|change|your|dummy|test|xxx|\*\*\*|<|\$\{))[^'"\s]{10,}['"]/i, '비밀번호·비밀 키를 코드에 적음'],
+];
+function gitHistorySecrets(ctx) {
+  let log;
+  try { log = execFileSync('git', ['log', '-p', '--all', '-n', '400', '--no-color', '--unified=0', '--format=@@COMMIT %h %ad', '--date=short'], { cwd: ctx.root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
+  catch { return null; }
+  const now = new Map();   // 지금 파일에도 있으면 위의 '박힌 비밀' 검사가 이미 본다
+  const found = new Map();
+  let commit = '', file = '';
+  for (const line of log.split('\n')) {
+    if (line.startsWith('@@COMMIT ')) { commit = line.slice(9); continue; }
+    if (line.startsWith('+++ ')) { file = line.slice(6); continue; }
+    if (!line.startsWith('+') || line.startsWith('+++')) continue;
+    if (require('../_util').NOT_SHIPPED.test(file) || /\.env\.(example|sample|template)$|package-lock|yarn\.lock|\.md$/i.test(file)) continue;
+    for (const [re, what] of HIST) {
+      const m = line.match(re); if (!m) continue;
+      const key = m[0].slice(0, 60);
+      if (found.has(key)) continue;
+      if (!now.has(file)) { try { now.set(file, fs.readFileSync(path.join(ctx.root, file), 'utf8')); } catch { now.set(file, ''); } }
+      if (now.get(file).includes(m[0])) { found.set(key, null); continue; }   // 지금도 있으면 위의 '박힌 비밀' 검사가 본다
+      found.set(key, { name: `${file} (${commit})`, ok: false, detail: `${what}: ${m[0].slice(0, 12)}… — 지금은 지웠지만 깃 기록에 남아 있다. 이미 샌 것으로 보고 새 키로 바꿔야 한다 (기록을 지우는 것만으론 부족)` });
+    }
+  }
+  // 예전에 커밋된 .env 파일
+  try {
+    const envs = execFileSync('git', ['log', '--all', '--diff-filter=A', '--name-only', '--format=@@%h', '--', '*.env', '.env', '*/.env', '.env.*', '*/.env.*'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    let c = '';
+    for (const l of envs.split('\n')) { if (l.startsWith('@@')) { c = l.slice(2); continue; } if (l && !/\.(example|sample|template|dist)$/.test(l)) found.set('env:' + l, { name: `${l} (${c})`, ok: false, detail: '.env 파일이 커밋된 적이 있다 — 지금 없어도 기록에 남아 있다. 안의 비밀번호·키를 모두 바꿔야 한다' }); }
+  } catch { /* 무시 */ }
+  const items = [...found.values()].filter(Boolean);
+  return items.length ? items : [{ name: '깃 기록', ok: true, detail: '최근 400개 커밋의 추가된 줄에서 비밀을 찾지 못했다' }];
+}
 
 module.exports = {
   id: 'K', name: '비밀·암호화', weight: 7, owasp: ['A02', 'A05'],
@@ -50,6 +89,9 @@ module.exports = {
       }
       checks.push(owasp('A02', checkItems('API 응답에 비밀번호·해시·비밀값이 없다', leaks)));
     }
+    // 깃 기록 — 지금은 지웠어도 예전 커밋에 남은 비밀 (누구나 git log 로 꺼낼 수 있다 → 키를 바꿔야 한다)
+    const hist = gitHistorySecrets(ctx);
+    if (hist) checks.push(owasp('A02', checkItems('깃 기록에 비밀이 남아 있지 않다 (최근 400개 커밋)', hist)));
     return { checks };
   },
 };

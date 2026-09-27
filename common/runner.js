@@ -88,6 +88,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   const auth = project.auth;
   ctx.authService = (routes.find(r => r.path === auth.loginPath) || {}).service || (ctx.primary && ctx.primary.id);
 
+  require('./session').timings.length = 0;   // 응답 시간 기록은 이번 검사 것만
   // 꺼진 서버는 직접 켠다 (설치·빌드·실행) — '딱 실행' 하면 서버까지 올라와 끝까지 잰다. 로그는 '서버 로그 오류' 영역이 읽는다
   const serve = require('./serve');
   ctx.serverStates = { ...servers };
@@ -192,7 +193,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     .filter(p => !singleOnly || !COMPOSITE.includes(p.id));
   // 로그인 잠금처럼 뒤 검사를 막을 수 있는 영역(last: true)은 맨 뒤에 돈다
   probes.sort((a, b) => (+a.last || 0) - (+b.last || 0));
-  return { def, project, ctx, probes, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
+  return { def, project, ctx, probes, only, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
 }
 
 // ── 영역 하나 실행
@@ -272,6 +273,31 @@ function topFixes(results, n = 10) {
   return top;
 }
 
+// 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)
+const failKeys = results => {
+  const m = new Map();
+  for (const r of results || []) for (const c of r.checks || []) {
+    const cname = c.name.replace(/\(로그 \d+줄\)|\d+(\.\d+)?(ms|초|MB|개|번|건)/g, '');
+    const bad = (c.items || []).filter(i => i.ok === false);
+    if (bad.length) for (const i of bad) m.set(`${r.id}|${cname}|${String(i.name).replace(/\d+번|\(\w{7} [\d-]+\)/g, '')}`, { area: r.id, check: c.name, item: i.name, detail: String(i.detail || '').slice(0, 140) });
+    else if (c.failed) for (const n of (c.notes || []).slice(0, 20)) m.set(`${r.id}|${cname}|${String(n).slice(0, 80)}`, { area: r.id, check: c.name, item: String(n).slice(0, 100), detail: '' });
+  }
+  return m;
+};
+function diffWithPrevious(dir, results, score) {
+  if (!fs.existsSync(dir)) return null;
+  // 일부 영역만 돌린 검사(--only·영역 조회)는 비교 기준이 못 된다 — 전체 검사끼리만
+  let prev = null, prevFile = null;
+  for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().reverse()) {
+    try { const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (r.summary && r.summary.full !== false && (r.results || []).length >= results.length - 2) { prev = r; prevFile = f; break; } } catch { /* 깨진 파일 */ }
+  }
+  if (!prev) return null;
+  const a = failKeys(prev.results), b = failKeys(results);
+  const added = [...b.entries()].filter(([k]) => !a.has(k)).map(([, v]) => v);
+  const fixed = [...a.entries()].filter(([k]) => !b.has(k)).map(([, v]) => v);
+  return { prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && prev.summary.score, score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
+}
+
 async function finish(prep, results, { save = true } = {}) {
   const { ctx, project, todo } = prep;
   const measured = results.filter(r => !r.skip);
@@ -301,21 +327,36 @@ async function finish(prep, results, { save = true } = {}) {
     owasp: owaspSummary(results),
     top: topFixes(results),
   };
+  // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
+  summary.full = !prep.only || !prep.only.length;
+  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
   if (save) {
     const dir = prep.toolDir;
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, `${stamp}.json`), JSON.stringify(report, null, 2));
+    try { fs.writeFileSync(path.join(dir, `${stamp}.html`), require('./report-html').renderHtml(report)); } catch (e) { /* HTML 은 덤 — 실패해도 검사는 끝난다 */ }
   }
   return { report, stamp };
+}
+
+// GitHub Actions 요약 (마크다운)
+function ciMarkdown(report, reasons) {
+  const s = report.summary, d = s.diff;
+  const L = [`## QA — ${s.target}`, '', `**최종 ${s.score}** (${s.grade}) · 검사 ${s.scanned} · 문제 ${s.failed} · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
+  if (reasons.length) L.push(`> ✗ 실패: ${reasons.join(' · ')}`, '');
+  if (d && d.added.length) { L.push('### 새로 생긴 문제', '', '| 영역 | 검사 | 항목 |', '|---|---|---|'); for (const x of d.added.slice(0, 30)) L.push(`| ${x.area} | ${x.check.replace(/\|/g, '/')} | ${String(x.item).replace(/\|/g, '/').slice(0, 120)} |`); L.push(''); }
+  if ((s.top || []).length) { L.push('### 먼저 고칠 것', ''); s.top.forEach((t, i) => L.push(`${i + 1}. **[${t.area}] ${t.check}** — ${t.failed}건 · ${(t.examples[0] || '').replace(/\|/g, '/').slice(0, 140)}`)); L.push(''); }
+  L.push('| OWASP | 상태 | 검사 | 문제 |', '|---|---|---|---|'); for (const o of s.owasp || []) L.push(`| ${o.id} ${o.name} | ${o.status} | ${o.scanned} | ${o.failed} |`);
+  return L.join('\n') + '\n';
 }
 
 // ── 명령줄
 async function run(arg) {
   const args = process.argv.slice(2);
   const target = arg || args.find(a => !a.startsWith('--'));
-  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--ci: 새 문제가 생기면 실패] [--fail-under=60]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
   const only = (args.find(a => a.startsWith('--only=')) || '').replace('--only=', '').split(',').filter(Boolean);
   const jsonOnly = args.includes('--json');
   const def = resolveProject(target);
@@ -339,6 +380,17 @@ async function run(arg) {
   }
   const { report, stamp } = await finish(prep, results);
   stopStarted();
+  // CI — 실패 조건을 정하면 끝 코드(exit code)로 알린다. GitHub Actions 면 요약 표를 남긴다
+  const ci = args.includes('--ci');
+  const under = Number((args.find(a => a.startsWith('--fail-under=')) || '').split('=')[1]) || null;
+  const failNew = ci || args.includes('--fail-on-new');
+  const reasons = [];
+  if (under !== null && report.summary.score < under) reasons.push(`점수 ${report.summary.score} < 기준 ${under}`);
+  if (failNew && report.summary.diff && report.summary.diff.addedCount > 0) reasons.push(`지난 검사보다 새 문제 ${report.summary.diff.addedCount}건`);
+  if (process.env.GITHUB_STEP_SUMMARY) { try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, ciMarkdown(report, reasons)); } catch { /* 요약은 덤 */ } }
+  let ciLine = null;
+  if (reasons.length) { ciLine = `\n✗ CI 실패: ${reasons.join(' · ')}`; process.exitCode = 1; }
+  else if (ci || under !== null) ciLine = '\n✓ CI 통과';
   if (jsonOnly) { console.log(JSON.stringify(report, null, 2)); return; }
   const s = report.summary;
   console.log('\n' + '='.repeat(64));
@@ -347,6 +399,14 @@ async function run(arg) {
   console.log(`설정 필요·해당 없음 ${s.skippedAreas.length}개 영역 (점수에서 뺌)`);
   console.log('\nOWASP Top 10 (2021)');
   for (const o of s.owasp) console.log(`  ${o.id} ${o.name.padEnd(18)} ${o.status.padEnd(6)} 검사 ${o.scanned} · 문제 ${o.failed}${o.warned ? ` · 확인 ${o.warned}` : ''}`);
+  if (s.diff) {
+    const d = s.diff, delta = Math.round((d.score - d.prevScore) * 10) / 10;
+    console.log(`\n▲ 지난 검사(${String(d.prevAt || d.prevFile).slice(0, 16).replace('T', ' ')})와 비교: 점수 ${d.prevScore} → ${d.score} (${delta >= 0 ? '+' : ''}${delta}) · 새 문제 ${d.addedCount} · 고친 것 ${d.fixedCount}`);
+    for (const x of d.added.slice(0, 8)) console.log(`   + [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
+    if (d.addedCount > 8) console.log(`     … 새 문제 ${d.addedCount - 8}건 더`);
+    for (const x of d.fixed.slice(0, 5)) console.log(`   ✓ [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
+    if (d.fixedCount > 5) console.log(`     … 고친 것 ${d.fixedCount - 5}건 더`);
+  }
   if (s.top && s.top.length) {
     console.log('\n★ 먼저 고칠 것 (영향 큰 순서)');
     s.top.forEach((t, i) => {
@@ -363,7 +423,8 @@ async function run(arg) {
       if ((c.notes || []).length > 5) console.log(`    … 외 ${c.notes.length - 5}건`);
     }
   }
-  console.log(`\n리포트: ${path.relative(QA_ROOT, prep.toolDir)}/${stamp}.json`);
+  console.log(`\n리포트: ${path.relative(QA_ROOT, prep.toolDir)}/${stamp}.json · 보기 좋은 HTML: ${path.join(prep.toolDir, stamp + '.html')}`);
+  if (ciLine) console.log(ciLine);
 }
 
 module.exports = { CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };

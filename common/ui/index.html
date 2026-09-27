@@ -292,7 +292,8 @@ function renderSummary() {
   if (!s) { $('#panel').innerHTML = '<div class="empty">[전체 검사]를 돌리면 점수 요약이 나옵니다.</div>'; return; }
   const self = (state.report.selfcheck && state.report.selfcheck.items) || [];
   const mat = (state.report.maturity && state.report.maturity.items) || [];
-  $('#panel').innerHTML = `<div class="ph"><h2>전체 요약 <span class="chip">${esc(state.reportAt || '')}</span></h2></div>
+  const htmlFile = state.reportFile ? state.reportFile.replace(/\.json$/, '.html') : null;
+  $('#panel').innerHTML = `<div class="ph"><h2>전체 요약 <span class="chip">${esc(state.reportAt || '')}</span>${htmlFile ? ` <a class="btn run-btn" target="_blank" href="/api/report.html?project=${encodeURIComponent(state.project)}&file=${encodeURIComponent(htmlFile)}">HTML 리포트 열기 (공유용)</a>` : ''}</h2></div>
     <div class="summary-grid">
       <div class="card"><div class="k">최종 점수</div><div class="v">${esc(s.score)}</div><div class="k">${esc(s.grade)}</div></div>
       <div class="card"><div class="k">제품 점수</div><div class="v">${esc(s.rawScore)}</div></div>
@@ -300,6 +301,7 @@ function renderSummary() {
       <div class="card"><div class="k">운영 성숙도</div><div class="v">${esc(s.maturity.got)}/${esc(s.maturity.total)}</div><div class="k">계수 ${esc(s.maturity.factor)}</div></div>
       ${(s.sections || []).map(x => `<div class="card"><div class="k">${esc(x.label)}</div><div class="v">${x.score === null ? '-' : esc(x.score)}</div></div>`).join('')}
     </div>
+    ${s.diff ? (() => { const d = s.diff, dl = Math.round((d.score - d.prevScore) * 10) / 10; return `<div class="group"><div class="gh">▲ 지난 검사와 비교 — 점수 ${esc(d.prevScore)} → ${esc(d.score)} (${dl >= 0 ? '+' : ''}${esc(dl)}) · <span class="chip bad">새 문제 ${esc(d.addedCount)}</span> <span class="chip ok">고친 것 ${esc(d.fixedCount)}</span></div><table>${d.added.slice(0, 20).map(x => `<tr class="bad"><td class="mark bad">+</td><td class="item">[${esc(x.area)}] ${esc(x.check)}</td><td class="detail">${esc(x.item)}${x.detail ? ' — ' + esc(x.detail) : ''}</td></tr>`).join('')}${d.fixed.slice(0, 20).map(x => `<tr><td class="mark ok">✓</td><td class="item">[${esc(x.area)}] ${esc(x.check)}</td><td class="detail">${esc(x.item)} — 고쳐졌다</td></tr>`).join('')}</table></div>`; })() : ''}
     ${(s.top || []).length ? `<div class="group"><div class="gh">★ 먼저 고칠 것 (영향 큰 순서)</div><table>${s.top.map((t, i) => `<tr class="bad"><td class="mark bad">${i + 1}</td><td class="item"><a href="#" data-goto="${esc(t.area)}">[${esc(t.area)}]</a> ${esc(t.check)} <span class="chip bad">${esc(t.failed)}건</span>${t.owasp ? ` <span class="chip">${esc([].concat(t.owasp).join(','))}</span>` : ''}</td><td class="detail">${t.examples.map(esc).join('<br>')}</td></tr>`).join('')}</table></div>` : ''}
     ${(s.skippedAreas || []).length ? `<div class="group"><div class="gh">잴 수 없었던 영역 (점수에서 뺌)</div><table>${s.skippedAreas.map(a => `<tr><td class="mark">-</td><td class="item">${esc(a.id)} ${esc(a.name || '')}</td><td class="detail">${esc(a.why || a.skip || '')}</td></tr>`).join('')}</table></div>` : ''}
     <div class="group"><div class="gh">운영 성숙도</div><table>${mat.map(i => `<tr class="${i.ok ? '' : 'bad'}"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc(i.weight)}점</td></tr>`).join('')}</table></div>
@@ -464,7 +466,7 @@ function fillSelect() {
 }
 
 async function loadProject(id) {
-  state.project = id; state.results = {}; state.report = null; state.reportAt = null; state.selected = null; state.server = [];
+  state.project = id; state.results = {}; state.report = null; state.reportAt = null; state.reportFile = null; state.selected = null; state.server = [];
   try { localStorage.setItem('qa-ui-project', id); } catch (e) {}
   if (!id) { renderAll(); return; }
   await loadSettings();
@@ -473,6 +475,7 @@ async function loadProject(id) {
   if (latest) {
     for (const r of latest.results) state.results[r.id] = r;
     state.report = { summary: latest.summary, selfcheck: latest.selfcheck, maturity: latest.maturity };
+    state.reportFile = latest.file;
     state.reportAt = '지난 검사 ' + latest.file.replace('.json', '').replace(/^(\d{4}-\d{2}-\d{2})-(\d{2})-(\d{2})$/, '$1 $2:$3') + ' (UTC)';
   }
   renderAll();
@@ -493,7 +496,7 @@ async function poll() {
   if (!j || j.project !== state.project) return;
   state.running = j;
   for (const r of j.results) state.results[r.id] = r;
-  if (j.status === 'done' && j.report && j.report.full) { const first = state.reportAt !== '방금 전체 검사'; state.report = j.report; state.reportAt = '방금 전체 검사'; if (first) state.selected = '__summary'; }
+  if (j.status === 'done' && j.report && j.report.full) { state.reportFile = j.report.file; const first = state.reportAt !== '방금 전체 검사'; state.report = j.report; state.reportAt = '방금 전체 검사'; if (first) state.selected = '__summary'; }
   renderAll();
   if (j.status === 'running') setTimeout(poll, 700);
 }

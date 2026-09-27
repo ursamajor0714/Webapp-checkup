@@ -211,6 +211,14 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, latestReport(q.get('project')));
     }
     if (req.method === 'GET' && P === '/api/job') return send(res, 200, job);
+    // HTML 리포트 — 파일 이름만 받는다 (폴더 밖으로 나가지 못하게)
+    if (req.method === 'GET' && P === '/api/report.html') {
+      const id = q.get('project'), file = String(q.get('file') || '');
+      if (!known(id) || !/^[\w-]+\.html$/.test(file)) return send(res, 404, { error: '없는 리포트' });
+      const f = path.join(ROOT, 'reports', id, file);
+      if (!fs.existsSync(f)) return send(res, 404, { error: '없는 리포트 — 전체 검사를 한 번 돌리면 생긴다' });
+      return send(res, 200, fs.readFileSync(f, 'utf8'), 'text/html; charset=utf-8');
+    }
     if (req.method === 'POST' && P === '/api/run') {
       if (job && job.status === 'running') return send(res, 409, { error: '이미 검사가 돌고 있습니다. 끝난 뒤 다시 누르세요.' });
       const { project, ids = [] } = await readBody(req);

@@ -1,0 +1,43 @@
+# 대상 레포의 .github/workflows/qa.yml 로 복사해 쓴다 — 푸시·PR 마다 QA 를 돌리고,
+# 지난 검사보다 새 문제가 생기거나 점수가 기준 아래면 실패로 표시한다. 결과(JSON·HTML)는 Actions 의 Artifacts 로 받는다.
+#
+# 필요하면 레포 Settings → Secrets 에 넣는다:
+#   QA_USER / QA_PASSWORD   로그인이 있는 서비스의 검사용 계정 (가입 경로가 있으면 없어도 자동으로 만든다)
+name: QA
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4            # 검사할 레포 (이 레포)
+        with: { path: app }
+      - uses: actions/checkout@v4            # QA 도구
+        with: { repository: ursamajor0714/QA, path: qa }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # 파이썬 서버(Django·FastAPI)면 주석을 푼다
+      # - uses: actions/setup-python@v5
+      #   with: { python-version: '3.12' }
+      - run: npm ci --no-audit --no-fund
+        working-directory: qa
+      # 브라우저 검사(②⑤⑦⑧⑩)용 크로미움 — Actions 러너에는 크롬이 깔려 있어 보통 필요 없다
+      # - run: npx playwright-core install chromium
+      #   working-directory: qa
+      # 지난 결과와 비교하려면 직전 실행의 reports 를 받아 온다 (없으면 비교 없이 돈다)
+      - uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with: { name: qa-reports, path: qa/reports, workflow_conclusion: success, if_no_artifact_found: ignore }
+      - name: QA
+        working-directory: qa
+        env:
+          QA_ROOT: ${{ github.workspace }}/app
+        run: |
+          node run.js "$QA_ROOT" --ci --fail-under=50
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: qa-reports, path: qa/reports, retention-days: 30 }
