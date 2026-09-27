@@ -25,6 +25,7 @@ function makeContext(project) {
   const once = (k, fn) => (cache[k] ??= fn());
 
   const ctx = {
+    level: require('./level').levelOf(),   // 검사 수준 (prepare 가 바꾼다)
     project, config: project, root: project.root, parts: project.parts, services, clients,
     primary: services[0] || null,
     sessions: { anon: new Session('anon') },

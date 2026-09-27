@@ -4,7 +4,9 @@
   "description": "범용 QA — 레포를 넣으면 스택을 감지해 A~Z·OWASP·브라우저 실행 오류까지 잰다",
   "scripts": {
     "ui": "node ui.js --open",
-    "qa": "node run.js"
+    "qa": "node run.js",
+    "test": "node --test --test-concurrency=1 tests/unit.test.js tests/regression.test.js",
+    "test:unit": "node --test tests/unit.test.js"
   },
   "dependencies": {
     "axe-core": "^4.13.0",

@@ -78,17 +78,19 @@ function listAreas(def) {
 }
 
 // ── 준비: 부분 감지 · 로그인 방식 · 서버 살았나 · 계정 · 규칙 추출
-async function prepare(def, { only = [], singleOnly = false, log = () => {}, servers = {}, autoServe = true } = {}) {
+async function prepare(def, { only = [], singleOnly = false, log = () => {}, servers = {}, autoServe = true, level } = {}) {
   const project = loadProject(def);
   if (!project.root || !fs.existsSync(project.root)) throw new Error(`레포 폴더가 없다: ${project.root}`);
   const ctx = makeContext(project);
+  ctx.level = require('./level').levelOf(level || def.level);   // 검사 수준 — 영역·한도·판정의 엄격함
   const routes = ctx.routes();
   project.auth = { ...guessAuth(project.root, project.parts, routes), ...(def.auth || {}) };
   if (def.auth && def.auth.fields) project.auth.fields = def.auth.fields;
   const auth = project.auth;
   ctx.authService = (routes.find(r => r.path === auth.loginPath) || {}).service || (ctx.primary && ctx.primary.id);
 
-  require('./session').timings.length = 0;   // 응답 시간 기록은 이번 검사 것만
+  require('./session').timings.length = 0;
+  ctx.ignores = require('./ignore').load(project.root);   // 무시 목록   // 응답 시간 기록은 이번 검사 것만
   // 꺼진 서버는 직접 켠다 (설치·빌드·실행) — '딱 실행' 하면 서버까지 올라와 끝까지 잰다. 로그는 '서버 로그 오류' 영역이 읽는다
   const serve = require('./serve');
   ctx.serverStates = { ...servers };
@@ -157,6 +159,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       if (!r.ok) break;
       accounts.push({ user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입' });
     }
+    ctx.accounts = accounts;   // 브라우저가 화면에서 직접 로그인할 때 쓴다
     for (const [i, name] of ['owner', 'other'].entries()) {
       const a = accounts[i]; if (!a) break;
       const l = await login(base, auth, a, name);
@@ -187,13 +190,16 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     if (!ctx.accountFlow.length) delete ctx.accountFlow;
   }
 
+  // 비어 있는 목록이 있으면 검사용 데이터를 몇 개 만든다 (끝나면 지운다)
+  if (def.seed !== false) await require('./seed').seed(ctx, log).catch(e => ctx.notes.push(`검사용 데이터를 만들지 못했다: ${e.message}`));
   const all = listAreas(def);
   const probes = all.filter(p => !p.todo)
     .filter(p => !only.length || only.map(s => s.toUpperCase()).includes(p.id))
+    .filter(p => only.length || ctx.level.includes(p.id))   // 전체 검사면 수준에 든 영역만 (영역을 콕 집으면 수준과 상관없이 돈다)
     .filter(p => !singleOnly || !COMPOSITE.includes(p.id));
   // 로그인 잠금처럼 뒤 검사를 막을 수 있는 영역(last: true)은 맨 뒤에 돈다
   probes.sort((a, b) => (+a.last || 0) - (+b.last || 0));
-  return { def, project, ctx, probes, only, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
+  return { def, project, ctx, probes, only, level: ctx.level, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
 }
 
 // ── 영역 하나 실행
@@ -218,7 +224,7 @@ async function runProbe(ctx, probe) {
   }
   const sum = k => checks.reduce((s, c) => s + (c[k] || 0), 0);
   const universe = sum('universe'), scanned = sum('scanned'), passed = sum('passed'), warned = sum('warned'), failed = sum('failed');
-  return {
+  const result = {
     id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file, owasp: probe.owasp || [],
     composite: COMPOSITE.includes(probe.id), skip, skipped, partial,
     universe, scanned, passed, warned, failed,
@@ -226,6 +232,11 @@ async function runProbe(ctx, probe) {
     passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
     ms: Date.now() - t0, checks, error,
   };
+  // 사람이 '의도된 것·오탐' 으로 표시한 문제는 통과로 센다 (대상 레포의 .qa-ignore.json)
+  require('./ignore').apply(result, ctx.ignores);
+  // 전문가 수준 — '확인 필요(△)' 도 통과가 아니다 (고치거나 무시 목록에 이유를 적어야 한다)
+  if (ctx.level && ctx.level.strict) result.passRate = result.scanned ? result.passed / result.scanned : 1;
+  return result;
 }
 
 // 점수: 가중 합격률 × √스캔률 — '설정 필요(skip)' 영역은 뺀다
@@ -275,21 +286,21 @@ function topFixes(results, n = 10) {
 
 // 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)
 const failKeys = results => {
+  const { findingKey } = require('./ignore');
   const m = new Map();
   for (const r of results || []) for (const c of r.checks || []) {
-    const cname = c.name.replace(/\(로그 \d+줄\)|\d+(\.\d+)?(ms|초|MB|개|번|건)/g, '');
     const bad = (c.items || []).filter(i => i.ok === false);
-    if (bad.length) for (const i of bad) m.set(`${r.id}|${cname}|${String(i.name).replace(/\d+번|\(\w{7} [\d-]+\)/g, '')}`, { area: r.id, check: c.name, item: i.name, detail: String(i.detail || '').slice(0, 140) });
-    else if (c.failed) for (const n of (c.notes || []).slice(0, 20)) m.set(`${r.id}|${cname}|${String(n).slice(0, 80)}`, { area: r.id, check: c.name, item: String(n).slice(0, 100), detail: '' });
+    if (bad.length) for (const i of bad) m.set(findingKey(r.id, c.name, i.name), { area: r.id, check: c.name, item: i.name, detail: String(i.detail || '').slice(0, 140) });
+    else if (c.failed) for (const n of (c.notes || []).slice(0, 20)) m.set(findingKey(r.id, c.name, n), { area: r.id, check: c.name, item: String(n).slice(0, 100), detail: '' });
   }
   return m;
 };
-function diffWithPrevious(dir, results, score) {
+function diffWithPrevious(dir, results, score, level = 'advanced') {
   if (!fs.existsSync(dir)) return null;
   // 일부 영역만 돌린 검사(--only·영역 조회)는 비교 기준이 못 된다 — 전체 검사끼리만
   let prev = null, prevFile = null;
   for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().reverse()) {
-    try { const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (r.summary && r.summary.full !== false && (r.results || []).length >= results.length - 2) { prev = r; prevFile = f; break; } } catch { /* 깨진 파일 */ }
+    try { const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (r.summary && r.summary.full !== false && ((r.summary.level && r.summary.level.id) || 'advanced') === level && (r.results || []).length >= results.length - 2) { prev = r; prevFile = f; break; } } catch { /* 깨진 파일 */ }
   }
   if (!prev) return null;
   const a = failKeys(prev.results), b = failKeys(results);
@@ -300,6 +311,7 @@ function diffWithPrevious(dir, results, score) {
 
 async function finish(prep, results, { save = true } = {}) {
   const { ctx, project, todo } = prep;
+  if (ctx.seeded && ctx.seeded.length) { const n = await require('./seed').cleanup(ctx).catch(() => 0); if (n) ctx.notes.push(`검사용 데이터 ${n}개를 지웠다`); }
   const measured = results.filter(r => !r.skip);
   const tot = k => measured.reduce((s, r) => s + r[k], 0);
   const { scanRate, quality } = scoreOf(results);
@@ -327,10 +339,12 @@ async function finish(prep, results, { save = true } = {}) {
     score, grade: gradeOf(score).label, tier: tierOf(score),
     owasp: owaspSummary(results),
     top: topFixes(results),
+    ignored: results.reduce((a, r) => a + (r.ignored || 0), 0),
+    level: { id: ctx.level.id, label: ctx.level.label, desc: ctx.level.desc, strict: ctx.level.strict },
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
   summary.full = !prep.only || !prep.only.length;
-  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
+  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score, summary.level.id); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
   if (save) {
@@ -345,7 +359,7 @@ async function finish(prep, results, { save = true } = {}) {
 // GitHub Actions 요약 (마크다운)
 function ciMarkdown(report, reasons) {
   const s = report.summary, d = s.diff;
-  const L = [`## QA — ${s.target}`, '', `**최종 ${s.score}** (${s.grade}) · 검사 ${s.scanned} · 문제 ${s.failed} · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
+  const L = [`## QA — ${s.target} (${s.level ? s.level.label : '고급'})`, '', `**최종 ${s.score}** (${s.grade}) · 검사 ${s.scanned} · 문제 ${s.failed} · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
   if (reasons.length) L.push(`> ✗ 실패: ${reasons.join(' · ')}`, '');
   if (d && d.added.length) { L.push('### 새로 생긴 문제', '', '| 영역 | 검사 | 항목 |', '|---|---|---|'); for (const x of d.added.slice(0, 30)) L.push(`| ${x.area} | ${x.check.replace(/\|/g, '/')} | ${String(x.item).replace(/\|/g, '/').slice(0, 120)} |`); L.push(''); }
   if ((s.top || []).length) { L.push('### 먼저 고칠 것', ''); s.top.forEach((t, i) => L.push(`${i + 1}. **[${t.area}] ${t.check}** — ${t.failed}건 · ${(t.examples[0] || '').replace(/\|/g, '/').slice(0, 140)}`)); L.push(''); }
@@ -357,11 +371,11 @@ function ciMarkdown(report, reasons) {
 async function run(arg) {
   const args = process.argv.slice(2);
   const target = arg || args.find(a => !a.startsWith('--'));
-  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--ci: 새 문제가 생기면 실패] [--fail-under=60]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
   const only = (args.find(a => a.startsWith('--only=')) || '').replace('--only=', '').split(',').filter(Boolean);
   const jsonOnly = args.includes('--json');
   const def = resolveProject(target);
-  const prep = await prepare(def, { only, singleOnly: args.includes('--single'), autoServe: !args.includes('--no-serve'), log: m => !jsonOnly && console.error(m) });
+  const prep = await prepare(def, { only, singleOnly: args.includes('--single'), autoServe: !args.includes('--no-serve'), level: (args.find(a => a.startsWith('--level=')) || '').split('=')[1] || undefined, log: m => !jsonOnly && console.error(m) });
   // 검사가 켠 서버는 끝나면 끈다 (Ctrl+C 로 멈춰도)
   const stopStarted = () => { for (const st of Object.values(prep.ctx.startedServers || {})) require('./serve').stop(st); };
   process.once('exit', stopStarted);
@@ -369,6 +383,7 @@ async function run(arg) {
   const { ctx, project } = prep;
   if (!jsonOnly) {
     console.log(`대상: ${project.name} (${project.root})`);
+    console.log(`검사 수준: ${ctx.level.label} — ${ctx.level.desc} · 영역 ${prep.probes.length}개 (--level=초급|중급|고급|전문가)`);
     console.log(`부분: ${project.parts.map(p => `${p.stack}@${p.dir}${p.baseUrl ? ' ' + p.baseUrl : ''}`).join(' · ')}`);
     console.log(`로그인: ${project.auth.type}${project.auth.loginPath ? ' ' + project.auth.loginPath : ''}${project.auth.guessed ? ' (코드에서 추정)' : ''} · 세션: ${Object.keys(ctx.sessions).join(', ')}`);
     for (const n of ctx.notes) console.log('  · ' + n);
@@ -396,7 +411,8 @@ async function run(arg) {
   const s = report.summary;
   console.log('\n' + '='.repeat(64));
   console.log(`검사 ${s.scanned} (자동 생성 ${s.generated}) · 통과 ${s.passed} · 문제 ${s.failed} · 확인필요 ${s.warned}`);
-  console.log(`제품 점수 ${s.rawScore} × 운영 성숙도 ${s.maturity.got}/${s.maturity.total}(계수 ${s.maturity.factor}) → 최종 ${s.score} ${s.grade}`);
+  console.log(`${s.level.label} 검사${s.level.strict ? ' (확인 필요도 감점)' : ''} — 다른 수준의 점수와는 견주지 않는다`);
+  console.log(`제품 점수 ${s.rawScore} × 운영 성숙도 ${s.maturity.got}/${s.maturity.total}(계수 ${s.maturity.factor}) → 최종 ${s.score} (등급 ${s.grade})`);
   const miss = report.maturity.items.filter(i => !i.ok).sort((a, b) => b.plus - a.plus);
   if (miss.length) {
     console.log(`\n◆ 운영 성숙도 — 빠진 것 ${miss.length}개 (다 갖추면 최종 +${Math.round(miss.reduce((a, i) => a + i.plus, 0) * 10) / 10})`);
@@ -413,6 +429,7 @@ async function run(arg) {
     for (const x of d.fixed.slice(0, 5)) console.log(`   ✓ [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
     if (d.fixedCount > 5) console.log(`     … 고친 것 ${d.fixedCount - 5}건 더`);
   }
+  if (s.ignored) console.log(`\n(무시 목록으로 뺀 문제 ${s.ignored}건 — ${path.join(project.root, require('./ignore').FILE)})`);
   if (s.top && s.top.length) {
     console.log('\n★ 먼저 고칠 것 (영향 큰 순서)');
     s.top.forEach((t, i) => {

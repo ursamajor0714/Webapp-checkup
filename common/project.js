@@ -43,6 +43,11 @@ function detectParts(root) {
     if (p.stack !== 'express') continue;
     const views = [path.join(root, 'frontend'), path.join(p.absDir, 'views'), path.join(p.absDir, 'public')].find(d => exists(d) && STACKS.templates.detect(d) && !parts.some(q => q.absDir === d));
     if (views) parts.push({ id: path.relative(root, views).replace(/[\\/]/g, '-') || 'views', dir: path.relative(root, views), absDir: views, stack: 'templates', kind: 'client', lang: 'js', servedBy: p.id });
+    // express.static('public') 처럼 서버가 그대로 내보내는 정적 화면 (public/index.html)
+    else {
+      const pub = ['public', 'static', 'www'].map(d => path.join(p.absDir, d)).find(d => exists(path.join(d, 'index.html')) && !parts.some(q => q.absDir === d));
+      if (pub) parts.push({ id: path.relative(root, pub).replace(/[\\/]/g, '-'), dir: path.relative(root, pub), absDir: pub, stack: 'static', kind: 'client', lang: 'js', servedBy: p.id });
+    }
   }
   if (!parts.length && exists(path.join(root, 'index.html'))) parts.push({ id: 'static', dir: '.', absDir: root, stack: 'static', kind: 'client', lang: 'js' });
   // 포트 — 겹치면 뒤의 것을 옮긴다

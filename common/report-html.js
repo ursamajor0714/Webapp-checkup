@@ -45,7 +45,7 @@ details.area{background:var(--panel);border:1px solid var(--line);border-radius:
 <h1>QA 리포트 — ${esc(s.target)}</h1>
 <div class="muted">${esc(String(s.at).slice(0, 16).replace('T', ' '))} (UTC) · ${esc(s.root)} · ${(s.parts || []).map(p => esc(`${p.stack}@${p.dir}`)).join(' · ')}</div>
 <div class="cards">
-  <div class="card"><div class="k">최종 점수</div><div class="v">${esc(s.score)}</div><div class="k">${esc(s.grade)}</div></div>
+  <div class="card"><div class="k">최종 점수${s.level ? ` · ${esc(s.level.label)} 검사` : ''}</div><div class="v">${esc(s.score)}</div><div class="k">등급 ${esc(s.grade)}${s.level && s.level.strict ? ' · 확인 필요도 감점' : ''}</div></div>
   <div class="card"><div class="k">제품 점수 × 운영 성숙도</div><div class="v">${esc(s.rawScore)}</div><div class="k">× ${esc(s.maturity.factor)} (${esc(s.maturity.got)}/${esc(s.maturity.total)})</div></div>
   <div class="card"><div class="k">검사 / 통과 / 문제 / 확인 필요</div><div class="v">${esc(s.scanned)}</div><div class="k">통과 ${esc(s.passed)} · 문제 ${esc(s.failed)} · 확인 ${esc(s.warned)} · 자동 생성 ${esc(s.generated ?? '-')}</div></div>
   ${(s.sections || []).map(x => `<div class="card"><div class="k">${esc(x.label)}</div><div class="v">${x.score === null ? '-' : esc(x.score)}</div></div>`).join('')}

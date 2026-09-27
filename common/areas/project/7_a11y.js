@@ -19,7 +19,7 @@ function axeSource() {
 module.exports = {
   id: '7', name: '접근성 (WCAG)', weight: 4,
   async run(ctx) {
-    const start = startPages(ctx).slice(0, MAX_PAGES);
+    const start = startPages(ctx).slice(0, ctx.level.n(MAX_PAGES));
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다' };
     const axe = axeSource();
     if (!axe) return { skip: 'axe-core 가 없다 — QA 폴더에서 npm install 한 번' };
@@ -54,7 +54,7 @@ module.exports = {
     const order = { critical: 0, serious: 1, moderate: 2, minor: 3 };
     const items = [...rules.entries()].sort((a, b) => (order[a[1].impact] ?? 9) - (order[b[1].impact] ?? 9)).map(([id, r]) => {
       const total = [...r.pages.values()].reduce((a, n) => a + n, 0);
-      return { name: `[${IMPACT[r.impact] || r.impact}] ${r.help}`, ok: r.impact === 'critical' || r.impact === 'serious' ? false : null,
+      return { name: `[${IMPACT[r.impact] || r.impact}] ${r.help}`, ok: r.impact === 'critical' || r.impact === 'serious' || (ctx.level.strict && r.impact === 'moderate') ? false : null,
         detail: `${id} · 화면 ${r.pages.size}개 · 요소 ${total}개 (${[...r.pages.keys()].slice(0, 4).join(', ')}) · 예: ${r.html || r.sample}` };
     });
     for (const p of pagesOk) items.push({ name: p, ok: true, detail: 'WCAG 2.1 A·AA 위반 없음' });

@@ -130,12 +130,12 @@ function pull(dir) {
 
 // ── 검사 실행 — 한 번에 하나만 ────────────────────────────
 let job = null;
-async function startJob(id, ids) {
-  job = { id: Date.now().toString(36), project: id, ids, status: 'running', current: null, results: [], report: null, error: null, notes: [], startedAt: Date.now() };
+async function startJob(id, ids, level) {
+  job = { id: Date.now().toString(36), project: id, ids, level, status: 'running', current: null, results: [], report: null, error: null, notes: [], startedAt: Date.now() };
   const my = job;
   try {
     // 화면이 켠 서버는 화면이 로그를 갖고 있다 — 검사(서버 로그 오류 영역)에 넘긴다. 꺼져 있으면 검사가 직접 켠다
-    const prep = await prepare(defOf(id), { only: ids, servers: Object.fromEntries(Object.entries(servers).filter(([k]) => k.startsWith(id + ':')).map(([k, st]) => [k.slice(id.length + 1), st])) });
+    const prep = await prepare(defOf(id), { only: ids, level, servers: Object.fromEntries(Object.entries(servers).filter(([k]) => k.startsWith(id + ':')).map(([k, st]) => [k.slice(id.length + 1), st])) });
     my.notes = prep.ctx.notes;
     my.total = prep.probes.length;
     for (const probe of prep.probes) {
@@ -211,6 +211,18 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, latestReport(q.get('project')));
     }
     if (req.method === 'GET' && P === '/api/job') return send(res, 200, job);
+    // 무시 목록 — 대상 레포의 .qa-ignore.json
+    if (P === '/api/ignore' || P === '/api/ignore/remove') {
+      const ig = require('./common/ignore');
+      if (req.method === 'GET') { if (!known(q.get('project'))) return send(res, 404, { error: '없는 프로젝트' }); const d = defOf(q.get('project')); return send(res, 200, { file: path.join(d.root, ig.FILE), items: ig.load(d.root) }); }
+      const body = await readBody(req);
+      if (!known(body.project)) return send(res, 400, { error: '없는 프로젝트' });
+      const d = defOf(body.project);
+      if (!d.root || !fs.existsSync(d.root)) return send(res, 400, { error: '레포 폴더가 없습니다' });
+      if (P === '/api/ignore/remove') return send(res, 200, { items: ig.remove(d.root, String(body.key || '')) });
+      if (!body.area || !body.check || !body.item) return send(res, 400, { error: '무엇을 무시할지 모릅니다' });
+      return send(res, 200, { items: ig.add(d.root, body), key: ig.findingKey(body.area, body.check, body.item) });
+    }
     // HTML 리포트 — 파일 이름만 받는다 (폴더 밖으로 나가지 못하게)
     if (req.method === 'GET' && P === '/api/report.html') {
       const id = q.get('project'), file = String(q.get('file') || '');
@@ -221,11 +233,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && P === '/api/run') {
       if (job && job.status === 'running') return send(res, 409, { error: '이미 검사가 돌고 있습니다. 끝난 뒤 다시 누르세요.' });
-      const { project, ids = [] } = await readBody(req);
+      const { project, ids = [], level } = await readBody(req);
+      try { require('./common/level').levelOf(level); } catch (e) { return send(res, 400, { error: e.message }); }
       if (!known(project)) return send(res, 400, { error: '없는 프로젝트' });
       const valid = new Set(listAreas(defOf(project)).map(p => p.id));
       const pick = (Array.isArray(ids) ? ids : []).map(String).map(s => s.toUpperCase()).filter(i => valid.has(i));
-      startJob(project, pick);   // 기다리지 않는다 — 화면은 /api/job 으로 진행을 본다
+      startJob(project, pick, level);   // 기다리지 않는다 — 화면은 /api/job 으로 진행을 본다
       return send(res, 202, { ok: true });
     }
 

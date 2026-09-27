@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>QA 시험용 — 버그를 일부러 심은 정적 사이트</title></head>
+<body>
+  <h1>주문 요약</h1>
+  <!-- 심은 버그: 대체 텍스트 없는 이미지, 없는 파일을 가리키는 이미지 -->
+  <img src="/images/does-not-exist.png">
+  <p id="total"></p>
+  <button onclick="calc()">계산</button>
+  <script src="app.js"></script>
+</body>
+</html>

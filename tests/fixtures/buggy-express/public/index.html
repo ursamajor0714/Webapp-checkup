@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>QA 시험용 가게</title></head>
+<body>
+  <h1>물건</h1>
+  <ul id="list"></ul>
+  <script>
+    fetch('/api/items').then(r => r.json()).then(j => { document.getElementById('list').innerHTML = j.data.map(x => '<li>' + x.name + '</li>').join(''); });
+    // 심은 버그: 서버에 없는 API 를 부른다
+    fetch('/api/prices').then(r => r.json()).catch(() => {});
+  </script>
+</body>
+</html>
