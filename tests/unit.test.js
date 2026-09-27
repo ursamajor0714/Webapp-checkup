@@ -92,3 +92,28 @@ test('점수 — 설정 필요(skip) 영역은 점수에서 뺀다', () => {
   assert.strictEqual(a.raw, 100);
   assert.strictEqual(b.raw, 100);
 });
+
+test('검사 수준 — 오를수록 영역·한도가 늘고, 전문가는 확인 필요(△)도 감점', () => {
+  const { levelOf, LEVELS } = require('../common/level');
+  assert.strictEqual(levelOf('초급').id, 'basic');
+  assert.strictEqual(levelOf('현역').id, 'expert');
+  assert.strictEqual(levelOf().id, 'advanced');
+  assert.throws(() => levelOf('없는수준'));
+  // 초급 ⊂ 중급 ⊂ 고급(전부)
+  for (const a of LEVELS.basic.areas) assert.ok(LEVELS.standard.areas.includes(a), a);
+  assert.ok(levelOf('advanced').includes('X') && !levelOf('basic').includes('X'));
+  assert.ok(levelOf('basic').n(25) < levelOf('advanced').n(25) && levelOf('advanced').n(25) < levelOf('expert').n(25));
+  // 모든 영역 id 가 실제로 있는 영역이다 (오타로 영역이 조용히 빠지지 않게)
+  const ids = new Set(require('../common/runner').listAreas({}).map(p => p.id));
+  for (const a of LEVELS.standard.areas) assert.ok(ids.has(a), `없는 영역 ${a}`);
+});
+
+test('검사 수준 — 전문가 수준에서는 △ 가 통과율을 깎는다', async () => {
+  const { runProbe } = require('../common/runner');
+  const { levelOf } = require('../common/level');
+  const probe = { id: 'Q', name: '시험', weight: 1, run: async () => ({ checks: [{ name: 'c', universe: 2, scanned: 2, passed: 1, warned: 1, failed: 0 }] }) };
+  const normal = await runProbe({ level: levelOf('advanced'), services: [], ignores: [] }, probe);
+  const strict = await runProbe({ level: levelOf('expert'), services: [], ignores: [] }, probe);
+  assert.strictEqual(normal.passRate, 1);
+  assert.strictEqual(strict.passRate, 0.5);
+});

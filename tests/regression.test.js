@@ -69,3 +69,17 @@ test('Express 서버 — 심은 버그를 모두 잡는다', { timeout: 600000 }
   caught(rep, '2', /\/api\/prices/, { warnOk: true });   // 화면이 부른 요청이 404
   caught(rep, '8', /잡히지 않은 예외|멈춘다/);            // API 가 죽으면 화면도 죽는다
 });
+
+test('검사 수준 — 초급 < 중급 < 고급 = 전문가 순으로 도는 영역이 늘고, 리포트에 수준이 남는다', async () => {
+  const root = path.join(__dirname, 'fixtures', 'buggy-express');
+  const n = {};
+  for (const lv of ['basic', 'standard', 'advanced', 'expert']) {
+    const prep = await runner.prepare({ id: 'test-level', root }, { level: lv, autoServe: false, log: () => {} });
+    n[lv] = prep.probes.length;
+    assert.strictEqual(prep.ctx.level.id, lv);
+  }
+  assert.ok(n.basic < n.standard && n.standard < n.advanced && n.advanced === n.expert, JSON.stringify(n));
+  // 영역을 콕 집으면 수준과 상관없이 돈다
+  const one = await runner.prepare({ id: 'test-level', root }, { level: 'basic', only: ['X'], autoServe: false, log: () => {} });
+  assert.deepStrictEqual(one.probes.map(p => p.id), ['X']);
+});

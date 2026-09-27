@@ -25,7 +25,7 @@ module.exports = {
       if (note) skipped.push(note);
 
       const seen = new Set(); const queue = start.map(pg => ({ url: new URL(pg.path, ctx.baseUrl(pg.part)).href, part: pg.part, from: null }));
-      while (queue.length && seen.size < MAX_PAGES) {
+      while (queue.length && seen.size < ctx.level.n(MAX_PAGES)) {
         const { url, from } = queue.shift();
         const key = url.replace(/#.*$/, '');
         if (seen.has(key)) continue; seen.add(key);
@@ -128,7 +128,7 @@ module.exports = {
           await mp.close();
         }
       }
-      if (queue.length) skipped.push(`화면이 더 있지만 ${MAX_PAGES}개까지만 열었다`);
+      if (queue.length) skipped.push(`화면이 더 있지만 ${ctx.level.n(MAX_PAGES)}개까지만 열었다`);
     } finally { await b.browser.close().catch(() => {}); }
     return { checks: [
       checkItems('화면이 예외·콘솔 오류 없이 뜬다', errs),

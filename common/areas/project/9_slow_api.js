@@ -17,7 +17,7 @@ module.exports = {
       const s = [...v].sort((a, b) => a - b);
       return { k, n: s.length, med: s[Math.floor(s.length / 2)], p95: s[Math.min(s.length - 1, Math.floor(s.length * 0.95))], max: s[s.length - 1] };
     }).sort((a, b) => b.med - a.med);
-    const items = stats.filter(x => x.med > 300 || x.max > 1500).slice(0, 25).map(x => ({ name: x.k, ok: x.med > 1000 ? false : x.max > 3000 || x.med > 500 ? null : true,
+    const items = stats.filter(x => x.med > 300 || x.max > 1500).slice(0, 25).map(x => ({ name: x.k, ok: x.med > (ctx.level.strict ? 500 : 1000) || (ctx.level.strict && x.max > 3000) ? false : x.max > 3000 || x.med > 500 ? null : true,
       detail: `${x.n}번 · 보통 ${x.med}ms · 느릴 때 ${x.p95}ms · 최대 ${x.max}ms${x.med > 1000 ? ' — 사용자가 기다린다 (쿼리·외부 호출·N+1 확인)' : x.max > 3000 ? ' — 가끔 크게 튄다 (잠금·타임아웃·콜드 스타트 확인)' : ''}` }));
     const all = rows.map(t => t.ms).sort((a, b) => a - b);
     items.push({ name: `전체 요청 ${rows.length}개 · 경로 ${stats.length}개`, ok: true, detail: `보통 ${all[Math.floor(all.length / 2)]}ms · 느릴 때(95%) ${all[Math.floor(all.length * 0.95)]}ms · 가장 느린 경로: ${stats.slice(0, 3).map(x => `${x.k} ${x.med}ms`).join(', ')}` });

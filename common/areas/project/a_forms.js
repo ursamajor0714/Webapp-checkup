@@ -10,7 +10,7 @@ const SKIP = /로그아웃|탈퇴|삭제|logout|sign ?out|delete|remove|결제|p
 module.exports = {
   id: '10', name: '폼', weight: 4,
   async run(ctx) {
-    const start = startPages(ctx).slice(0, MAX_PAGES);
+    const start = startPages(ctx).slice(0, ctx.level.n(MAX_PAGES));
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };

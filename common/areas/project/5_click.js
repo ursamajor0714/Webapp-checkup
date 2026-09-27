@@ -20,7 +20,7 @@ const SNAP = () => {
 module.exports = {
   id: '5', name: '클릭 탐색', weight: 6,
   async run(ctx) {
-    const start = startPages(ctx).slice(0, MAX_PAGES);
+    const start = startPages(ctx).slice(0, ctx.level.n(MAX_PAGES));
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
@@ -80,7 +80,7 @@ module.exports = {
             out.push({ sel: `[data-qa-click="${i}"]`, label: label || `<${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}>` });
           });
           return out.slice(0, max);
-        }, { dangerSrc: DANGER.source, max: MAX_CLICKS }).catch(() => []);
+        }, { dangerSrc: DANGER.source, max: ctx.level.n(MAX_CLICKS) }).catch(() => []);
         const targets = await mark();
         if (!targets.length) { items.push({ name: pg.path, ok: true, detail: '누를 만한 버튼이 없다' }); await page.close(); continue; }
         for (const t of targets) {

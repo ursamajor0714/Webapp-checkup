@@ -12,7 +12,7 @@ const TOLD = /오류|에러|실패|다시 시도|새로고침|문제가|불러�
 module.exports = {
   id: '8', name: '장애 대응', weight: 5,
   async run(ctx) {
-    const start = startPages(ctx).filter(p => !/login|signin|register|signup/i.test(p.path)).slice(0, MAX_PAGES);
+    const start = startPages(ctx).filter(p => !/login|signin|register|signup/i.test(p.path)).slice(0, ctx.level.n(MAX_PAGES));
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
