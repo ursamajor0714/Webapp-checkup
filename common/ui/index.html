@@ -214,7 +214,9 @@ function renderAreas() {
   const busy = state.running && state.running.status === 'running';
   const ow = state.report && state.report.summary && state.report.summary.owasp;
   const owBad = ow ? ow.filter(x => x.status === '문제').length : null;
-  $('#areas').innerHTML = `<div class="sec"><h3><span>보안 기준</span></h3>
+  const mt = state.report && state.report.maturity;
+  $('#areas').innerHTML = `<div class="sec"><h3><span>기준</span></h3>
+      <div class="area ${state.selected === '__maturity' ? 'sel' : ''}" data-view="__maturity"><span class="letter">◆</span><span class="nm">운영 성숙도</span>${mt ? `<span class="chip ${mt.got / mt.total >= 0.75 ? 'ok' : mt.got / mt.total >= 0.4 ? 'warn' : 'bad'}">${esc(mt.got)}/${esc(mt.total)}</span>` : '<span class="chip">전체 검사 후</span>'}<span></span></div>
       <div class="area ${state.selected === '__owasp' ? 'sel' : ''}" data-view="__owasp"><span class="letter">10</span><span class="nm">OWASP Top 10 (2021)</span>${ow ? (owBad ? `<span class="chip bad">문제 ${owBad}</span>` : '<span class="chip ok">O</span>') : '<span class="chip">전체 검사 후</span>'}<span></span></div></div>` +
     t.sections.map(sec => {
     const sc = state.report && state.report.summary && (state.report.summary.sections || []).find(x => x.dir === sec.dir);
@@ -229,6 +231,7 @@ function renderAreas() {
 function renderPanel() {
   const panel = $('#panel');
   if (state.selected === '__summary') return renderSummary();
+  if (state.selected === '__maturity') return renderMaturity();
   if (state.selected === '__owasp') return renderOwasp();
   const t = cur();
   const probe = t && t.sections.flatMap(s => s.probes).find(p => p.id === state.selected);
@@ -299,6 +302,25 @@ function renderOwasp() {
   $('#panel').innerHTML = html;
 }
 
+// 운영 성숙도 — 항목마다 왜 중요한가 · 무엇을 찾았나 · 어떻게 갖추나 · 갖추면 몇 점
+function renderMaturity() {
+  const m = state.report && state.report.maturity, s = state.report && state.report.summary;
+  if (!m) { $('#panel').innerHTML = '<div class="empty">[전체 검사]를 돌리면 운영 성숙도가 나옵니다.</div>'; return; }
+  const items = [...m.items].sort((a, b) => (a.ok - b.ok) || ((b.plus || 0) - (a.plus || 0)));
+  const allPlus = Math.round(items.filter(i => !i.ok).reduce((a, i) => a + (i.plus || 0), 0) * 10) / 10;
+  $('#panel').innerHTML = `<div class="ph"><h2>운영 성숙도 <span class="chip">${esc(m.got)}/${esc(m.total)}점 · 계수 ${esc(Math.round(m.factor * 100) / 100)}</span>${allPlus ? `<span class="chip ok">다 갖추면 최종 +${esc(allPlus)}</span>` : ''}</h2>
+    <div class="hint">"지금 멀쩡한가" 는 A~Z 영역이 보고, 여기서는 "멀쩡함이 계속 유지되는 장치가 있는가" 를 본다. 문서에 이름만 적힌 것은 치지 않는다 — 실제 설정·스크립트·파일이 있어야 한다.
+    최종 점수 = 제품 점수 ${esc(s ? s.rawScore : '')} × 계수 (0.55 ~ 1.00).</div></div>
+    ${items.map(i => `<div class="group"><div class="gh" style="position:static"><span class="mark ${i.ok ? 'ok' : 'bad'}" style="font-weight:800;color:var(--${i.ok ? 'ok' : 'bad'})">${i.ok ? 'O' : 'X'}</span>
+        <span class="gname">${esc(i.label)}</span><span class="chip">${esc(i.weight)}점</span>${!i.ok && i.plus ? `<span class="chip ok">갖추면 최종 +${esc(i.plus)}</span>` : ''}</div>
+      <div style="padding:10px 18px 14px">
+        ${i.why ? `<div><b>왜</b> — ${esc(i.why)}</div>` : ''}
+        <div style="margin-top:4px"><b>${i.ok ? '찾은 것' : '찾아본 곳'}</b> — <span class="hint">${esc(i.ok ? (i.found || '있음') : (i.look || '-'))}</span></div>
+        ${!i.ok && (i.how || []).length ? `<div style="margin-top:6px"><b>어떻게 갖추나</b><ul style="margin:4px 0 0 18px;padding:0">${i.how.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+        ${!i.ok && !i.how ? '<div class="hint">예전 검사 결과라 개선 방법이 없다 — 전체 검사를 다시 돌리면 나온다</div>' : ''}
+      </div></div>`).join('')}`;
+}
+
 function renderSummary() {
   const s = state.report && state.report.summary;
   if (!s) { $('#panel').innerHTML = '<div class="empty">[전체 검사]를 돌리면 점수 요약이 나옵니다.</div>'; return; }
@@ -310,13 +332,13 @@ function renderSummary() {
       <div class="card"><div class="k">최종 점수</div><div class="v">${esc(s.score)}</div><div class="k">${esc(s.grade)}</div></div>
       <div class="card"><div class="k">제품 점수</div><div class="v">${esc(s.rawScore)}</div></div>
       <div class="card"><div class="k">검사 / 통과 / 문제</div><div class="v">${esc(s.scanned)} / ${esc(s.passed)} / ${esc(s.failed)}</div><div class="k">자동 생성 ${esc(s.generated ?? '-')} · 확인 필요 ${esc(s.warned)}</div></div>
-      <div class="card"><div class="k">운영 성숙도</div><div class="v">${esc(s.maturity.got)}/${esc(s.maturity.total)}</div><div class="k">계수 ${esc(s.maturity.factor)}</div></div>
+      <div class="card" data-view="__maturity" style="cursor:pointer" title="눌러서 항목·개선 방법 보기"><div class="k">운영 성숙도 ▸</div><div class="v">${esc(s.maturity.got)}/${esc(s.maturity.total)}</div><div class="k">계수 ${esc(s.maturity.factor)} · 누르면 빠진 것과 고치는 법</div></div>
       ${(s.sections || []).map(x => `<div class="card"><div class="k">${esc(x.label)}</div><div class="v">${x.score === null ? '-' : esc(x.score)}</div></div>`).join('')}
     </div>
     ${s.diff ? (() => { const d = s.diff, dl = Math.round((d.score - d.prevScore) * 10) / 10; return `<div class="group"><div class="gh">▲ 지난 검사와 비교 — 점수 ${esc(d.prevScore)} → ${esc(d.score)} (${dl >= 0 ? '+' : ''}${esc(dl)}) · <span class="chip bad">새 문제 ${esc(d.addedCount)}</span> <span class="chip ok">고친 것 ${esc(d.fixedCount)}</span></div><table>${d.added.slice(0, 20).map(x => `<tr class="bad"><td class="mark bad">+</td><td class="item">[${esc(x.area)}] ${esc(x.check)}</td><td class="detail">${esc(x.item)}${x.detail ? ' — ' + esc(x.detail) : ''}</td></tr>`).join('')}${d.fixed.slice(0, 20).map(x => `<tr><td class="mark ok">✓</td><td class="item">[${esc(x.area)}] ${esc(x.check)}</td><td class="detail">${esc(x.item)} — 고쳐졌다</td></tr>`).join('')}</table></div>`; })() : ''}
     ${(s.top || []).length ? `<div class="group"><div class="gh">★ 먼저 고칠 것 (영향 큰 순서)</div><table>${s.top.map((t, i) => `<tr class="bad"><td class="mark bad">${i + 1}</td><td class="item"><a href="#" data-goto="${esc(t.area)}">[${esc(t.area)}]</a> ${esc(t.check)} <span class="chip bad">${esc(t.failed)}건</span>${t.owasp ? ` <span class="chip">${esc([].concat(t.owasp).join(','))}</span>` : ''}</td><td class="detail">${t.examples.map(esc).join('<br>')}</td></tr>`).join('')}</table></div>` : ''}
     ${(s.skippedAreas || []).length ? `<div class="group"><div class="gh">잴 수 없었던 영역 (점수에서 뺌)</div><table>${s.skippedAreas.map(a => `<tr><td class="mark">-</td><td class="item">${esc(a.id)} ${esc(a.name || '')}</td><td class="detail">${esc(a.why || a.skip || '')}</td></tr>`).join('')}</table></div>` : ''}
-    <div class="group"><div class="gh">운영 성숙도</div><table>${mat.map(i => `<tr class="${i.ok ? '' : 'bad'}"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc(i.weight)}점</td></tr>`).join('')}</table></div>
+    <div class="group"><div class="gh" data-view="__maturity" style="cursor:pointer">운영 성숙도 ${esc(s.maturity.got)}/${esc(s.maturity.total)} — 눌러서 개선 방법 보기 ▸</div><table>${mat.map(i => `<tr class="${i.ok ? '' : 'bad'}" data-view="__maturity" style="cursor:pointer"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc(i.weight)}점${i.ok ? '' : i.plus ? ` · 갖추면 최종 +${esc(i.plus)}` : ''}</td></tr>`).join('')}</table></div>
     <div class="group"><div class="gh">도구 자기 점검</div><table>${self.map(i => `<tr class="${i.ok ? '' : 'bad'}"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc((i.notes || []).join(' / '))}</td></tr>`).join('')}</table></div>`;
 }
 

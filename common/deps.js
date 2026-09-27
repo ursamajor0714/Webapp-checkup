@@ -41,15 +41,23 @@ const sh = (cmd, args, opt = {}) => { try { return { ok: true, out: execFileSync
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function dockerReady(log) {
+  const ready = () => sh('docker', ['info', '--format', '{{.ServerVersion}}']).ok;
   const v = sh('docker', ['info', '--format', '{{.ServerVersion}}']);
   if (v.ok) return { ok: true };
-  if (v.missing) return { ok: false, why: 'Docker 가 설치돼 있지 않다' };
-  if (process.platform === 'darwin' && sh('open', ['-a', 'Docker']).ok) {
-    log('Docker Desktop 을 켜는 중… (처음엔 30초쯤 걸린다)');
-    for (let i = 0; i < 45; i++) { await sleep(2000); if (sh('docker', ['info', '--format', '{{.ServerVersion}}']).ok) return { ok: true }; }
-    return { ok: false, why: 'Docker Desktop 이 90초 안에 준비되지 않았다' };
+  const tried = [];
+  // 맥: Docker Desktop · OrbStack · Rancher Desktop 앱, 또는 Colima — 깔린 것을 차례로 켜 본다
+  const starters = process.platform === 'darwin'
+    ? [['Docker Desktop', 'open', ['-a', 'Docker']], ['OrbStack', 'open', ['-a', 'OrbStack']], ['Rancher Desktop', 'open', ['-a', 'Rancher Desktop']], ['Colima', 'colima', ['start']]]
+    : process.platform === 'win32' ? [['Docker Desktop', 'cmd', ['/c', 'start', '', 'Docker Desktop']]] : [['Docker 서비스', 'systemctl', ['--user', 'start', 'docker']]];
+  for (const [name, cmd, args] of starters) {
+    const r = sh(cmd, args, { timeout: name === 'Colima' ? 180000 : 15000 });
+    if (!r.ok) { tried.push(`${name}: ${r.missing ? '없음' : '켜지 못함'}`); continue; }
+    log(`${name} 을(를) 켜는 중… (처음엔 30초쯤 걸린다)`);
+    for (let i = 0; i < 45; i++) { if (ready()) return { ok: true, via: name }; await sleep(2000); }
+    tried.push(`${name}: 켰지만 90초 안에 준비되지 않음`);
   }
-  return { ok: false, why: `Docker 가 꺼져 있다 (${process.platform === 'win32' ? 'Docker Desktop 을 켠다' : 'Docker 를 켠다'})` };
+  if (v.missing) return { ok: false, why: 'Docker 가 설치돼 있지 않다 — Docker Desktop(docker.com) 이나 OrbStack(orbstack.dev) 을 깐다' };
+  return { ok: false, why: `Docker 엔진이 꺼져 있는데 켜지 못했다 (${tried.join(' · ') || '켤 방법을 찾지 못함'}) — Docker Desktop·OrbStack 을 직접 켜거나, 없으면 설치한다` };
 }
 
 // 그 포트를 쓰는 컨테이너 — 꺼진 것도 찾는다 (포트 설정은 inspect 로)
