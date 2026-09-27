@@ -1,8 +1,8 @@
-# QA
+# 웹앱 건강검진 (webapp-checkup)
 
-**레포를 넣으면 실제로 돌려서 잡는 웹 QA — 실행할 때 AI 토큰 0**
+**딸깍 한 번, 레포를 넣으면 실제로 돌려서 잡는 웹 QA — 실행할 때 AI 토큰 0**
 
-![QA 요약 화면](docs/images/qa-summary.png)
+![웹앱 건강검진 요약 화면](docs/images/qa-summary.png)
 
 <sub>CrossFit Grove(Express + 서버 템플릿) 레포를 더블클릭 한 번에 — 검사 2,448건 · 손댈 곳 25곳 · OWASP Top 10</sub>
 
