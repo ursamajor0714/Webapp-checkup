@@ -1,0 +1,8 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>시험 앱</title><meta name="viewport" content="width=device-width"></head><body>
+<form id="login"><input id="pw" type="password" name="password" aria-label="비밀번호"><button type="submit">로그인</button></form>
+<ul id="list"></ul>
+<script>
+document.getElementById('login').onsubmit = async e => { e.preventDefault();
+  const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: document.getElementById('pw').value }) });
+  if (r.ok) { localStorage.token = (await r.json()).token; document.getElementById('login').remove(); } };
+</script></body></html>
