@@ -211,6 +211,18 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, latestReport(q.get('project')));
     }
     if (req.method === 'GET' && P === '/api/job') return send(res, 200, job);
+    // 무시 목록 — 대상 레포의 .qa-ignore.json
+    if (P === '/api/ignore' || P === '/api/ignore/remove') {
+      const ig = require('./common/ignore');
+      if (req.method === 'GET') { if (!known(q.get('project'))) return send(res, 404, { error: '없는 프로젝트' }); const d = defOf(q.get('project')); return send(res, 200, { file: path.join(d.root, ig.FILE), items: ig.load(d.root) }); }
+      const body = await readBody(req);
+      if (!known(body.project)) return send(res, 400, { error: '없는 프로젝트' });
+      const d = defOf(body.project);
+      if (!d.root || !fs.existsSync(d.root)) return send(res, 400, { error: '레포 폴더가 없습니다' });
+      if (P === '/api/ignore/remove') return send(res, 200, { items: ig.remove(d.root, String(body.key || '')) });
+      if (!body.area || !body.check || !body.item) return send(res, 400, { error: '무엇을 무시할지 모릅니다' });
+      return send(res, 200, { items: ig.add(d.root, body), key: ig.findingKey(body.area, body.check, body.item) });
+    }
     // HTML 리포트 — 파일 이름만 받는다 (폴더 밖으로 나가지 못하게)
     if (req.method === 'GET' && P === '/api/report.html') {
       const id = q.get('project'), file = String(q.get('file') || '');

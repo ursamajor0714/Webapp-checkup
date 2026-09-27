@@ -88,7 +88,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   const auth = project.auth;
   ctx.authService = (routes.find(r => r.path === auth.loginPath) || {}).service || (ctx.primary && ctx.primary.id);
 
-  require('./session').timings.length = 0;   // 응답 시간 기록은 이번 검사 것만
+  require('./session').timings.length = 0;
+  ctx.ignores = require('./ignore').load(project.root);   // 무시 목록   // 응답 시간 기록은 이번 검사 것만
   // 꺼진 서버는 직접 켠다 (설치·빌드·실행) — '딱 실행' 하면 서버까지 올라와 끝까지 잰다. 로그는 '서버 로그 오류' 영역이 읽는다
   const serve = require('./serve');
   ctx.serverStates = { ...servers };
@@ -218,7 +219,7 @@ async function runProbe(ctx, probe) {
   }
   const sum = k => checks.reduce((s, c) => s + (c[k] || 0), 0);
   const universe = sum('universe'), scanned = sum('scanned'), passed = sum('passed'), warned = sum('warned'), failed = sum('failed');
-  return {
+  const result = {
     id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file, owasp: probe.owasp || [],
     composite: COMPOSITE.includes(probe.id), skip, skipped, partial,
     universe, scanned, passed, warned, failed,
@@ -226,6 +227,9 @@ async function runProbe(ctx, probe) {
     passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
     ms: Date.now() - t0, checks, error,
   };
+  // 사람이 '의도된 것·오탐' 으로 표시한 문제는 통과로 센다 (대상 레포의 .qa-ignore.json)
+  require('./ignore').apply(result, ctx.ignores);
+  return result;
 }
 
 // 점수: 가중 합격률 × √스캔률 — '설정 필요(skip)' 영역은 뺀다
@@ -275,12 +279,12 @@ function topFixes(results, n = 10) {
 
 // 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)
 const failKeys = results => {
+  const { findingKey } = require('./ignore');
   const m = new Map();
   for (const r of results || []) for (const c of r.checks || []) {
-    const cname = c.name.replace(/\(로그 \d+줄\)|\d+(\.\d+)?(ms|초|MB|개|번|건)/g, '');
     const bad = (c.items || []).filter(i => i.ok === false);
-    if (bad.length) for (const i of bad) m.set(`${r.id}|${cname}|${String(i.name).replace(/\d+번|\(\w{7} [\d-]+\)/g, '')}`, { area: r.id, check: c.name, item: i.name, detail: String(i.detail || '').slice(0, 140) });
-    else if (c.failed) for (const n of (c.notes || []).slice(0, 20)) m.set(`${r.id}|${cname}|${String(n).slice(0, 80)}`, { area: r.id, check: c.name, item: String(n).slice(0, 100), detail: '' });
+    if (bad.length) for (const i of bad) m.set(findingKey(r.id, c.name, i.name), { area: r.id, check: c.name, item: i.name, detail: String(i.detail || '').slice(0, 140) });
+    else if (c.failed) for (const n of (c.notes || []).slice(0, 20)) m.set(findingKey(r.id, c.name, n), { area: r.id, check: c.name, item: String(n).slice(0, 100), detail: '' });
   }
   return m;
 };
@@ -327,6 +331,7 @@ async function finish(prep, results, { save = true } = {}) {
     score, grade: gradeOf(score).label, tier: tierOf(score),
     owasp: owaspSummary(results),
     top: topFixes(results),
+    ignored: results.reduce((a, r) => a + (r.ignored || 0), 0),
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
   summary.full = !prep.only || !prep.only.length;
@@ -413,6 +418,7 @@ async function run(arg) {
     for (const x of d.fixed.slice(0, 5)) console.log(`   ✓ [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
     if (d.fixedCount > 5) console.log(`     … 고친 것 ${d.fixedCount - 5}건 더`);
   }
+  if (s.ignored) console.log(`\n(무시 목록으로 뺀 문제 ${s.ignored}건 — ${path.join(project.root, require('./ignore').FILE)})`);
   if (s.top && s.top.length) {
     console.log('\n★ 먼저 고칠 것 (영향 큰 순서)');
     s.top.forEach((t, i) => {

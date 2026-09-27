@@ -182,10 +182,10 @@ async function api(path, opt) {
 
 // 검사(check) 하나를 O/X 행들로 — items 가 있으면 그대로, 없으면 검사 자체를 한 줄로
 function rowsOf(c) {
-  if (c.items) return c.items.map(i => ({ name: i.name, detail: i.detail || '', mark: i.ok === true ? 'ok' : i.ok === null ? 'warn' : 'bad' }));
+  if (c.items) return c.items.map(i => ({ name: i.name, detail: i.detail || '', ik: i.name, ignored: i.ignored, mark: i.ok === true ? 'ok' : i.ok === null ? 'warn' : 'bad' }));
   const rows = [];
-  if (c.failed > 0) (c.notes && c.notes.length ? c.notes : [`${c.failed}건 문제`]).forEach(n => rows.push({ name: c.name, detail: n, mark: 'bad' }));
-  (c.warnNotes || []).forEach(n => rows.push({ name: c.name, detail: n, mark: 'warn' }));
+  if (c.failed > 0) (c.notes && c.notes.length ? c.notes : [`${c.failed}건 문제`]).forEach(n => rows.push({ name: c.name, detail: n, ik: n, mark: 'bad' }));
+  (c.warnNotes || []).forEach(n => rows.push({ name: c.name, detail: n, ik: n, mark: 'warn' }));
   if (c.passed > 0 || !rows.length) rows.push({ name: c.name, detail: c.failed > 0 ? `나머지 ${c.passed}건 통과` : (c.notes || []).join(' / ') || `${c.passed}건 통과`, mark: 'ok' });
   return rows;
 }
@@ -216,6 +216,7 @@ function renderAreas() {
   const owBad = ow ? ow.filter(x => x.status === '문제').length : null;
   const mt = state.report && state.report.maturity;
   $('#areas').innerHTML = `<div class="sec"><h3><span>기준</span></h3>
+      <div class="area ${state.selected === '__ignored' ? 'sel' : ''}" data-view="__ignored"><span class="letter">—</span><span class="nm">무시 목록</span><span class="chip">${state.ignores ? esc(state.ignores.length) : ''}</span><span></span></div>
       <div class="area ${state.selected === '__maturity' ? 'sel' : ''}" data-view="__maturity"><span class="letter">◆</span><span class="nm">운영 성숙도</span>${mt ? `<span class="chip ${mt.got / mt.total >= 0.75 ? 'ok' : mt.got / mt.total >= 0.4 ? 'warn' : 'bad'}">${esc(mt.got)}/${esc(mt.total)}</span>` : '<span class="chip">전체 검사 후</span>'}<span></span></div>
       <div class="area ${state.selected === '__owasp' ? 'sel' : ''}" data-view="__owasp"><span class="letter">10</span><span class="nm">OWASP Top 10 (2021)</span>${ow ? (owBad ? `<span class="chip bad">문제 ${owBad}</span>` : '<span class="chip ok">O</span>') : '<span class="chip">전체 검사 후</span>'}<span></span></div></div>` +
     t.sections.map(sec => {
@@ -232,6 +233,7 @@ function renderPanel() {
   const panel = $('#panel');
   if (state.selected === '__summary') return renderSummary();
   if (state.selected === '__maturity') return renderMaturity();
+  if (state.selected === '__ignored') return renderIgnored();
   if (state.selected === '__owasp') return renderOwasp();
   const t = cur();
   const probe = t && t.sections.flatMap(s => s.probes).find(p => p.id === state.selected);
@@ -267,8 +269,8 @@ function renderPanel() {
     html += `<div class="group"><div class="gh" data-toggle="${key}"><span class="caret">${closed ? '▸' : '▾'}</span>
       <span class="gname">${esc(c.name)}</span>${[].concat(c.owasp || []).map(o => `<span class="chip">${esc(o)}</span>`).join('')}${bad ? `<span class="chip bad">X ${bad}</span>` : ''}${warn ? `<span class="chip warn">△ ${warn}</span>` : ''}<span class="chip ok">O ${ok}</span></div>`;
     if (!closed) {
-      html += '<table>' + rows.slice(0, 1500).map(x => `<tr class="${x.mark === 'bad' ? 'bad' : ''}"><td class="mark ${x.mark}">${x.mark === 'ok' ? 'O' : x.mark === 'bad' ? 'X' : '△'}</td>
-        <td class="item">${esc(x.name)}</td><td class="detail">${esc(x.detail)}</td></tr>`).join('') + '</table>';
+      html += '<table>' + rows.slice(0, 1500).map(x => `<tr class="${x.mark === 'bad' ? 'bad' : ''}"><td class="mark ${x.mark}">${x.ignored ? '—' : x.mark === 'ok' ? 'O' : x.mark === 'bad' ? 'X' : '△'}</td>
+        <td class="item">${esc(x.name)}</td><td class="detail">${esc(x.detail)}${x.mark !== 'ok' ? ` <button class="btn run-btn ign" title="오탐이거나 의도한 것이면 다음 검사부터 뺀다 (대상 레포 .qa-ignore.json)" data-ig="${esc(JSON.stringify({ area: r.id, check: c.name, item: x.ik }))}">무시</button>` : ''}</td></tr>`).join('') + '</table>';
     }
     html += '</div>';
   });
@@ -303,6 +305,27 @@ function renderOwasp() {
 }
 
 // 운영 성숙도 — 항목마다 왜 중요한가 · 무엇을 찾았나 · 어떻게 갖추나 · 갖추면 몇 점
+// 무시 목록 — 되살리면 다음 검사부터 다시 센다
+function renderIgnored() {
+  const list = state.ignores || [];
+  $('#panel').innerHTML = `<div class="ph"><h2>무시 목록 <span class="chip">${esc(list.length)}개</span></h2>
+    <div class="hint">결과의 X·△ 줄에서 [무시] 를 누르면 여기에 쌓인다. 대상 레포의 <b>${esc(state.ignoreFile || '.qa-ignore.json')}</b> 에 저장되니 깃에 올리면 팀원·CI 도 같은 기준을 쓴다. 무시한 문제는 통과로 세고 결과에 '무시함' 으로 남는다.</div></div>
+    ${list.length ? `<table>${list.map(i => `<tr><td class="mark">—</td><td class="item">[${esc(i.area)}] ${esc(i.check)}<br><span class="hint">${esc(i.item)}</span></td><td class="detail">${esc(i.reason || '이유 없음')} · ${esc(i.at || '')} <button class="btn run-btn" data-unig="${esc(i.key)}">되살리기</button></td></tr>`).join('')}</table>` : '<div class="empty">무시한 문제가 없다.</div>'}`;
+}
+async function loadIgnores() {
+  const r = await api('/api/ignore?project=' + encodeURIComponent(state.project)).catch(() => null);
+  state.ignores = r ? r.items : []; state.ignoreFile = r ? r.file : null;
+}
+// 화면의 결과에도 바로 반영 (다음 검사를 기다리지 않게)
+function ignoreLocal(area, check, item, reason) {
+  const r = state.results[area]; if (!r) return;
+  for (const c of r.checks || []) {
+    if (c.name !== check) continue;
+    if (c.items) for (const it of c.items) if (it.name === item && it.ok !== true) { it.ignored = reason; it.ok = true; it.detail = `무시함 (${reason || '이유 없음'}) — ${it.detail}`; }
+    if (!c.items) { if ((c.notes || []).includes(item)) { c.notes = c.notes.filter(n => n !== item); c.failed = Math.max(0, c.failed - 1); c.passed++; } if ((c.warnNotes || []).includes(item)) { c.warnNotes = c.warnNotes.filter(n => n !== item); c.warned = Math.max(0, c.warned - 1); c.passed++; } }
+  }
+}
+
 function renderMaturity() {
   const m = state.report && state.report.maturity, s = state.report && state.report.summary;
   if (!m) { $('#panel').innerHTML = '<div class="empty">[전체 검사]를 돌리면 운영 성숙도가 나옵니다.</div>'; return; }
@@ -505,6 +528,7 @@ async function loadProject(id) {
   try { localStorage.setItem('qa-ui-project', id); } catch (e) {}
   if (!id) { renderAll(); return; }
   await loadSettings();
+  await loadIgnores();
   pollServer();
   const latest = await api('/api/latest?project=' + encodeURIComponent(id)).catch(() => null);
   if (latest) {
@@ -537,6 +561,17 @@ async function poll() {
 }
 
 document.addEventListener('click', e => {
+  const ig = e.target.closest('[data-ig]');
+  if (ig) {
+    e.stopPropagation();
+    const f = JSON.parse(ig.dataset.ig);
+    const reason = prompt('이 문제를 무시할까요? 이유를 적어 두면 나중에 팀원이 압니다 (예: 오탐 · 의도한 공개 경로 · 다음 달에 고침)', '오탐');
+    if (reason === null) return;
+    api('/api/ignore', json({ project: state.project, ...f, reason })).then(r => { state.ignores = r.items; ignoreLocal(f.area, f.check, f.item, reason); renderAreas(); renderPanel(); }).catch(err => alert(err.message));
+    return;
+  }
+  const unig = e.target.closest('[data-unig]');
+  if (unig) { api('/api/ignore/remove', json({ project: state.project, key: unig.dataset.unig })).then(r => { state.ignores = r.items; renderAreas(); renderPanel(); }).catch(err => alert(err.message)); return; }
   const runBtn = e.target.closest('[data-run]');
   if (runBtn) { e.stopPropagation(); run([runBtn.dataset.run]); return; }
   const go = e.target.closest('[data-goto]');
