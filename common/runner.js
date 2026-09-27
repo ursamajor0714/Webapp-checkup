@@ -205,13 +205,14 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
 // ── 영역 하나 실행
 async function runProbe(ctx, probe) {
   const t0 = Date.now();
-  let checks = [], error = null, skip = null, skipped = [], partial = null;
+  let checks = [], error = null, skip = null, skipped = [], partial = null, info = null;
   try {
     const out = await probe.run(ctx) || {};
     if (out.skip) skip = out.skip;
     checks = out.checks || [];
     skipped = out.skipped || [];
     partial = out.partial || null;
+    info = out.info || null;   // 점수에 넣지 않는 참고 정보 (예: 기대는 외부 서비스 목록)
     // 프로젝트 전용 검사는 대부분 로그인한 서버를 전제로 짠다 — 서버가 꺼졌거나 로그인하지 못했으면 오류 대신 건너뛴다
     const extrasReady = !ctx.services.length || (ctx.live && (!ctx.project.auth || ctx.project.auth.type === 'none' || !!ctx.sessions.owner));
     for (const ex of probe.extras || []) {
@@ -230,7 +231,7 @@ async function runProbe(ctx, probe) {
     universe, scanned, passed, warned, failed,
     scanRate: universe ? scanned / universe : 0,
     passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
-    ms: Date.now() - t0, checks, error,
+    ms: Date.now() - t0, checks, error, info,
   };
   // 사람이 '의도된 것·오탐' 으로 표시한 문제는 통과로 센다 (대상 레포의 .qa-ignore.json)
   require('./ignore').apply(result, ctx.ignores);
@@ -340,6 +341,7 @@ async function finish(prep, results, { save = true } = {}) {
     owasp: owaspSummary(results),
     top: topFixes(results),
     ignored: results.reduce((a, r) => a + (r.ignored || 0), 0),
+    saas: ((results.find(r => r.id === '11') || {}).info || {}).items || null,
     level: { id: ctx.level.id, label: ctx.level.label, desc: ctx.level.desc, strict: ctx.level.strict },
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
@@ -428,6 +430,10 @@ async function run(arg) {
     if (d.addedCount > 8) console.log(`     … 새 문제 ${d.addedCount - 8}건 더`);
     for (const x of d.fixed.slice(0, 5)) console.log(`   ✓ [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
     if (d.fixedCount > 5) console.log(`     … 고친 것 ${d.fixedCount - 5}건 더`);
+  }
+  if (s.saas && s.saas.length) {
+    console.log(`\n☁ 기대는 외부 서비스 ${s.saas.length}개 (참고 — 점수에 넣지 않는다)`);
+    for (const x of s.saas) console.log(`  · ${x.name} [${x.kind}] — ${x.watch}\n      근거: ${x.why.join(' · ')}`);
   }
   if (s.ignored) console.log(`\n(무시 목록으로 뺀 문제 ${s.ignored}건 — ${path.join(project.root, require('./ignore').FILE)})`);
   if (s.top && s.top.length) {

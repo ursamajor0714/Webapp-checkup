@@ -25,5 +25,14 @@ app.delete('/api/items/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// 심은 버그: 외부 API 를 제한 시간 없이 부른다 (저쪽이 느려지면 이 요청도 끝없이 기다린다)
+async function exchangeRate() {
+  const r = await fetch('https://api.example.com/rate?base=KRW');
+  return (await r.json()).rate;
+}
+// 제한 시간이 있는 호출 — 잡으면 안 된다
+async function ping() { return fetch('https://api.example.com/ping', { signal: AbortSignal.timeout(3000) }); }
+module.exports = { exchangeRate, ping };
+
 const port = process.env.PORT || 3999;
 app.listen(port, () => console.log(`buggy-express on ${port}`));

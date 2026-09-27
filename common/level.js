@@ -11,8 +11,8 @@ const LEVELS = {
     areas: ['1', '2', '3', '4', '6', 'G', 'N', 'A', 'E', 'F', 'K', 'B', 'C', 'I'], scale: 0.5, strict: false,
   },
   standard: {
-    id: 'standard', label: '중급', desc: '서비스 품질 — 입력 검증·응답 규격·접근성·보안 헤더·로그·개인정보',
-    areas: ['1', '2', '3', '4', '5', '6', '7', '9', '10', 'G', 'N', 'U', 'Z', 'A', 'J', 'D', 'E', 'F', 'L', 'M', 'O', 'Q', 'T', 'K', 'B', 'C', 'H', 'I', 'P', 'V'], scale: 0.75, strict: false,
+    id: 'standard', label: '중급', desc: '서비스 품질 — 입력 검증·응답 규격·접근성·보안 헤더·로그·개인정보·외부 서비스 제한 시간',
+    areas: ['1', '2', '3', '4', '5', '6', '7', '9', '10', '11', 'G', 'N', 'U', 'Z', 'A', 'J', 'D', 'E', 'F', 'L', 'M', 'O', 'Q', 'T', 'K', 'B', 'C', 'H', 'I', 'P', 'V'], scale: 0.75, strict: false,
   },
   advanced: { id: 'advanced', label: '고급', desc: '전체 영역 — 동시성·상태 전이·기능 간섭·업무 흐름·장애 대응까지', areas: null, scale: 1, strict: false },
   expert: { id: 'expert', label: '전문가', desc: '현역 출시 기준 — 두 배로 넓게, 확인 필요(△)도 감점, 접근성·속도 기준을 엄하게', areas: null, scale: 2, strict: true },

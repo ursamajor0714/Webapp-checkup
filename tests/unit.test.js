@@ -117,3 +117,26 @@ test('검사 수준 — 전문가 수준에서는 △ 가 통과율을 깎는다
   assert.strictEqual(normal.passRate, 1);
   assert.strictEqual(strict.passRate, 0.5);
 });
+
+test('외부 서비스 — 목록은 의존성·환경변수 이름·설정 파일로 찾고, 제한 시간 없는 호출만 △', async () => {
+  const area = require('../common/areas/project/b_saas');
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ dependencies: { express: '^4', stripe: '^1', '@supabase/supabase-js': '^2', axios: '^1' } }),
+    'vercel.json': '{}',
+    'server.js': [
+      "const express = require('express'); const axios = require('axios'); const app = express();",
+      "app.get('/a', async (req, res) => res.json(await (await fetch('https://x.example.com/a')).json()));",
+      "app.get('/b', async (req, res) => res.json((await axios.get('https://x.example.com/b', { timeout: 5000 })).data));",
+      "app.get('/c', async (req, res) => res.json(await (await fetch('/local')).json()));",
+      'app.listen(3000);',
+    ].join('\n'),
+  });
+  const out = await area.run(makeContext(loadProject({ root })));
+  assert.deepStrictEqual(out.info.items.map(x => x.name).sort(), ['Stripe', 'Supabase', 'Vercel']);
+  const items = out.checks[0].items;
+  assert.strictEqual(items.length, 1);
+  assert.match(items[0].name, /server\.js:2/);
+  assert.strictEqual(items[0].ok, null);   // 확인 필요 — 문제(X)로 세지 않는다
+});

@@ -235,6 +235,11 @@ function renderAreas() {
   }).join('');
 }
 
+// 점수에 넣지 않는 참고 정보 (외부 서비스 목록 등)
+function infoBox(r) {
+  const i = r && r.info; if (!i || !(i.items || []).length) return '';
+  return `<div class="group"><div class="gh">☁ ${esc(i.title)}</div><table>${i.items.map(x => `<tr><td class="mark">·</td><td class="item"><b>${esc(x.name)}</b> <span class="chip">${esc(x.kind)}</span><div class="hint">${esc(x.why.join(' · '))}</div></td><td class="detail">${esc(x.watch)}</td></tr>`).join('')}</table></div>`;
+}
 function renderPanel() {
   const panel = $('#panel');
   if (state.selected === '__summary') return renderSummary();
@@ -251,7 +256,7 @@ function renderPanel() {
       <button class="btn run-btn" data-run="${esc(probe.id)}" ${busy ? 'disabled' : ''}>${r ? '다시 조회' : '조회'}</button></h2>`;
   if (!r) { panel.innerHTML = head + `</div><div class="empty">${busy ? '<span class="spin"></span> 검사 중입니다…' : '아직 검사하지 않았습니다. [조회]를 누르세요.'}</div>`; return; }
   if (r.error) { panel.innerHTML = head + `</div><div class="empty" style="color:var(--bad)">실행 오류: ${esc(r.error)}</div>`; return; }
-  if (r.skip) { panel.innerHTML = head + `</div><div class="empty"><b>잴 수 없음 · 해당 없음</b><p>${esc(r.skip)}</p>${r.finding ? `<p style="color:var(--bad)">${esc(r.finding)}</p>` : ''}</div>`; return; }
+  if (r.skip) { panel.innerHTML = head + `</div><div class="empty"><b>잴 수 없음 · 해당 없음</b><p>${esc(r.skip)}</p>${r.finding ? `<p style="color:var(--bad)">${esc(r.finding)}</p>` : ''}</div>${infoBox(r)}`; return; }
   const n = countOf(r);
   const f = state.filter, q = state.q.trim().toLowerCase();
   const tabs = [['all', `전체 ${n.all}`], ['bad', `문제 ${n.bad}`], ['ok', `통과 ${n.ok}`], ['warn', `확인 필요 ${n.warn}`]];
@@ -280,6 +285,7 @@ function renderPanel() {
     }
     html += '</div>';
   });
+  html += infoBox(r);
   if (!shown) html += `<div class="empty">${f === 'bad' ? '문제가 없습니다. 👍' : '조건에 맞는 항목이 없습니다.'}</div>`;
   panel.innerHTML = html;
 }
@@ -366,6 +372,7 @@ function renderSummary() {
     </div>
     ${s.diff ? (() => { const d = s.diff, dl = Math.round((d.score - d.prevScore) * 10) / 10; return `<div class="group"><div class="gh">▲ 지난 검사와 비교 — 점수 ${esc(d.prevScore)} → ${esc(d.score)} (${dl >= 0 ? '+' : ''}${esc(dl)}) · <span class="chip bad">새 문제 ${esc(d.addedCount)}</span> <span class="chip ok">고친 것 ${esc(d.fixedCount)}</span></div><table>${d.added.slice(0, 20).map(x => `<tr class="bad"><td class="mark bad">+</td><td class="item">[${esc(x.area)}] ${esc(x.check)}</td><td class="detail">${esc(x.item)}${x.detail ? ' — ' + esc(x.detail) : ''}</td></tr>`).join('')}${d.fixed.slice(0, 20).map(x => `<tr><td class="mark ok">✓</td><td class="item">[${esc(x.area)}] ${esc(x.check)}</td><td class="detail">${esc(x.item)} — 고쳐졌다</td></tr>`).join('')}</table></div>`; })() : ''}
     ${(s.top || []).length ? `<div class="group"><div class="gh">★ 먼저 고칠 것 (영향 큰 순서)</div><table>${s.top.map((t, i) => `<tr class="bad"><td class="mark bad">${i + 1}</td><td class="item"><a href="#" data-goto="${esc(t.area)}">[${esc(t.area)}]</a> ${esc(t.check)} <span class="chip bad">${esc(t.failed)}건</span>${t.owasp ? ` <span class="chip">${esc([].concat(t.owasp).join(','))}</span>` : ''}</td><td class="detail">${t.examples.map(esc).join('<br>')}</td></tr>`).join('')}</table></div>` : ''}
+    ${(s.saas || []).length ? `<div class="group"><div class="gh" data-goto="11" style="cursor:pointer">☁ 기대는 외부 서비스 ${esc(s.saas.length)}개 (참고 — 점수에 넣지 않는다)</div><table>${s.saas.map(x => `<tr><td class="mark">·</td><td class="item"><b>${esc(x.name)}</b> <span class="chip">${esc(x.kind)}</span></td><td class="detail">${esc(x.watch)}</td></tr>`).join('')}</table></div>` : ''}
     ${(s.skippedAreas || []).length ? `<div class="group"><div class="gh">잴 수 없었던 영역 (점수에서 뺌)</div><table>${s.skippedAreas.map(a => `<tr><td class="mark">-</td><td class="item">${esc(a.id)} ${esc(a.name || '')}</td><td class="detail">${esc(a.why || a.skip || '')}</td></tr>`).join('')}</table></div>` : ''}
     <div class="group"><div class="gh" data-view="__maturity" style="cursor:pointer">운영 성숙도 ${esc(s.maturity.got)}/${esc(s.maturity.total)} — 눌러서 개선 방법 보기 ▸</div><table>${mat.map(i => `<tr class="${i.ok ? '' : 'bad'}" data-view="__maturity" style="cursor:pointer"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc(i.weight)}점${i.ok ? '' : i.plus ? ` · 갖추면 최종 +${esc(i.plus)}` : ''}</td></tr>`).join('')}</table></div>
     <div class="group"><div class="gh">도구 자기 점검</div><table>${self.map(i => `<tr class="${i.ok ? '' : 'bad'}"><td class="mark ${i.ok ? 'ok' : 'bad'}">${i.ok ? 'O' : 'X'}</td><td class="item">${esc(i.label)}</td><td class="detail">${esc((i.notes || []).join(' / '))}</td></tr>`).join('')}</table></div>`;
