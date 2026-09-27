@@ -1,0 +1,114 @@
+// 서버가 기대는 로컬 서비스(DB·Redis 등) 켜기 — 서버를 켜기 전에 본다
+//   .env·환경변수의 접속 주소(DATABASE_URL·REDIS_URL·MONGO_URL·DB_HOST/DB_PORT …)에서 이 컴퓨터(localhost)를 가리키는 것만 골라
+//   포트가 닫혀 있으면: Docker 가 꺼져 있으면 켜고(맥은 Docker Desktop) → 그 포트를 쓰는 컨테이너나 docker compose 서비스를 켠다
+//   그래도 안 되면 무엇을 하면 되는지(명령)를 알려 준다. 운영(원격) DB 는 건드리지 않는다.
+const fs = require('fs');
+const net = require('net');
+const path = require('path');
+const { execFileSync } = require('child_process');
+
+const DEFAULT_PORT = { postgres: 5432, postgresql: 5432, mysql: 3306, mariadb: 3306, mongodb: 27017, redis: 6379, rediss: 6379, amqp: 5672 };
+
+function readEnvFile(f) {
+  const out = {};
+  try { for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) { const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/); if (m) out[m[1]] = m[2].replace(/^['"]|['"]$/g, ''); } } catch { /* 없음 */ }
+  return out;
+}
+
+// 이 부분이 쓰는 로컬 서비스 목록 [{ name, host, port, from }]
+function localServices(part, root, env) {
+  const vars = { ...readEnvFile(path.join(root, '.env')), ...readEnvFile(path.join(part.absDir, '.env')), ...readEnvFile(path.join(part.absDir, '.env.local')), ...Object.fromEntries(Object.entries(env).filter(([k]) => /URL|HOST|PORT|URI/.test(k))) };
+  const out = [];
+  for (const [k, v] of Object.entries(vars)) {
+    const m = String(v).match(/^(postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|amqp):\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/?]+)(?::(\d+))?/i);
+    if (!m || /\+srv/.test(m[1])) continue;
+    const host = m[2].replace(/[[\]]/g, '');
+    if (!/^(localhost|127\.0\.0\.1|::1|0\.0\.0\.0|host\.docker\.internal)$/i.test(host)) continue;   // 원격(운영) DB 는 건드리지 않는다
+    out.push({ name: m[1].toLowerCase().replace(/ql$/, 'ql'), host: 'localhost', port: Number(m[3]) || DEFAULT_PORT[m[1].toLowerCase()] || 0, from: k });
+  }
+  // DB_HOST=localhost + DB_PORT=… 꼴
+  for (const [hk, pk, name] of [['DB_HOST', 'DB_PORT', 'db'], ['PGHOST', 'PGPORT', 'postgres'], ['MYSQL_HOST', 'MYSQL_PORT', 'mysql'], ['REDIS_HOST', 'REDIS_PORT', 'redis']]) {
+    if (vars[hk] && /^(localhost|127\.0\.0\.1)$/.test(vars[hk]) && Number(vars[pk])) out.push({ name, host: 'localhost', port: Number(vars[pk]), from: `${hk}/${pk}` });
+  }
+  return [...new Map(out.filter(s => s.port).map(s => [s.port, s])).values()];
+}
+
+const portOpen = (port, host = '127.0.0.1', ms = 800) => new Promise(res => {
+  const s = net.connect({ port, host }); const done = ok => { s.destroy(); res(ok); };
+  s.setTimeout(ms, () => done(false)); s.on('connect', () => done(true)); s.on('error', () => done(false));
+});
+const sh = (cmd, args, opt = {}) => { try { return { ok: true, out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000, ...opt }).trim() }; } catch (e) { return { ok: false, out: ((e.stdout || '') + (e.stderr || '')).trim() || e.message, missing: e.code === 'ENOENT' }; } };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function dockerReady(log) {
+  const v = sh('docker', ['info', '--format', '{{.ServerVersion}}']);
+  if (v.ok) return { ok: true };
+  if (v.missing) return { ok: false, why: 'Docker 가 설치돼 있지 않다' };
+  if (process.platform === 'darwin' && sh('open', ['-a', 'Docker']).ok) {
+    log('Docker Desktop 을 켜는 중… (처음엔 30초쯤 걸린다)');
+    for (let i = 0; i < 45; i++) { await sleep(2000); if (sh('docker', ['info', '--format', '{{.ServerVersion}}']).ok) return { ok: true }; }
+    return { ok: false, why: 'Docker Desktop 이 90초 안에 준비되지 않았다' };
+  }
+  return { ok: false, why: `Docker 가 꺼져 있다 (${process.platform === 'win32' ? 'Docker Desktop 을 켠다' : 'Docker 를 켠다'})` };
+}
+
+// 그 포트를 쓰는 컨테이너 — 꺼진 것도 찾는다 (포트 설정은 inspect 로)
+function containerFor(port) {
+  const names = sh('docker', ['ps', '-a', '--format', '{{.Names}}']);
+  if (!names.ok) return null;
+  for (const n of names.out.split('\n').filter(Boolean)) {
+    const b = sh('docker', ['inspect', '-f', '{{json .HostConfig.PortBindings}}', n]);
+    if (b.ok && new RegExp(`"HostPort":"${port}"`).test(b.out)) return n;
+  }
+  return null;
+}
+
+// docker compose 파일에서 그 포트를 여는 서비스
+function composeServiceFor(root, port) {
+  const f = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].map(x => path.join(root, x)).find(x => fs.existsSync(x));
+  if (!f) return null;
+  const txt = fs.readFileSync(f, 'utf8');
+  let svc = null, inServices = false;
+  for (const line of txt.split('\n')) {
+    if (/^services:\s*$/.test(line)) { inServices = true; continue; }
+    if (inServices && /^\S/.test(line)) inServices = false;
+    const m = inServices && line.match(/^ {2}([\w.-]+):\s*$/); if (m) svc = m[1];
+    if (svc && new RegExp(`["']?(?:[\\d.]+:)?${port}:\\d+`).test(line)) return { file: f, service: svc };
+  }
+  return null;
+}
+
+// README 에 적힌 docker run 한 줄 (안내용 — 새 컨테이너를 멋대로 만들지는 않는다)
+function readmeHint(root, port) {
+  for (const f of ['README.md', 'readme.md', 'docs'].map(x => path.join(root, x))) {
+    let txt = ''; try { txt = fs.statSync(f).isDirectory() ? fs.readdirSync(f).filter(x => x.endsWith('.md')).map(x => fs.readFileSync(path.join(f, x), 'utf8')).join('\n') : fs.readFileSync(f, 'utf8'); } catch { continue; }
+    const m = txt.match(new RegExp(`docker run [^\\n]*-p\\s*${port}:\\d+[^\\n]*`));
+    if (m) return m[0].trim();
+  }
+  return null;
+}
+
+/** 서버 켜기 전에. 돌려주는 것: { ok, notes[] } — ok=false 면 why 에 무엇을 하면 되는지 */
+async function ensureLocalServices(part, root, env, log = () => {}) {
+  const notes = [];
+  for (const s of localServices(part, root, env)) {
+    if (await portOpen(s.port)) continue;
+    log(`${s.name} (localhost:${s.port}, ${s.from}) 가 꺼져 있다 — 켜 본다`);
+    const d = await dockerReady(log);
+    const container = d.ok && containerFor(s.port);
+    const compose = d.ok && !container && composeServiceFor(root, s.port);
+    let how = null;
+    if (container) { const r = sh('docker', ['start', container]); how = r.ok ? `docker start ${container}` : null; if (!r.ok) log(`docker start ${container} 실패: ${r.out.slice(0, 160)}`); }
+    else if (compose) { const r = sh('docker', ['compose', '-f', compose.file, 'up', '-d', compose.service]); how = r.ok ? `docker compose up -d ${compose.service}` : null; if (!r.ok) log(`docker compose 실패: ${r.out.slice(0, 160)}`); }
+    if (how) {
+      for (let i = 0; i < 30 && !(await portOpen(s.port)); i++) await sleep(1000);
+      if (await portOpen(s.port)) { await sleep(1500); notes.push(`${s.name} 를 켰다 (${how})`); log(`${s.name} 를 켰다 — ${how}`); continue; }
+    }
+    const hint = readmeHint(root, s.port);
+    return { ok: false, notes, why: `${s.name} DB(localhost:${s.port}, ${s.from}) 가 꺼져 있다. ${!d.ok ? d.why + '. ' : ''}`
+      + (hint ? `처음이면 README 의 명령으로 만든다: ${hint}` : container === null && d.ok ? `${s.port} 포트를 쓰는 Docker 컨테이너·compose 서비스를 찾지 못했다 — DB 를 직접 켜야 한다` : 'DB 를 켠 뒤 다시 누른다') };
+  }
+  return { ok: true, notes };
+}
+
+module.exports = { ensureLocalServices, localServices, portOpen };

@@ -90,6 +90,9 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     const port = new URL(part.baseUrl).port || '80';
     const { env, missing } = envFor(def, port);
     if (missing.length) throw new Error(`⚙ 설정에서 ${missing.join('·')}를 먼저 넣어 주세요 (서버를 켤 때 필요합니다)`);
+    // 서버가 기대는 로컬 DB·Redis 가 꺼져 있으면 켠다 (Docker 컨테이너·compose). 못 켜면 할 일을 알려 주고 멈춘다
+    const deps = await require('./deps').ensureLocalServices(part, def.root || path.dirname(part.absDir), env, m => logLine(st, m));
+    if (!deps.ok) throw new Error(deps.why);
     const filled = fillDefaults(def, part, env);
     if (filled.length) { st.filledEnv = filled; logLine(st, `비어 있던 설정에 QA 가 검사용 값을 넣었다: ${filled.join(', ')}`); }
     const sub = a => a.map(x => x.replace('{PORT}', port));
@@ -124,7 +127,10 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     }
     throw new Error(`${timeoutSec}초 안에 켜지지 않았습니다 — 로그를 보세요`);
   } catch (e) {
-    st.phase = 'error'; st.error = e.message + (st.installError ? ` (앞서 설치도 실패: ${st.installError})` : ''); logLine(st, '✗ ' + st.error);
+    const tail = st.log.slice(-40).join('\n');
+    const db = tail.match(/ECONNREFUSED[^\n]*?:(\d{2,5})|connect ECONNREFUSED [\d.:]+:(\d+)|could not connect to server|Connection refused[^\n]*port (\d+)/i);
+    const hint = db ? ` — 데이터베이스에 연결하지 못했다${db[1] || db[2] || db[3] ? ` (포트 ${db[1] || db[2] || db[3]})` : ''}. DB(Docker 컨테이너 등)가 켜져 있는지, .env 의 접속 주소가 맞는지 확인` : '';
+    st.phase = 'error'; st.error = e.message + hint + (st.installError ? ` (앞서 설치도 실패: ${st.installError})` : ''); logLine(st, '✗ ' + st.error);
   }
 }
 
