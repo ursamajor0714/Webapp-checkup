@@ -23,7 +23,7 @@ module.exports = {
     }
     // 2. 코드에서 뽑은 검증 스키마 — 틀린 값은 4xx, 맞는 값은 저장
     for (const c of strict) {
-      const res = await fuzzRoute(ctx, c, { as: /register|signup|join/i.test(c.path) ? 'anon' : as });
+      const res = await fuzzRoute(ctx, c, { as: /register|signup|join/i.test(c.path) ? 'anon' : as, limit: ctx.level.n(400) });   // 수준만큼 넓게 (초급 200 · 고급 400 · 전문가 800)
       if (res.skipped) { skipped.push(res.skipped); continue; }
       checks.push(owasp('A04', checkItems(`${c.method} ${c.path} — 규칙: ${c.source}`, res.items)));
     }

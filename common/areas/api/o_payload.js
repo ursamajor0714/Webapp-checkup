@@ -2,12 +2,38 @@
 const { checkItems, owasp } = require('../_util');
 const { fillPath, untouchable } = require('../../generate');
 
+function uploadLimits(ctx) {
+  const { sources, read } = require('../_util');
+  const path = require('path');
+  const items = [];
+  for (const p of ctx.services) for (const f of sources(ctx, p)) {
+    const src = read(f), rel = ctx.rel(f);
+    if (p.lang === 'js') for (const m of src.matchAll(/multer\s*\(\s*(\{[^)]*\})?\s*\)/g)) {
+      const opt = m[1] || '';
+      const miss = [!/limits\s*:/.test(opt) && '크기(limits.fileSize)', !/fileFilter\s*:/.test(opt) && '종류(fileFilter)'].filter(Boolean);
+      items.push({ name: `${rel}:${src.slice(0, m.index).split('\n').length}`, ok: !miss.length, detail: miss.length ? `multer 에 ${miss.join('·')} 제한이 없다 — 아무 크기·아무 파일(.html·.svg·실행 파일)이나 받는다` : '크기·종류 제한 있음' });
+    }
+    if (p.lang === 'python' && /request\.FILES|UploadFile|FileField|ImageField/.test(src)) {
+      const has = /FileExtensionValidator|validate_file|content_type|\.size\s*[<>]|max_size|MAX_UPLOAD/i.test(src);
+      items.push({ name: rel, ok: has ? true : null, detail: has ? '종류·크기를 확인한다' : '업로드를 받는데 종류·크기 확인 코드를 찾지 못했다 (FileExtensionValidator · 크기 검사)' });
+    }
+    if (p.lang === 'java' && /MultipartFile/.test(src)) {
+      const cfg = require('../_util').walk(path.join(p.absDir, 'src', 'main', 'resources'), ['.properties', '.yml', '.yaml']).map(read).join('\n');
+      const size = /max-file-size|max-request-size|maxFileSize/.test(cfg + src), type = /getContentType\(\)|getOriginalFilename\(\)[^;]*\.(endsWith|matches)/.test(src);
+      items.push({ name: rel, ok: size && type ? true : size || type ? null : false, detail: `${size ? '크기 제한 있음' : '크기 제한(spring.servlet.multipart.max-file-size) 없음'} · ${type ? '종류 확인 있음' : '종류 확인 없음'}` });
+    }
+  }
+  return items;
+}
+
 module.exports = {
   id: 'O', name: '응답 크기·속도', weight: 5, owasp: ['A04'],
   async run(ctx) {
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
-    if (!ctx.live) return { skip: '서버가 꺼져 있다' };
     const checks = [];
+    // 전문가 — 파일 업로드에 종류·크기 제한이 있는가 (코드로 본다 — 실제로 올리면 파일이 남는다)
+    if (ctx.level.atLeast('expert')) { const up = uploadLimits(ctx); if (up.length) checks.push(owasp('A04', checkItems('파일 업로드에 종류·크기 제한이 있다', up))); }
+    if (!ctx.live) return checks.length ? { checks, partial: '서버가 꺼져 있어 요청 크기·목록 검사는 건너뛰었다' } : { skip: '서버가 꺼져 있다' };
     const as = ctx.sessions.owner ? 'owner' : 'anon';
     // 1. 본문 크기 상한 — 5MB 를 받아 주면 서버 메모리를 쉽게 채운다
     const big = [];

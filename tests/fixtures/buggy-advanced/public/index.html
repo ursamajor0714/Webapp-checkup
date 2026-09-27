@@ -1,0 +1,8 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>메모</title></head><body>
+<h1>메모</h1>
+<p id="lead">오늘 적을 것을 남기세요.</p>
+<ul id="list"><li>첫 메모</li><li>둘째 메모</li><li>셋째 메모</li></ul>
+<script>
+// 늦게 도착한 배너가 위에 끼어들어 본문을 아래로 민다 (레이아웃 이동 — CLS)
+setTimeout(() => { const b = document.createElement('div'); b.style.cssText = 'height:320px;background:#fde'; b.textContent = '공지'; document.body.insertBefore(b, document.body.firstChild); }, 600);
+</script></body></html>

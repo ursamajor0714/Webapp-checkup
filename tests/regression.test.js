@@ -9,11 +9,11 @@ const path = require('path');
 const runner = require('../common/runner');
 const serve = require('../common/serve');
 
-async function qa(fixture, def = {}) {
+async function qa(fixture, def = {}, opt = {}) {
   // 원본을 더럽히지 않게 임시 폴더로 복사한다 (검사가 데이터를 만들고, 서버가 파일을 쓸 수 있다)
   const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qa-reg-')), fixture);
   fs.cpSync(path.join(__dirname, 'fixtures', fixture), root, { recursive: true });
-  const prep = await runner.prepare({ id: `test-${fixture}`, root, ...def });
+  const prep = await runner.prepare({ id: `test-${fixture}`, root, ...def }, opt);
   const results = [];
   try {
     for (const p of prep.probes) results.push(await runner.runProbe(prep.ctx, p));
@@ -112,4 +112,21 @@ test('부작용 — 검사가 대상에 흔적을 남기지 않는다 (문자 �
   // 4. 응답하지 않는 경로 때문에 멈추지 않고, 그 경로를 문제로 적는다
   assert.ok(ev.filter(e => e.type === 'hang').length <= 2, '멈춘 경로를 계속 다시 기다렸다');
   caught(rep, '9', /GET \/api\/report.*응답이 없다/);
+});
+
+test('고급·전문가 — 권한 상승·동시 수정·CSRF·오픈 리다이렉트·세션 고정·업로드·HSTS·Web Vitals 를 잡는다', { timeout: 600000 }, async t => {
+  const rep = await qa('buggy-advanced', { auth: { user: 'owner1', password: 'Right-pw1' } }, { level: 'expert', log: () => {} });
+  assert.ok(rep.summary.live, '서버를 켜서 잰다: ' + rep.summary.notes.join(' / '));
+  assert.ok(rep.results.every(r => !r.error), '실행 오류 없음: ' + rep.results.filter(r => r.error).map(r => `${r.id} ${r.error}`).join(' / '));
+  caught(rep, 'C', /POST \/api\/signup.*관리자 권한/);                 // 가입 때 role:'admin' 이 먹힌다
+  caught(rep, 'R', /PATCH \/api\/notes\/:id.*한쪽 수정이 사라졌다/);     // 동시 수정 유실
+  caught(rep, 'H', /POST \/api\/notes.*받아 줬다/, { warnOk: true });   // CSRF — SameSite=Lax 라 △
+  caught(rep, 'H', /HSTS.*어디에도 없다/);                              // 전문가: HSTS 설정 없음
+  caught(rep, 'I', /GET \/go\?next=.*evil\.example/);                  // 오픈 리다이렉트
+  caught(rep, 'B', /sid.*로그인 뒤에도 같다/);                          // 전문가: 세션 고정
+  caught(rep, 'B', /60번 연달아/, { warnOk: true });                     // 전문가: 요청 제한 없음
+  caught(rep, 'O', /multer.*제한이 없다/);                               // 전문가: 업로드 제한 없음
+  const why = browserSkipped(rep);
+  if (why) return t.skip(`브라우저 없음 — 화면 검사 단정은 건너뜀 (${why})`);
+  caught(rep, '2', /CLS 0\.[1-9]/, { warnOk: true });                   // 늦게 끼어드는 배너가 화면을 민다
 });

@@ -9,6 +9,42 @@ const REQUIRED = [
   ['content-security-policy', /default-src|script-src/i, '허락한 스크립트만'],
 ];
 
+async function csrfLive(ctx) {
+  const owner = ctx.sessions.owner;
+  // 토큰(Authorization) 로그인은 브라우저가 다른 사이트 요청에 자동으로 싣지 않는다 — 쿠키 로그인만 본다
+  if (!owner || owner.token || !Object.keys(owner.cookies || {}).length) return [];
+  const { request, Session } = require('../../session');
+  const { baseline, untouchable } = require('../../generate');
+  const raw = (ctx.loginResponse && ctx.loginResponse.cookies || []).join(' ; ');
+  const sameSite = /samesite=strict/i.test(raw) ? 'Strict' : /samesite=lax/i.test(raw) ? 'Lax' : /samesite=none/i.test(raw) ? 'None' : '없음';
+  const items = [];
+  const idOf = b => b && (b.id ?? b._id ?? b.pk ?? (b.data && (b.data.id ?? b.data._id)));
+  for (const c of (ctx.contracts || []).filter(x => x.method === 'POST' && !x.path.includes(':') && !/register|signup|join|login|signin|logout|auth|token/i.test(x.path) && !untouchable(ctx, x)).slice(0, 3)) {
+    // 로그인 쿠키만 들고, CSRF 토큰 없이, 다른 사이트 출처로
+    const s = new Session('csrf'); s.cookies = { ...owner.cookies };
+    const body = baseline(c.fields);
+    const r = c.form
+      ? await request(ctx.baseUrl(c.service), s, c.path, { method: 'POST', form: Object.fromEntries(Object.entries(body).map(([k, v]) => [k, String(v)])), headers: { Origin: 'https://evil.example', Referer: 'https://evil.example/' } })
+      : await request(ctx.baseUrl(c.service), s, c.path, { method: 'POST', body, headers: { Origin: 'https://evil.example', Referer: 'https://evil.example/' } });
+    if (r.status < 300 && idOf(r.body) !== undefined) ctx.created && ctx.created.push({ path: c.path, id: String(idOf(r.body)), service: c.service, as: 'owner' });
+    const accepted = c.form ? (r.status === 302 || r.status === 303) && !/login/.test(r.location || '') : r.status < 300;
+    const name = `POST ${c.path} · 다른 사이트 출처 + 로그인 쿠키 + 토큰 없음`;
+    if (!accepted) items.push({ name, ok: r.status < 500, detail: r.status < 500 ? `${r.status} 막음` : `서버 오류 ${r.status}` });
+    else if (sameSite === 'Strict') items.push({ name, ok: true, detail: `${r.status} 받았지만 로그인 쿠키가 SameSite=Strict 라 브라우저가 다른 사이트 요청에 싣지 않는다` });
+    else items.push({ name, ok: sameSite === 'Lax' ? null : false, detail: `${r.status} 받아 줬다 — 서버가 출처(Origin)도 CSRF 토큰도 확인하지 않는다. 로그인 쿠키 SameSite=${sameSite}${sameSite === 'Lax' ? ' 라 요즘 브라우저의 기본 보호(다른 사이트 POST 에 쿠키 안 실음)에만 기대고 있다' : ' — 다른 사이트가 로그인한 사용자 대신 저장할 수 있다'}` });
+  }
+  return items;
+}
+function hstsConfig(ctx) {
+  const fs = require('fs'), path = require('path');
+  const { read, walk } = require('../_util');
+  const src = ctx.serverSrc + '\n' + ['vercel.json', 'netlify.toml', '_headers', 'next.config.js', 'next.config.mjs', 'next.config.ts', 'nginx.conf', 'firebase.json'].map(f => read(path.join(ctx.root, f))).join('\n')
+    + walk(ctx.root, ['.properties', '.yml', '.yaml']).filter(f => !/node_modules/.test(f)).map(read).join('\n');
+  const how = /\bhelmet\s*\(/.test(src) ? 'helmet()' : /Strict-Transport-Security|strictTransportSecurity|\bhsts\s*[:(]/i.test(src) ? 'Strict-Transport-Security 설정' : /SECURE_HSTS_SECONDS\s*=\s*[1-9]/.test(src) ? 'SECURE_HSTS_SECONDS' : /httpStrictTransportSecurity|\.hsts\(/.test(src) ? 'Spring Security hsts' : null;
+  const host = fs.existsSync(path.join(ctx.root, 'vercel.json')) || /vercel/i.test(Object.keys(require('../../stacks/util').pkgDeps(ctx.root) || {}).join(' ')) ? 'Vercel' : null;
+  return [{ name: 'HSTS', ok: how ? true : host ? null : false, detail: how ? `${how} 로 붙인다` : host ? `${host} 는 기본으로 HSTS 를 붙인다 — 배포 주소에서 한 번 확인` : '코드·배포 설정 어디에도 없다 — 처음 http 로 들어온 사용자가 가로채일 수 있다 (Express: helmet() · Django: SECURE_HSTS_SECONDS · Next: headers() · 호스팅 설정)' }];
+}
+
 module.exports = {
   id: 'H', name: 'HTTP 보안 헤더·설정', weight: 4, owasp: ['A05', 'A02'],
   async run(ctx) {
@@ -69,6 +105,10 @@ module.exports = {
       }
     }
     checks.push(owasp('A05', checkItems('코드에 운영 설정 실수가 없다 (DEBUG·CORS·스택트레이스)', mis.length ? mis : [{ name: '설정 파일 검사', ok: true, detail: '걸린 것 없음' }])));
+    // 고급부터 — 다른 사이트에서 로그인한 사용자 대신 저장 요청을 보내면 받아 주는가 (쿠키 로그인일 때만 뜻이 있다)
+    if (ctx.level.atLeast('advanced')) { const c = await csrfLive(ctx); if (c.length) checks.push(owasp('A01', checkItems('다른 사이트에서 보낸 저장 요청을 막는다 (CSRF)', c))); }
+    // 전문가 — HSTS 를 코드·배포 설정에서 붙이는가 (로컬 http 에선 응답으로 알 수 없어 설정을 본다)
+    if (ctx.level.atLeast('expert') && ctx.services.length) checks.push(owasp('A02', checkItems('HTTPS 강제(HSTS)를 코드·배포 설정에서 붙인다', hstsConfig(ctx))));
     return { checks };
   },
 };

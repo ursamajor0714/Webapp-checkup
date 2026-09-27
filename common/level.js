@@ -14,18 +14,20 @@ const LEVELS = {
     id: 'standard', label: '중급', desc: '서비스 품질 — 입력 검증·응답 규격·접근성·보안 헤더·로그·개인정보·외부 서비스 제한 시간',
     areas: ['1', '2', '3', '4', '5', '6', '7', '9', '10', '11', 'G', 'N', 'U', 'Z', 'A', 'J', 'D', 'E', 'F', 'L', 'M', 'O', 'Q', 'T', 'K', 'B', 'C', 'H', 'I', 'P', 'V'], scale: 0.75, strict: false,
   },
-  advanced: { id: 'advanced', label: '고급', desc: '전체 영역 — 동시성·상태 전이·기능 간섭·업무 흐름·장애 대응까지', areas: null, scale: 1, strict: false },
-  expert: { id: 'expert', label: '전문가', desc: '현역 출시 기준 — 두 배로 넓게, 확인 필요(△)도 감점, 접근성·속도 기준을 엄하게', areas: null, scale: 2, strict: true },
+  advanced: { id: 'advanced', label: '고급', desc: '전체 영역 — 동시성·업무 흐름·장애 대응 + 권한 상승·동시 수정 유실·CSRF·오픈 리다이렉트·Core Web Vitals', areas: null, scale: 1, strict: false },
+  expert: { id: 'expert', label: '전문가', desc: '현역 출시 기준 — 고급 + 세션 고정·API 요청 제한·업로드 제한·HSTS, 두 배로 넓게, 확인 필요(△)도 감점', areas: null, scale: 2, strict: true },
 };
 const ALIAS = { 초급: 'basic', 중급: 'standard', 고급: 'advanced', 전문가: 'expert', 현역: 'expert', beginner: 'basic', intermediate: 'standard', full: 'advanced', pro: 'expert' };
 const DEFAULT = 'advanced';
+const RANK = { basic: 0, standard: 1, advanced: 2, expert: 3 };
 
 function levelOf(name) {
   const k = String(name || DEFAULT).trim().toLowerCase();
   const L = LEVELS[k] || LEVELS[ALIAS[k]] || LEVELS[ALIAS[String(name || '').trim()]];
   if (!L) throw new Error(`없는 검사 수준: ${name} (basic·standard·advanced·expert 또는 초급·중급·고급·전문가)`);
   // n(기본 한도) — 이 수준에서 여는 화면·누르는 버튼 수
-  return { ...L, n: base => Math.max(1, Math.round(base * L.scale)), includes: id => !L.areas || L.areas.includes(String(id)) };
+  // atLeast('advanced') — 이 수준 이상에서만 도는 검사 (고급: 권한 상승·동시 수정·CSRF·오픈 리다이렉트·Web Vitals / 전문가: 세션 고정·요청 제한·업로드 제한·HSTS)
+  return { ...L, n: base => Math.max(1, Math.round(base * L.scale)), includes: id => !L.areas || L.areas.includes(String(id)), atLeast: lv => RANK[L.id] >= RANK[lv] };
 }
 
 module.exports = { LEVELS, DEFAULT, levelOf };

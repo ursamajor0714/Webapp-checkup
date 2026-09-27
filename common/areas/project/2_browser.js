@@ -16,7 +16,7 @@ module.exports = {
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다 — 서버를 켜거나, 끈 채로 돌리면 QA 가 켠다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
-    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [], fwItems = [], storm = [], meta = [];
+    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [], fwItems = [], storm = [], meta = [], vitals = [];
     const skipped = [];
     try {
       const base0 = ctx.baseUrl(start[0].part);
@@ -100,6 +100,21 @@ module.exports = {
             meta.push({ name: where, ok: !m.title || !m.viewport ? false : miss.length ? null : true, detail: miss.length ? `없음: ${miss.join(', ')}${!m.title ? ' — 탭·즐겨찾기에 주소만 보인다' : ''}` : `제목 "${m.title.slice(0, 40)}" · 설명·공유 미리보기·파비콘 있음` });
           }
         }
+        // 3-1) Core Web Vitals (고급부터) — 늦게 끼어드는 요소가 화면을 미는가(CLS) · 가장 큰 내용이 언제 그려지나(LCP)
+        if (!from && ctx.level.atLeast('advanced')) {
+          const v = await page.evaluate(() => new Promise(done => {
+            let cls = 0, lcp = 0;
+            try {
+              new PerformanceObserver(l => { for (const e of l.getEntries()) if (!e.hadRecentInput) cls += e.value; }).observe({ type: 'layout-shift', buffered: true });
+              new PerformanceObserver(l => { const es = l.getEntries(); if (es.length) lcp = es[es.length - 1].startTime; }).observe({ type: 'largest-contentful-paint', buffered: true });
+            } catch { /* 지원하지 않는 브라우저 */ }
+            setTimeout(() => done({ cls: Math.round(cls * 1000) / 1000, lcp: Math.round(lcp) }), 300);
+          })).catch(() => null);
+          if (v) {
+            const bad = v.cls > 0.25 || v.lcp > 4000, warn = v.cls > 0.1 || v.lcp > 2500;
+            vitals.push({ name: where, ok: bad ? false : warn ? null : true, detail: `CLS ${v.cls} (좋음 ≤0.1) · LCP ${(v.lcp / 1000).toFixed(1)}초 (좋음 ≤2.5초)${v.cls > 0.1 ? ' — 늦게 나타나는 요소가 본문을 민다. 자리를 미리 잡아 둔다 (이미지 width·height, 배너 높이)' : ''}${v.lcp > 2500 ? ' — 첫 화면의 큰 내용이 늦다 (개발 서버라면 배포 빌드로 다시)' : ''}` });
+          }
+        }
         // 4) 무게·속도 — 시작 화면만. 개발 서버(vite dev·next dev)는 압축·묶음 전이라 부풀어 보인다
         if (!from) {
           const m = await page.evaluate(() => {
@@ -137,6 +152,7 @@ module.exports = {
       checkItems('이미지가 깨지지 않는다', imgs),
       checkItems('모바일 폭(375px)에서 가로로 넘치지 않는다', mobile.length ? mobile : [{ name: '모바일', ok: null, detail: '열지 못함' }]),
       ...(perf.length ? [checkItems('화면이 가볍고 빨리 뜬다 (JS 1.5MB·4초 이하)', perf)] : []),
+      ...(vitals.length ? [checkItems('Core Web Vitals — 화면이 밀리지 않고(CLS) 큰 내용이 빨리 뜬다(LCP)', vitals)] : []),
       checkItems('프레임워크 경고가 없다 (하이드레이션 불일치·React key·무한 갱신)', fwItems),
       ...(storm.length ? [checkItems('가만히 둔 화면이 요청을 쏟아내지 않는다 (10초)', storm)] : []),
       ...(meta.length ? [checkItems('제목·설명·공유 미리보기·파비콘이 있다', meta)] : []),
