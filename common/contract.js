@@ -340,7 +340,8 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
   const items = [];
   const PUBLICISH = /(^|\/)(login|signin|logout|register|signup|join|health|healthz|ping|status|csrf|refresh|token|oauth|callback|verify|me|session|whoami|password_reset|password-reset|reset|forgot)(\/|$)/i;
   const same = (a, b) => JSON.stringify(a && a.body) === JSON.stringify(b && b.body);
-  for (const r of routes.filter(r => !pub.includes(`${r.method} ${r.path}`))) {
+  const outside = ctx.outsideRoutes || new Set();
+  for (const r of routes.filter(r => !pub.includes(`${r.method} ${r.path}`) && !outside.has(`${r.method} ${r.path}`))) {
     const url = r.method === 'DELETE' ? `${r.path}?id=qa-gen-nobody` : r.path;
     const body = ['POST', 'PUT', 'PATCH'].includes(r.method) ? bodyFor(r) : undefined;
     // 읽기 경로는 로그인한 응답과 견준다 — 누구에게나 같은 내용이면 '공개 목록' 일 수 있다 (의도인지 사람이 확인)
@@ -358,7 +359,7 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
       else if (!blocked && res.status === 404) { ok = null; detail = `404 — 없는 대상이라 인증 여부를 알 수 없다`; }
       items.push({ name: `${r.method} ${r.path} · ${label}`, ok, detail });
     }
-    if (real) {
+    if (real && !/logout|signout|withdraw|unregister/i.test(r.path)) {
       const res = mine || await ctx.call(url, { method: r.method, as: realAs, body });
       // 403 은 '로그인은 됐지만 이 역할로는 못 쓴다' 라서 인증 실패가 아니다
       const passes = res.status !== 401;

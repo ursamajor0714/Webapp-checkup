@@ -15,6 +15,8 @@ const crypto = require('crypto');
 const { valueCases, sampleOf } = require('./contract');
 
 const DANGEROUS = /logout|otp|totp|mfa|2fa|verify|signout|withdraw|unregister|delete|remove|destroy|reset|password|send|sms|mail|email\/|notify|push|payment|pay\b|charge|order|refund|refresh|revoke|presign|upload|import|export|backup|restore|seed|shutdown|deploy|webhook/i;
+// 건드리지 않는 경로 — 이름이 위험하거나(DANGEROUS), 처리 코드가 문자·메일·결제처럼 밖으로 보내는 경로(ctx.outsideRoutes)
+const untouchable = (ctx, r) => (DANGEROUS.test(r.path) && !/register|signup|join/i.test(r.path)) || !!(ctx.outsideRoutes && ctx.outsideRoutes.has(`${r.method} ${r.path}`));
 const UNIQUE = /email|username|user_?id|login_?id|nickname|nick|name|phone|mobile|code|slug|title/i;
 
 const tag = () => crypto.randomBytes(3).toString('hex');
@@ -85,7 +87,7 @@ function judge(expect, status, base, form, loc) {
  */
 async function fuzzRoute(ctx, c, { as = 'owner', limit = 400 } = {}) {
   const sess = ctx.sessions[as] ? as : 'anon';
-  if (DANGEROUS.test(c.path) && !/register|signup|join/i.test(c.path)) return { items: [], skipped: `${c.method} ${c.path} — 밖에 흔적이 남거나 세션을 끊는 경로라 건드리지 않음` };
+  if (untouchable(ctx, c)) return { items: [], skipped: `${c.method} ${c.path} — 밖에 흔적이 남거나(문자·메일·결제) 세션을 끊는 경로라 건드리지 않음` };
   const url = await fillPath(ctx, c, sess);
   const send = body => c.form
     ? ctx.call(url, { service: c.service, as: sess, method: c.method, form: Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])), headers: { Referer: ctx.baseUrl(c.service) + url }, withFormCsrf: true })
@@ -129,7 +131,7 @@ async function fuzzRoute(ctx, c, { as = 'owner', limit = 400 } = {}) {
 const SHAPES = [['빈 객체 {}', '{}'], ['배열 []', '[]'], ['문자열', '"x"'], ['null', 'null'], ['깨진 JSON', '{"a":'], ['빈 본문', ''], ['아주 깊은 중첩', '{"a":'.repeat(1500) + '1' + '}'.repeat(1500)], ['프로토타입 오염', '{"__proto__":{"qaPolluted":true},"constructor":{"prototype":{"qaPolluted":true}}}']];
 async function shapeRoute(ctx, r, { as = 'owner' } = {}) {
   const sess = ctx.sessions[as] ? as : 'anon';
-  if (DANGEROUS.test(r.path) && !/register|signup|join/i.test(r.path)) return { items: [], skipped: `${r.method} ${r.path} — 건드리지 않는 경로` };
+  if (untouchable(ctx, r)) return { items: [], skipped: `${r.method} ${r.path} — 건드리지 않는 경로 (밖으로 보내거나 세션을 끊는다)` };
   const url = await fillPath(ctx, r, sess);
   const items = [];
   for (const [label, raw] of SHAPES) {
@@ -143,4 +145,4 @@ async function shapeRoute(ctx, r, { as = 'owner' } = {}) {
   return { items };
 }
 
-module.exports = { fuzzRoute, shapeRoute, fillPath, DANGEROUS, baseline };
+module.exports = { fuzzRoute, shapeRoute, fillPath, DANGEROUS, untouchable, baseline };

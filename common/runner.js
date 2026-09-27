@@ -53,6 +53,8 @@ function resolveProject(arg) {
   const defs = projectDefs();
   if (defs[arg]) return defs[arg];
   const abs = path.resolve(arg.replace(/^~/, require('os').homedir()));
+  const same = Object.values(defs).find(d => d.root && path.resolve(String(d.root).replace(/^~/, require('os').homedir())) === abs);
+  if (same) return same;
   if (fs.existsSync(abs)) return { id: path.basename(abs), root: abs };
   throw new Error(`프로젝트를 찾을 수 없다: ${arg} (projects/ 의 이름이나 레포 폴더 경로)`);
 }
@@ -90,6 +92,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   ctx.authService = (routes.find(r => r.path === auth.loginPath) || {}).service || (ctx.primary && ctx.primary.id);
 
   require('./session').timings.length = 0;
+  require('./session').hung.clear();
   ctx.ignores = require('./ignore').load(project.root);   // 무시 목록   // 응답 시간 기록은 이번 검사 것만
   // 꺼진 서버는 직접 켠다 (설치·빌드·실행) — '딱 실행' 하면 서버까지 올라와 끝까지 잰다. 로그는 '서버 로그 오류' 영역이 읽는다
   const serve = require('./serve');
@@ -128,7 +131,12 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   ctx.up = up;
   // 화면 서버(따로 뜨는 React·정적 사이트) — 꺼져 있으면 화면 검사만 건너뛴다
   for (const c of ctx.clients.filter(c => c.baseUrl && !c.servedBy && !c.native)) { try { up[c.id] = (await request(c.baseUrl, null, '/', {})).status > 0; } catch { up[c.id] = false; } }
-  ctx.live = ctx.services.length > 0 && ctx.services.every(s => up[s.id]);
+  // 뜬 서버는 잰다 — 못 뜬 서버의 경로·규칙만 뺀다
+  const allRoutes = ctx.routes();
+  ctx.allRoutes = () => allRoutes;   // 코드만 보는 검사(A·L 등)는 못 뜬 서버의 경로까지 본다
+  const downSvc = new Set(ctx.services.filter(s => !up[s.id]).map(s => s.id));
+  if (downSvc.size && downSvc.size < ctx.services.length) ctx.routes = () => allRoutes.filter(r => !downSvc.has(r.service));
+  ctx.live = ctx.services.length > 0 && ctx.services.some(s => up[s.id]);
   ctx.pagesLive = ctx.pages().some(pg => up[pg.part]);
   const downClients = ctx.clients.filter(c => up[c.id] === false);
   if (downClients.length) ctx.notes.push(`꺼진 화면 서버: ${downClients.map(c => `${c.id}(${c.baseUrl})`).join(', ')} — 화면을 여는 검사는 건너뛴다`);
@@ -136,7 +144,10 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
 
   // 규칙 — 설정에 적은 것 + 코드에서 뽑은 것
   const { STACKS } = require('./stacks');
-  ctx.contracts = [...(def.contracts || []), ...ctx.services.flatMap(s => extractContracts(s, routes.filter(r => r.service === s.id), s.stack).map(c => ({ ...c, service: s.id })))];
+  ctx.contracts = [...(def.contracts || []), ...ctx.services.filter(s => up[s.id]).flatMap(s => extractContracts(s, routes.filter(r => r.service === s.id), s.stack).map(c => ({ ...c, service: s.id })))];
+  const SIDE = /(?<!function\s+)\b(?:sendSms|sendMail|sendEmail|sendKakao|sendPush)\s*\(|\b(?:nodemailer|aligo|twilio|solapi|coolsms|stripe|tosspayments|portone|iamport)\b[\w.]*\s*\(|fetch\(\s*['"`]https?:/;
+  const outside = routes.filter(r => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method) && SIDE.test(r.handler || ''));
+  if (outside.length) { const k = new Set(outside.map(r => `${r.method} ${r.path}`)); ctx.contracts = ctx.contracts.filter(c => !k.has(`${c.method} ${c.path}`)); ctx.outsideRoutes = k; ctx.notes.push(`처리 코드가 밖으로 보내는(문자·메일·결제) 경로 ${outside.length}개는 건드리지 않는다: ${[...k].join(', ')}`); }
   log(`규칙 ${ctx.contracts.length}개 (엄격 ${ctx.contracts.filter(c => c.strict).length}) · 경로 ${routes.length} · 화면 호출 ${ctx.calls().length}`);
 
   // 로그인 — 설정 계정, 없으면 가입해서 만든 계정
@@ -166,8 +177,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       let a = accounts[i]; if (!a) break;
       let l = await login(base, auth, a, name);
       if (!l.ok && a.from === '설정') {
-        const locked = /429/.test(l.why || '');
-        setupFail.push(`⚙ 설정의 ${name === 'owner' ? '첫' : '두'} 번째 계정(${a.user || '비밀번호만'})으로 로그인하지 못했다: ${l.why}${locked ? ' — 직전 검사의 무차별 대입 검사로 잠겼을 수 있다. 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ' — 아이디·비밀번호를 확인한다'}`);
+        const locked = /\b(429|423)\b|잠김|잠겼|locked|too many/i.test(l.why || '');
+        setupFail.push(`⚙ 설정의 ${name === 'owner' ? '첫' : '두'} 번째 계정(${a.user || '비밀번호만'})으로 로그인하지 못했다: ${l.why}${locked ? ' — 계정이 잠겨 있다 (직전 검사의 무차별 대입 검사로 잠겼을 수 있다). 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ' — 아이디·비밀번호를 확인한다'}`);
         // 가입 경로가 있으면 검사용 계정을 만들어 이어 간다
         if (reg && def.autoAccounts !== false) {
           const r = await register(base, auth, reg, regContract ? Object.keys(regContract.fields) : []);
@@ -182,7 +193,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     if (setupFail.length) {
       ctx.setupErrors = setupFail;
       // 설정 계정도, 대신 만든 계정도 없으면 로그인이 꼭 필요한 영역은 '설정 오류로 못 잼'
-      if (!ctx.sessions.owner) ctx.setupBlocked = setupFail[0];
+      if (!ctx.sessions.owner) { ctx.setupBlocked = setupFail[0]; ctx._uiLogin = { ok: false, why: '설정 계정으로 API 로그인이 안 돼 화면 로그인은 하지 않았다 (잠금 횟수를 쌓지 않게)' }; }
     }
     if (ctx.sessions.owner) {
       const l2 = await login(base, auth, accounts[0], 'attacker');
@@ -207,6 +218,11 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     if (!ctx.accountFlow.length) delete ctx.accountFlow;
   }
 
+  // 검사가 만든 것 — POST 가 2xx 로 id 를 돌려주면 기록해 두고 finish 에서 지운다
+  ctx.created = [];
+  const rawCall = ctx.call.bind(ctx);
+  const idOfBody = b => { for (const o of [b, b && b.data, b && b.item, b && b.result]) if (o && typeof o === 'object' && !Array.isArray(o)) for (const k of ['id', '_id', 'pk', 'uuid']) if (o[k] !== undefined && o[k] !== null) return String(o[k]); return null; };
+  ctx.call = async (p, o = {}) => { const r = await rawCall(p, o); if ((o.method || 'GET') === 'POST' && r.status >= 200 && r.status < 300) { const id = idOfBody(r.body); if (id) ctx.created.push({ path: p.split('?')[0], id, service: o.service, as: o.as }); } return r; };
   // 비어 있는 목록이 있으면 검사용 데이터를 몇 개 만든다 (끝나면 지운다)
   if (def.seed !== false) await require('./seed').seed(ctx, log).catch(e => ctx.notes.push(`검사용 데이터를 만들지 못했다: ${e.message}`));
   const all = listAreas(def);
@@ -221,7 +237,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
 
 // ── 영역 하나 실행
 // 로그인한 계정으로 서버를 두드려야만 뜻이 있는 영역 — 로그인이 설정 오류로 막히면 익명 결과(401 투성이)가 잡음이 된다
-const LOGIN_ONLY = new Set(['W', 'X', 'Y', 'M', 'R', 'S', 'D', 'E', 'F', 'J', 'O', 'Q', 'Z', 'C']);
+const LOGIN_ONLY = new Set(['W', 'X', 'Y', 'M', 'R', 'S', 'E', 'F', 'J', 'O', 'Z', 'C']);
 async function runProbe(ctx, probe) {
   const t0 = Date.now();
   if (ctx.setupBlocked && LOGIN_ONLY.has(probe.id)) {
@@ -368,7 +384,8 @@ function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
     try { const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (r.summary && r.summary.full !== false && ((r.summary.level && r.summary.level.id) || 'advanced') === level && (r.results || []).length >= results.length - 2) { prev = r; prevFile = f; break; } } catch { /* 깨진 파일 */ }
   }
   if (!prev) return null;
-  const a = failKeys(prev.results), b = failKeys(results);
+  const measuredBoth = new Set(results.filter(r => !r.skip && (prev.results || []).some(p => p.id === r.id && !p.skip)).map(r => r.id));
+  const a = failKeys((prev.results || []).filter(r => measuredBoth.has(r.id))), b = failKeys(results.filter(r => measuredBoth.has(r.id)));
   const added = [...b.entries()].filter(([k]) => !a.has(k)).map(([, v]) => v);
   const fixed = [...a.entries()].filter(([k]) => !b.has(k)).map(([, v]) => v);
   // 점수가 왜 바뀌었나 — 영역마다 전과 후, 그리고 이유 (못 잰 영역이 달라졌나 · 검사 수가 달라졌나 · 확인 필요가 달라졌나)
@@ -403,6 +420,16 @@ function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
 async function finish(prep, results, { save = true } = {}) {
   const { ctx, project, todo } = prep;
   if (ctx.seeded && ctx.seeded.length) { const n = await require('./seed').cleanup(ctx).catch(() => 0); if (n) ctx.notes.push(`검사용 데이터 ${n}개를 지웠다`); }
+  if (ctx.created && ctx.created.length) {
+    const routes = ctx.routes(); let gone = 0; const left = new Map();
+    for (const c of ctx.created.reverse()) {
+      const del = routes.find(r => r.method === 'DELETE' && r.path.replace(/\/:[\w]+$/, '') === c.path.replace(/\/+$/, ''));
+      if (!del) { left.set(c.path, (left.get(c.path) || 0) + 1); continue; }
+      const r = await ctx.call(del.path.replace(/:[\w]+/, encodeURIComponent(c.id)), { service: c.service, as: ctx.sessions.owner ? 'owner' : 'anon', method: 'DELETE' }).catch(() => null);
+      if (r && r.status < 300) gone++; else left.set(c.path, (left.get(c.path) || 0) + 1);
+    }
+    ctx.notes.push(`검사가 만든 것 ${ctx.created.length}개 중 ${gone}개를 지웠다${left.size ? ` · 남긴 것: ${[...left].map(([p, n]) => `${p} ${n}개`).join(', ')} (지우는 경로가 없거나 거절)` : ''}`);
+  }
   const measured = results.filter(r => !r.skip);
   const tot = k => measured.reduce((s, r) => s + r[k], 0);
   const { scanRate, quality } = scoreOf(results);
@@ -438,6 +465,7 @@ async function finish(prep, results, { save = true } = {}) {
     saas: ((results.find(r => r.id === '11') || {}).info || {}).items || null,
     level: { id: ctx.level.id, label: ctx.level.label, desc: ctx.level.desc, strict: ctx.level.strict },
     qa: qaVersion(),
+    coverage: { measured: measured.length, total: results.length },   // 잰 영역 / 돌린 영역 — 점수와 꼭 같이 본다
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
   summary.full = !prep.only || !prep.only.length;
@@ -459,7 +487,7 @@ function maturityLabel(m) { const r = m.got / (m.total || 1); return r >= 0.75 ?
 // GitHub Actions 요약 (마크다운)
 function ciMarkdown(report, reasons) {
   const s = report.summary, d = s.diff;
-  const L = [`## QA — ${s.target} (${s.level ? s.level.label : '고급'})`, '', `**제품 점수 ${s.score}** (${s.grade}) · 운영 성숙도 ${s.maturity.got}/${s.maturity.total} · 검사 ${s.scanned} · 손댈 곳 ${s.actionable ? s.actionable.fix : '-'}곳 (문제 ${s.failed}건) · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
+  const L = [`## QA — ${s.target} (${s.level ? s.level.label : '고급'})`, '', `**제품 점수 ${s.score}** (${s.grade}) · 잰 영역 ${s.coverage.measured}/${s.coverage.total} · 운영 성숙도 ${s.maturity.got}/${s.maturity.total} · 검사 ${s.scanned} · 손댈 곳 ${s.actionable ? s.actionable.fix : '-'}곳 (문제 ${s.failed}건) · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
   if (reasons.length) L.push(`> ✗ 실패: ${reasons.join(' · ')}`, '');
   if (d && d.added.length) { L.push('### 새로 생긴 문제', '', '| 영역 | 검사 | 항목 |', '|---|---|---|'); for (const x of d.added.slice(0, 30)) L.push(`| ${x.area} | ${x.check.replace(/\|/g, '/')} | ${String(x.item).replace(/\|/g, '/').slice(0, 120)} |`); L.push(''); }
   if ((s.top || []).length) { L.push('### 먼저 고칠 것', ''); s.top.forEach((t, i) => L.push(`${i + 1}. **[${t.area}] ${t.check}** — ${t.failed}건 · ${(t.examples[0] || '').replace(/\|/g, '/').slice(0, 140)}`)); L.push(''); }
@@ -502,6 +530,8 @@ async function run(arg) {
   const failNew = ci || args.includes('--fail-on-new');
   const reasons = [];
   if (under !== null && report.summary.score < under) reasons.push(`점수 ${report.summary.score} < 기준 ${under}`);
+  const measuredAreas = results.filter(r => !r.skip).length;
+  if ((ci || under !== null) && measuredAreas < results.length / 2) reasons.push(`잰 영역이 ${measuredAreas}/${results.length} 뿐이다 (서버를 켜지 못했거나 로그인하지 못했다) — 점수를 믿을 수 없다`);
   if (failNew && report.summary.diff && report.summary.diff.addedCount > 0) reasons.push(`지난 검사보다 새 문제 ${report.summary.diff.addedCount}건`);
   if (process.env.GITHUB_STEP_SUMMARY) { try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, ciMarkdown(report, reasons)); } catch { /* 요약은 덤 */ } }
   let ciLine = null;
@@ -519,7 +549,7 @@ async function run(arg) {
     const blocked = s.skippedAreas.filter(a => a.setup);
     if (blocked.length) console.log(`  → 이 때문에 못 잰 영역 ${blocked.length}개: ${blocked.map(a => a.id).join(' ')} — 설정을 고치고 다시 돌리면 잰다`);
   }
-  console.log(`제품 점수 ${s.score} (등급 ${s.grade}) · 운영 성숙도 ${s.maturity.got}/${s.maturity.total} (${s.maturity.label}) — 두 점수는 따로 본다`);
+  console.log(`제품 점수 ${s.score} (등급 ${s.grade}) · ${s.coverage.total}개 영역 중 ${s.coverage.measured}개를 잼${s.coverage.measured < s.coverage.total / 2 ? ' — 절반도 못 재서 점수를 믿기 어렵다' : ''} · 운영 성숙도 ${s.maturity.got}/${s.maturity.total} (${s.maturity.label}) — 두 점수는 따로 본다`);
   const miss = report.maturity.items.filter(i => !i.ok).sort((a, b) => b.plus - a.plus);
   if (miss.length) {
     console.log(`\n◆ 운영 성숙도 — 빠진 것 ${miss.length}개 (다 갖추면 ${report.maturity.total}/${report.maturity.total})`);

@@ -45,7 +45,7 @@ details.area{background:var(--panel);border:1px solid var(--line);border-radius:
 <h1>QA 리포트 — ${esc(s.target)}</h1>
 <div class="muted">${esc(String(s.at).slice(0, 16).replace('T', ' '))} (UTC) · ${esc(s.root)} · ${(s.parts || []).map(p => esc(`${p.stack}@${p.dir}`)).join(' · ')} · QA ${esc(s.qa ? s.qa.commit + (s.qa.dirty ? ` + 커밋 안 한 수정${typeof s.qa.dirty === 'string' ? `(${s.qa.dirty})` : ''}` : '') : '버전 모름')}</div>
 <div class="cards">
-  <div class="card"><div class="k">제품 점수${s.level ? ` · ${esc(s.level.label)} 검사` : ''}</div><div class="v">${esc(s.score)}</div><div class="k">등급 ${esc(s.grade)}${s.level && s.level.strict ? ' · 확인 필요도 감점' : ''}</div></div>
+  <div class="card"><div class="k">제품 점수${s.level ? ` · ${esc(s.level.label)} 검사` : ''}</div><div class="v">${esc(s.score)}</div><div class="k">등급 ${esc(s.grade)}${s.level && s.level.strict ? ' · 확인 필요도 감점' : ''}${s.coverage ? ` · 영역 ${esc(s.coverage.measured)}/${esc(s.coverage.total)} 잼` : ''}</div></div>
   <div class="card"><div class="k">운영 성숙도 (따로 본다)</div><div class="v">${esc(s.maturity.got)}/${esc(s.maturity.total)}</div><div class="k">${esc(s.maturity.label || '')}</div></div>
   ${s.actionable ? `<div class="card"><div class="k">손댈 곳</div><div class="v">${esc(s.actionable.fix)}곳</div><div class="k">문제 ${esc(s.actionable.failed)}건을 원인별로 묶음 · 사람이 볼 곳 ${esc(s.actionable.look)}곳</div></div>` : ''}
   <div class="card"><div class="k">검사 / 통과 / 문제 / 확인 필요</div><div class="v">${esc(s.scanned)}</div><div class="k">통과 ${esc(s.passed)} · 문제 ${esc(s.failed)} · 확인 ${esc(s.warned)} · 자동 생성 ${esc(s.generated ?? '-')}</div></div>

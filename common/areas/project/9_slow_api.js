@@ -9,7 +9,7 @@ const norm = p => p.replace(/\/\d+(?=\/|$)/g, '/:id').replace(/\/[0-9a-f]{8,}(?=
 module.exports = {
   id: '9', name: '느린 API', weight: 3, last: 2,
   async run(ctx) {
-    const rows = timings.filter(t => !t.big && t.status > 0);
+    const rows = timings.filter(t => !t.big && t.status > 0 && !(t.timedOut && t.ms < 1000));   // 다시 기다리지 않은 요청(바로 돌아옴)은 빼고
     if (rows.length < 20) return { skip: '재 볼 요청이 모자라다 (서버가 꺼져 있었거나 검사를 일부만 돌렸다)' };
     const by = new Map();
     for (const t of rows) { const k = `${t.method} ${norm(t.path)}`; (by.get(k) || by.set(k, []).get(k)).push(t.ms); }
@@ -19,6 +19,9 @@ module.exports = {
     }).sort((a, b) => b.med - a.med);
     const items = stats.filter(x => x.med > 300 || x.max > 1500).slice(0, 25).map(x => ({ name: x.k, ok: x.med > (ctx.level.strict ? 500 : 1000) || (ctx.level.strict && x.max > 3000) ? false : x.max > 3000 || x.med > 500 ? null : true,
       detail: `${x.n}번 · 보통 ${x.med}ms · 느릴 때 ${x.p95}ms · 최대 ${x.max}ms${x.med > 1000 ? ' — 사용자가 기다린다 (쿼리·외부 호출·N+1 확인)' : x.max > 3000 ? ' — 가끔 크게 튄다 (잠금·타임아웃·콜드 스타트 확인)' : ''}` }));
+    // 응답을 아예 안 준 경로 — 가장 나쁜 느림이다 (QA 는 15초 뒤 끊고 그 경로를 다시 기다리지 않았다)
+    const hungRoutes = [...new Set(rows.filter(t => t.timedOut).map(t => `${t.method} ${norm(t.path)}`))];
+    for (const k of hungRoutes) items.unshift({ name: k, ok: false, detail: '15초 안에 응답이 없다 — 서버가 요청을 붙잡고 끝내지 않는다 (응답을 보내지 않는 분기·풀리지 않는 대기·끝나지 않는 쿼리 확인)' });
     const all = rows.map(t => t.ms).sort((a, b) => a - b);
     items.push({ name: `전체 요청 ${rows.length}개 · 경로 ${stats.length}개`, ok: true, detail: `보통 ${all[Math.floor(all.length / 2)]}ms · 느릴 때(95%) ${all[Math.floor(all.length * 0.95)]}ms · 가장 느린 경로: ${stats.slice(0, 3).map(x => `${x.k} ${x.med}ms`).join(', ')}` });
     return { checks: [checkItems('API 가 빨리 답한다 (보통 1초·최대 3초 이하)', items)] };

@@ -193,3 +193,21 @@ test('지난 검사와 비교 — QA 버전이 같으면 조용하고, 다르면
   fs.writeFileSync(path.join(dir, '2026-01-02-00-00.json'), JSON.stringify({ summary: { full: true, rawScore: 100, level: { id: 'advanced' }, qa: { ...v1, dirty: 'c0ffee1' } }, results: res }));
   assert.strictEqual(diffWithPrevious(dir, res, 100, 'advanced', { ...v1, dirty: 'c0ffee1' }).qaNote, null, '똑같은 수정 상태끼리는 같은 버전');
 });
+
+test('폴더 경로로 받아도 같은 폴더를 가리키는 프로젝트 설정을 쓴다', () => {
+  const { resolveProject } = require('../common/runner');
+  const d = resolveProject(path.join(os.homedir(), 'Developer', 'CROSFIT-GROVE'));   // projects/crossfit-grove 의 root
+  assert.strictEqual(d.id, 'crossfit-grove');
+  assert.ok((d.publicRoutes || []).length > 0, '공개 경로 설정이 따라온다');
+});
+
+test('지난 검사와 비교 — 이번에 못 잰 영역의 옛 문제를 "고친 것" 으로 세지 않는다', () => {
+  const { diffWithPrevious } = require('../common/runner');
+  const dir = tmp();
+  const area = (id, o) => ({ id, name: id, weight: 5, universe: 4, scanned: 4, passed: 0, warned: 0, failed: 4, passRate: 0, checks: [{ name: 'N+1', items: [1, 2, 3, 4].map(i => ({ name: `f${i}.js`, ok: false, detail: 'x' })) }], ...o });
+  const ok = id => area(id, { failed: 0, passed: 4, passRate: 1, checks: [] });
+  fs.writeFileSync(path.join(dir, '2026-01-01-00-00.json'), JSON.stringify({ summary: { full: true, rawScore: 50, level: { id: 'advanced' } }, results: [area('Q'), ok('A')] }));
+  const d = diffWithPrevious(dir, [area('Q', { skip: '설정 오류로 못 잼', scanned: 0, universe: 0, checks: [] }), ok('A')], 100, 'advanced');
+  assert.strictEqual(d.fixedCount, 0);
+  assert.strictEqual(d.addedCount, 0);
+});
