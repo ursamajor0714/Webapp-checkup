@@ -158,6 +158,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       if (!r.ok) break;
       accounts.push({ user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입' });
     }
+    ctx.accounts = accounts;   // 브라우저가 화면에서 직접 로그인할 때 쓴다
     for (const [i, name] of ['owner', 'other'].entries()) {
       const a = accounts[i]; if (!a) break;
       const l = await login(base, auth, a, name);
