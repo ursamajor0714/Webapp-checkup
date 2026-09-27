@@ -34,18 +34,32 @@ function valueCases(spec, sampleOf) {
   add('빠짐', undefined, spec.required ? 'invalid' : 'valid', true);
   add('null', null, nullExpect);
 
-  if (spec.type === 'string') {
+  if (spec.type === 'boolean') {
+    add('true', true, 'valid'); add('false', false, 'valid');
+    add('문자열 "true"', 'true', 'invalid'); add('숫자 1', 1, 'invalid'); add('배열 타입', [true], 'invalid');
+  } else if (spec.type === 'any' || spec.type === 'array') {
+    // 모양을 모르는 칸 — 서버가 죽지 않는지만 본다
+    for (const [label, v] of [['문자열', 'qa'], ['빈 문자열', ''], ['숫자', 123], ['음수', -1], ['아주 큰 수', 1e308], ['불리언', true], ['배열', ['a']], ['객체', { a: 1 }], ['아주 긴 문자열(10000자)', 'a'.repeat(10000)], ['주입 문자열 <script>', '<script>alert(1)</script>'], ["주입 문자열 ' OR 1=1", "' OR 1=1 --"], ['NoSQL 연산자', { $gt: '' }]]) add(label, v, 'any');
+  } else if (spec.type === 'string') {
     const max = spec.max ?? 100;
     const min = spec.min ?? (spec.required ? 1 : 0);
     add('정상 값', sampleOf(spec), 'valid');
-    add(`최대 길이(${max}자)`, 'a'.repeat(max), 'valid');
-    add(`최대 길이 초과(${max + 1}자)`, 'a'.repeat(max + 1), 'invalid');
+    const fill = n => spec.format === 'email' ? 'q'.repeat(Math.max(1, n - 12)) + '@example.com' : 'a'.repeat(n);
+    if (spec.max !== undefined && !spec.pattern) add(`최대 길이(${max}자)`, fill(max), 'valid');
+    add(`최대 길이 초과(${max + 1}자)`, fill(max + 1), spec.max !== undefined ? 'invalid' : 'any');
+    if (spec.min > 1) add(`최소 길이 미만(${spec.min - 1}자)`, 'a'.repeat(spec.min - 1), 'invalid');
     add('빈 문자열', '', min > 0 ? 'invalid' : (spec.pattern ? 'invalid' : 'valid'));
     add('공백만', '   ', spec.pattern ? 'invalid' : 'any');
     add('숫자 타입', 12345, 'invalid');
     add('불리언 타입', true, 'invalid');
     add('배열 타입', ['a'], 'invalid');
-    add('한글·이모지', '가나다🔥', spec.pattern && !spec.pattern.test('가나다🔥') ? 'invalid' : 'valid');
+    // 최소 길이는 채운다. 8자 이상 규칙(비밀번호 꼴)은 서버의 강도 규칙이 따로 있을 수 있어 '서버 오류 없음' 만 본다
+    const ko = '가나다🔥' + '가'.repeat(Math.max(0, min - 4));
+    add('한글·이모지', ko, (spec.pattern && !spec.pattern.test(ko)) || spec.format ? 'invalid' : min >= 8 ? 'any' : 'valid');
+    if (spec.format === 'email') { add('이메일 아님', 'not-an-email', 'invalid'); add('@ 만', '@', 'invalid'); add('도메인 없음', 'qa@', 'invalid'); }
+    if (spec.format === 'url') { add('URL 아님', 'not a url', 'invalid'); add('javascript: URL', 'javascript:alert(1)', 'invalid'); }
+    if (spec.format === 'uuid') add('UUID 아님', '1234', 'invalid');
+    add('NoSQL 연산자 객체', { $gt: '' }, 'invalid');
     for (const inj of INJECTIONS) {
       const fits = inj.length <= max && (!spec.pattern || spec.pattern.test(inj));
       add(`주입 문자열 ${inj.slice(0, 14)}`, inj, spec.pattern ? (fits ? 'valid' : 'invalid') : 'any');
@@ -90,7 +104,14 @@ function valueCases(spec, sampleOf) {
 function sampleOf(spec) {
   if (spec.sample !== undefined) return spec.sample;
   switch (spec.type) {
-    case 'string': return 'qa' + 'x'.repeat(Math.max(0, (spec.min ?? 1) - 2));
+    case 'string':
+      if (spec.format === 'email') return 'qa@example.com';
+      if (spec.format === 'url') return 'https://example.com/qa';
+      if (spec.format === 'uuid') return '123e4567-e89b-42d3-a456-426614174000';
+      if (spec.format === 'datetime') return new Date().toISOString();
+      return 'qa' + 'x'.repeat(Math.max(0, (spec.min ?? 1) - 2));
+    case 'boolean': return true;
+    case 'any': case 'array': return spec.type === 'array' ? [] : 'qa';
     case 'number': return spec.integer ? Math.ceil(((spec.min ?? 0) + (spec.max ?? 100)) / 2) : ((spec.min ?? 0) + (spec.max ?? 100)) / 2;
     case 'enum': return spec.values[0];
     case 'object': return Object.fromEntries(Object.entries(spec.fields).map(([k, s]) => [k, sampleOf(s)]));
@@ -317,18 +338,31 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
                 ['내용 변조 토큰', 'Bearer ' + Buffer.from(JSON.stringify({ sid: 'qa', exp: Date.now() + 1e9 })).toString('base64url') + '.' + real.split('.')[1]]] : []),
   ];
   const items = [];
+  const PUBLICISH = /(^|\/)(login|signin|logout|register|signup|join|health|healthz|ping|status|csrf|refresh|token|oauth|callback|verify|me|session|whoami|password_reset|password-reset|reset|forgot)(\/|$)/i;
+  const same = (a, b) => JSON.stringify(a && a.body) === JSON.stringify(b && b.body);
   for (const r of routes.filter(r => !pub.includes(`${r.method} ${r.path}`))) {
     const url = r.method === 'DELETE' ? `${r.path}?id=qa-gen-nobody` : r.path;
+    const body = ['POST', 'PUT', 'PATCH'].includes(r.method) ? bodyFor(r) : undefined;
+    // 읽기 경로는 로그인한 응답과 견준다 — 누구에게나 같은 내용이면 '공개 목록' 일 수 있다 (의도인지 사람이 확인)
+    const mine = real && r.method === 'GET' ? await ctx.call(url, { method: 'GET', as: realAs }) : null;
     for (const [label, header] of variants) {
-      const res = await ctx.call(url, { method: r.method, as: 'none', headers: header ? { Authorization: header } : {},
-        body: ['POST', 'PUT', 'PATCH'].includes(r.method) ? bodyFor(r) : undefined });
-      const blocked = res.status === 401 || res.status === 403;
-      items.push({ name: `${r.method} ${r.path} · ${label}`, ok: blocked, detail: blocked ? `${res.status} 차단` : `${res.status} — 인증 없이 통과` });
+      const res = await ctx.call(url, { method: r.method, as: 'anon', headers: header ? { Authorization: header } : {}, body });
+      const blocked = res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400 && /login|signin/i.test(res.location || ''));
+      let ok = blocked, detail = blocked ? `${res.status} 차단` : res.status >= 500 ? `${res.status} — 로그인 확인 전에 서버가 죽는다 (로그인 안 한 요청을 401 로 막지 않는다)` : `${res.status} — 인증 없이 통과`;
+      if (!blocked && r.method !== 'GET' && res.status < 400 && PUBLICISH.test(r.path)) { ok = true; detail = `${res.status} — 로그인 전에 쓰는 경로 (가입·로그인·비밀번호 찾기)`; }
+      else if (!blocked && r.method === 'GET' && res.status < 300) {
+        if (PUBLICISH.test(r.path)) { ok = true; detail = `${res.status} — 로그인 상태 확인·발급 경로 (누구나 부른다)`; }
+        else if (mine && mine.status < 300 && !same(res, mine)) { ok = true; detail = `${res.status} — 로그인 안 한 사람에겐 다른(공개용) 응답`; }
+        else { ok = null; detail = `${res.status} — 로그인 없이 ${mine && mine.status < 300 ? '로그인한 사람과 같은 내용이' : '내용이'} 보인다 — 공개 목록이 맞는지 확인`; }
+      } else if (!blocked && res.status >= 400 && res.status < 500 && res.status !== 404) { ok = null; detail = `${res.status} — 인증 전에 입력을 먼저 거절했다 (인증이 걸려 있는지는 이 응답으로 모른다)`; }
+      else if (!blocked && res.status === 404) { ok = null; detail = `404 — 없는 대상이라 인증 여부를 알 수 없다`; }
+      items.push({ name: `${r.method} ${r.path} · ${label}`, ok, detail });
     }
     if (real) {
-      const res = await ctx.call(url, { method: r.method, as: realAs, body: ['POST', 'PUT', 'PATCH'].includes(r.method) ? bodyFor(r) : undefined });
-      const passes = res.status !== 401 && res.status !== 403;
-      items.push({ name: `${r.method} ${r.path} · 진짜 토큰`, ok: passes, detail: passes ? `${res.status} 인증 통과` : `${res.status} — 로그인했는데 막힘` });
+      const res = mine || await ctx.call(url, { method: r.method, as: realAs, body });
+      // 403 은 '로그인은 됐지만 이 역할로는 못 쓴다' 라서 인증 실패가 아니다
+      const passes = res.status !== 401;
+      items.push({ name: `${r.method} ${r.path} · 진짜 토큰`, ok: passes, detail: passes ? `${res.status}${res.status === 403 ? ' 인증 통과 · 이 역할엔 권한 없음' : ' 인증 통과'}` : `${res.status} — 로그인했는데 막힘` });
     }
   }
   return items;
