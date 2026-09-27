@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4            # 검사할 레포 (이 레포)
         with: { path: app }
       - uses: actions/checkout@v4            # QA 도구
-        with: { repository: ursamajor0714/QA, path: qa }
+        with: { repository: ursamajor0714/Webapp-checkup, path: qa }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       # 파이썬 서버(Django·FastAPI)면 주석을 푼다

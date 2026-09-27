@@ -1,7 +1,7 @@
 // QA 2차 점검 — 시험 서버(sidefx)에 QA 를 돌리고 부작용을 센다
 //   node verify.js <시나리오 이름> [--pw=right-pw] [--only=F,R] [--env=HANG=1] [--wall=120]
 const fs = require('fs'), path = require('path');
-const QA = process.env.QA_DIR || path.join(process.env.HOME, 'Developer/QA');
+const QA = process.env.QA_DIR || path.join(process.env.HOME, 'Developer/webapp-checkup');
 const runner = require(path.join(QA, 'common/runner'));
 const serve = require(path.join(QA, 'common/serve'));
 const arg = k => (process.argv.find(a => a.startsWith(`--${k}=`)) || '').split('=').slice(1).join('=');
