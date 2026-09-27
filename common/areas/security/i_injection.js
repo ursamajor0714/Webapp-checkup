@@ -10,6 +10,25 @@ const PAYLOADS = [
 ];
 const DB_ERROR = /SQLITE_ERROR|SQLSTATE|syntax error at or near|You have an error in your SQL|ORA-\d{5}|psql:|PrismaClient\w*Error|QueryFailedError|Unclosed quotation|MongoServerError|CastError|django\.db\.utils|OperationalError|Traceback \(most recent/i;
 
+const REDIRECT_PARAM = /(?:req\.query|query|searchParams\.get\(|request\.(?:GET|args)(?:\.get)?\(|@RequestParam[^)]*)\W*['"]?(next|redirect(?:_?(?:to|uri|url))?|return(?:_?(?:to|url))?|returnUrl|continue|dest(?:ination)?|goto|url|callback(?:Url)?)\b/gi;
+async function openRedirect(ctx) {
+  const items = [];
+  // 처리 코드가 이동할 주소로 쓰는 쿼리 이름을 찾는다 — 없으면 흔한 이름(next·redirect)을 로그인 경로에만
+  const cands = [];
+  for (const r of ctx.routes().filter(x => x.method === 'GET' && !x.path.includes(':'))) {
+    const names = [...new Set([...(r.handler || '').matchAll(REDIRECT_PARAM)].map(m => m[1]))];
+    if (names.length && /redirect|location|res\.redirect|HttpResponseRedirect|RedirectResponse|redirect:/i.test(r.handler || '')) for (const n of names) cands.push({ r, n });
+    else if (/(^|\/)(login|signin|logout|auth)(\/|$)/i.test(r.path)) for (const n of ['next', 'redirect']) cands.push({ r, n });
+  }
+  for (const { r, n } of cands.slice(0, 12)) for (const target of ['https://evil.example/qa', '//evil.example/qa']) {
+    const res = await ctx.call(`${r.path}?${n}=${encodeURIComponent(target)}`, { service: r.service, as: 'none' });
+    const loc = res.location || '';
+    const bad = res.status >= 300 && res.status < 400 && /^(https?:)?\/\/evil\.example/i.test(loc);
+    items.push({ name: `GET ${r.path}?${n}=${target}`, ok: !bad, detail: bad ? `${res.status} → ${loc} — 받은 주소로 그대로 보낸다. 같은 사이트 경로(/로 시작하고 //가 아닌 것)만 허용한다` : `${res.status}${loc ? ' → ' + loc.slice(0, 60) : ''}` });
+  }
+  return items;
+}
+
 module.exports = {
   id: 'I', name: '주입·SSRF', weight: 7, owasp: ['A03', 'A10', 'A08'],
   async run(ctx) {
@@ -90,6 +109,8 @@ module.exports = {
       stored.push({ name: `${c.method} ${c.path} · ${strField[0]} 에 스크립트 저장 후 화면`, ok: !hit, detail: hit ? `${hit} 화면에 escape 없이 그려진다 (저장형 XSS)` : `${res.status} · 화면 ${pages.length}개에서 escape 됨` });
     }
     if (stored.length) checks.push(owasp('A03', checkItems('저장한 스크립트가 화면에서 escape 된다 (저장형 XSS)', stored)));
+    // 고급부터 — 오픈 리다이렉트: 이동할 주소를 쿼리로 받는 경로에 다른 사이트 주소를 넣으면 그대로 보내는가 (피싱에 쓰인다)
+    if (ctx.level.atLeast('advanced')) { const o = await openRedirect(ctx); if (o.length) checks.push(owasp('A01', checkItems('받은 주소로 아무 데나 보내지 않는다 (오픈 리다이렉트)', o))); }
     return { checks };
   },
 };

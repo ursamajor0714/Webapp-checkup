@@ -8,6 +8,58 @@ const { fillPath } = require('../../generate');
 const ADMIN = /(^|\/)(admin|manage|management|staff|internal|dashboard\/admin|backoffice)(\/|$)/i;
 const idOf = b => b && (b.id ?? b._id ?? b.pk ?? (b.data && (b.data.id ?? b.data._id)) ?? (b.result && b.result.id));
 
+// 권한 칸 — 이 이름들 중 하나라도 '관리자' 로 되돌아오면 권한 상승
+const PRIV = { role: 'admin', roles: ['admin'], isAdmin: true, is_admin: true, admin: true, is_staff: true, is_superuser: true, userRole: 'ADMIN', authority: 'ADMIN', level: 99 };
+const elevated = o => o && typeof o === 'object' && Object.entries(PRIV).some(([k]) => {
+  const v = o[k] ?? (o.data && o.data[k]) ?? (o.user && o.user[k]);
+  return v === true || v === 99 || /^(admin|root|super)/i.test(String(v)) || (Array.isArray(v) && v.some(x => /admin/i.test(String(x))));
+});
+async function privilegeEscalation(ctx, routes) {
+  const { login, Session, request } = require('../../session');
+  const auth = ctx.project.auth || {};
+  const items = [];
+  const t = Date.now().toString(36);
+  // 가입 — 새 계정이 관리자로 만들어지는가 (응답, 그리고 그 계정으로 로그인한 내 정보)
+  const reg = routes.find(r => r.method === 'POST' && /register|signup|join/i.test(r.path));
+  if (reg) {
+    const pw = `Qa!${t}Zz9x`;
+    const body = { username: `qaesc${t}`.slice(0, 13), email: `qa+esc${t}@example.com`, password: pw, password1: pw, password2: pw, passwordConfirm: pw, confirmPassword: pw, name: `QA${t}`, nickname: `qa${t}`.slice(0, 12), ...PRIV };
+    // 폼 로그인(Django)은 익명 세션의 CSRF 토큰을 실어 폼으로 보낸다 — 토큰 없이 보내면 403 이라 잰 것이 아니다
+    const form = auth.type === 'form';
+    const send = b => form
+      ? ctx.call(reg.path, { service: reg.service, as: 'anon', method: 'POST', form: Object.fromEntries(Object.entries(b).map(([k, v]) => [k, Array.isArray(v) ? v[0] : String(v)])), headers: { Referer: ctx.baseUrl(reg.service) + reg.path } })
+      : ctx.call(reg.path, { service: reg.service, as: 'none', method: 'POST', body: b });
+    const didJoin = x => (form ? (x.status === 302 || x.status === 303) && !/register|signup|join/i.test(x.location || '') : x.status < 300);
+    const r = await send(body);
+    const joined = didJoin(r);
+    if (!joined && r.status >= 500) items.push({ name: `POST ${reg.path} · role:'admin' 끼워 가입`, ok: false, detail: `서버 오류 ${r.status}` });
+    else if (!joined) {
+      // 권한 칸 때문에 거절됐나, 가입 자체가 안 되나 — 권한 칸을 뺀 같은 본문으로 한 번 더
+      const plain = Object.fromEntries(Object.entries(body).filter(([k]) => !(k in PRIV)).map(([k, v]) => [k, /user|nick|email/i.test(k) && typeof v === 'string' ? v.replace(/esc/, 'esp') : v]));
+      const r2 = await send(plain);
+      items.push({ name: `POST ${reg.path} · role:'admin' 끼워 가입`, ok: didJoin(r2) ? true : null,
+        detail: didJoin(r2) ? `권한 칸을 넣으면 ${r.status} 로 거절하고, 빼면 가입된다 — 모르는 칸을 받지 않는다` : `${r.status} — 권한 칸을 빼도 가입되지 않아(${r2.status}) 재지 못했다 (CSRF·필수 칸·형식 확인)` });
+    }
+    else {
+      let seen = elevated(r.body) ? '가입 응답' : null;
+      const me = routes.find(x => x.method === 'GET' && /(^|\/)(me|profile|myinfo|mypage)\/?$/i.test(x.path) && x.service === reg.service);
+      if (!seen && me && auth.loginPath && auth.type !== 'form') {
+        const l = await login(ctx.baseUrl(reg.service), auth, { user: auth.fields && auth.fields.user === 'email' ? body.email : body.username, password: pw }, 'qa-esc');
+        if (l.ok) { const m = await request(ctx.baseUrl(reg.service), l.sess, me.path); if (elevated(m.body)) seen = `로그인 뒤 ${me.path}`; }
+      }
+      items.push({ name: `POST ${reg.path} · role:'admin' 끼워 가입`, ok: !seen, detail: seen ? `${seen} 에 관리자 권한이 보인다 — 누구나 가입하면서 관리자가 될 수 있다. 본문에서 받을 칸만 골라 저장한다 (허용 목록)` : `${r.status} 가입됐지만 권한 칸은 먹히지 않았다` });
+    }
+  }
+  // 만들기 — 자원에 권한·소유 칸이 그대로 저장되는가
+  const { baseline } = require('../../generate');
+  for (const c of (ctx.contracts || []).filter(x => x.method === 'POST' && !x.path.includes(':') && !/register|signup|join|login|signin|auth|token/i.test(x.path)).slice(0, 5)) {
+    const r = await ctx.call(c.path, { service: c.service, as: ctx.sessions.owner ? 'owner' : 'anon', method: 'POST', body: { ...baseline(c.fields), ...PRIV } });
+    if (r.status >= 300) continue;
+    items.push({ name: `POST ${c.path} · 권한 칸 끼워 만들기`, ok: elevated(r.body) ? null : true, detail: elevated(r.body) ? '응답에 끼워 넣은 권한 칸이 그대로 있다 — 이 칸이 권한 판단에 쓰이면 권한 상승 (허용 목록으로 받을 칸만 저장)' : '권한 칸을 저장하지 않았다' });
+  }
+  return items;
+}
+
 module.exports = {
   id: 'C', name: '권한 (남의 데이터·관리자 경로)', weight: 7, owasp: ['A01'],
   async run(ctx) {
@@ -75,6 +127,11 @@ module.exports = {
     const st = await ctx.call('/..%2F..%2F..%2F..%2Fetc%2Fpasswd', { as: 'none' });
     trav.push({ name: 'GET /../../etc/passwd (정적 파일 경로)', ok: !/root:x:0:0/.test(st.text), detail: /root:x:0:0/.test(st.text) ? '서버 파일 내용이 나온다' : `${st.status}` });
     checks.push(owasp('A01', checkItems('경로 조작(../)으로 서버 파일을 못 읽는다', trav)));
+    // 4. 권한 상승 (고급부터) — 가입·만들기 본문에 role:'admin' 같은 칸을 끼워 넣으면 그대로 저장되는가 (대량 할당)
+    if (ctx.level.atLeast('advanced')) {
+      const esc = await privilegeEscalation(ctx, routes);
+      if (esc.length) checks.push(owasp('A01', checkItems('본문에 끼워 넣은 권한 칸(role·isAdmin)이 먹히지 않는다 (권한 상승)', esc)));
+    }
     return { checks };
   },
 };
