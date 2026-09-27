@@ -30,4 +30,4 @@ QA 사본에 넣어 위 시험으로 효과를 확인하고, `npm test` 19개가
 | `stacks/django.js`·`fastapi.js` | 레포의 `.venv`·`venv` 파이썬 사용 | 맥에서 Django 완주 |
 
 `git apply --check -p1 docs/2026-09-27_재현도구/고친사본.patch` 로 적용 가능한지 먼저 본다.
-알려진 허점: 문자 경로 거르기가 경로 사이에 정의된 함수까지 읽어 `DELETE /api/items/:id` 를 잘못 거른다 (보고서 참고).
+문자 경로 거르기는 처음엔 경로 사이에 정의된 함수까지 읽어 `DELETE /api/items/:id` 를 잘못 걸렀다 → 정의(`function sendSms`)는 빼고 **호출(`sendSms(`)만** 보게 고쳐, 이제 `POST /api/applications` 하나만 거른다 (문자 0통 · items 0행).

@@ -38,7 +38,7 @@ diff -ru a/common/contract.js b/common/contract.js
        const passes = res.status !== 401;
 diff -ru a/common/runner.js b/common/runner.js
 --- a/common/runner.js	2026-09-27 19:06:39
-+++ b/common/runner.js	2026-09-27 21:35:54
++++ b/common/runner.js	2026-09-27 21:37:20
 @@ -53,6 +53,8 @@
    const defs = projectDefs();
    if (defs[arg]) return defs[arg];
@@ -67,7 +67,7 @@ diff -ru a/common/runner.js b/common/runner.js
    const { STACKS } = require('./stacks');
 -  ctx.contracts = [...(def.contracts || []), ...ctx.services.flatMap(s => extractContracts(s, routes.filter(r => r.service === s.id), s.stack).map(c => ({ ...c, service: s.id })))];
 +  ctx.contracts = [...(def.contracts || []), ...ctx.services.filter(s => up[s.id]).flatMap(s => extractContracts(s, routes.filter(r => r.service === s.id), s.stack).map(c => ({ ...c, service: s.id })))];
-+  const SIDE = /sendSms|sendMail|sendEmail|nodemailer|aligo|twilio|solapi|coolsms|stripe|tosspayments|portone|iamport|fetch\(\s*['"`]https?:/;
++  const SIDE = /(?<!function\s+)\b(?:sendSms|sendMail|sendEmail|sendKakao|sendPush)\s*\(|\b(?:nodemailer|aligo|twilio|solapi|coolsms|stripe|tosspayments|portone|iamport)\b[\w.]*\s*\(|fetch\(\s*['"`]https?:/;
 +  const outside = routes.filter(r => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method) && SIDE.test(r.handler || ''));
 +  if (outside.length) { const k = new Set(outside.map(r => `${r.method} ${r.path}`)); ctx.contracts = ctx.contracts.filter(c => !k.has(`${c.method} ${c.path}`)); ctx.outsideRoutes = k; ctx.notes.push(`처리 코드가 밖으로 보내는(문자·메일·결제) 경로 ${outside.length}개는 건드리지 않는다: ${[...k].join(', ')}`); }
    log(`규칙 ${ctx.contracts.length}개 (엄격 ${ctx.contracts.filter(c => c.strict).length}) · 경로 ${routes.length} · 화면 호출 ${ctx.calls().length}`);
