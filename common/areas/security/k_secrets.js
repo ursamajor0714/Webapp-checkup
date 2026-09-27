@@ -16,18 +16,18 @@ const HIST = [
   [/AKIA[0-9A-Z]{16}/, 'AWS 액세스 키'], [/-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/, '개인키'],
   [/\bsk-(?:live|proj|ant)?[-_A-Za-z0-9]{20,}/, 'API 키 (sk-…)'], [/\bghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}/, 'GitHub 토큰'], [/xox[bap]-[A-Za-z0-9-]{10,}/, 'Slack 토큰'],
   [/AIza[0-9A-Za-z_-]{35}/, 'Google API 키'], [/(?:postgres|postgresql|mysql|mongodb(?:\+srv)?):\/\/[^:\s'"]+:[^@\s'"]{4,}@(?!localhost|127\.0\.0\.1)[^\s'"/]+/, '운영 DB 접속 주소(비밀번호 포함)'],
-  [/\b(?:password|passwd|secret|api[_-]?key|jwt[_-]?secret|secret[_-]?key|access[_-]?token)\b\s*[:=]\s*['"](?![^'"]*(?:example|change|your|dummy|test|xxx|\*\*\*|<|\$\{))[^'"\s]{10,}['"]/i, '비밀번호·비밀 키를 코드에 적음'],
+  [/\b(?:password|passwd|secret|api[_-]?key|jwt[_-]?secret|secret[_-]?key|access[_-]?token)\b\s*[:=]\s*['"](?![^'"]*(?:example|change|your|dummy|test|xxx|wrong|fake|invalid|bogus|qa-|\*\*\*|<|\$\{))[^'"\s]{10,}['"]/i, '비밀번호·비밀 키를 코드에 적음'],
 ];
 function gitHistorySecrets(ctx) {
   let log;
-  try { log = execFileSync('git', ['log', '-p', '--all', '-n', '400', '--no-color', '--unified=0', '--format=@@COMMIT %h %ad', '--date=short'], { cwd: ctx.root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
+  try { log = execFileSync('git', ['-c', 'core.quotepath=false', 'log', '-p', '--all', '-n', '400', '--no-color', '--unified=0', '--format=@@COMMIT %h %ad', '--date=short'], { cwd: ctx.root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
   catch { return null; }
   const now = new Map();   // 지금 파일에도 있으면 위의 '박힌 비밀' 검사가 이미 본다
   const found = new Map();
   let commit = '', file = '';
   for (const line of log.split('\n')) {
     if (line.startsWith('@@COMMIT ')) { commit = line.slice(9); continue; }
-    if (line.startsWith('+++ ')) { file = line.slice(6); continue; }
+    if (line.startsWith('+++ ')) { file = line.slice(4).replace(/^"|"$/g, '').replace(/^b\//, ''); continue; }   // 한글 파일명은 따옴표로 감싸 나온다
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
     if (require('../_util').NOT_SHIPPED.test(file) || /\.env\.(example|sample|template)$|package-lock|yarn\.lock|\.md$/i.test(file)) continue;
     for (const [re, what] of HIST) {
@@ -41,7 +41,7 @@ function gitHistorySecrets(ctx) {
   }
   // 예전에 커밋된 .env 파일
   try {
-    const envs = execFileSync('git', ['log', '--all', '--diff-filter=A', '--name-only', '--format=@@%h', '--', '*.env', '.env', '*/.env', '.env.*', '*/.env.*'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const envs = execFileSync('git', ['-c', 'core.quotepath=false', 'log', '--all', '--diff-filter=A', '--name-only', '--format=@@%h', '--', '*.env', '.env', '*/.env', '.env.*', '*/.env.*'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     let c = '';
     for (const l of envs.split('\n')) { if (l.startsWith('@@')) { c = l.slice(2); continue; } if (l && !/\.(example|sample|template|dist)$/.test(l)) found.set('env:' + l, { name: `${l} (${c})`, ok: false, detail: '.env 파일이 커밋된 적이 있다 — 지금 없어도 기록에 남아 있다. 안의 비밀번호·키를 모두 바꿔야 한다' }); }
   } catch { /* 무시 */ }

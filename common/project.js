@@ -85,7 +85,7 @@ function guessAuth(root, parts, routes) {
   // CSRF — 발급 경로와, 서버가 토큰을 읽는 헤더 이름 (x-csrftoken · x-csrf-token · x-xsrf-token …)
   const csrfHeader = (src.match(/headers\[\s*["'](x-[\w-]*(?:csrf|xsrf)[\w-]*)["']\s*\]|\.(?:get|header)\(\s*["'](x-[\w-]*(?:csrf|xsrf)[\w-]*)["']/i) || []).slice(1).find(Boolean);
   const csrf = /csurf|csrf/i.test(src) ? { getPath: (routes.find(r => r.method === 'GET' && /csrf/i.test(r.path) && r.service === svc.id) || {}).path || null, header: csrfHeader || undefined } : null;
-  const usesCookie = /res\.cookie\(|cookie-parser|express-session|httpOnly\s*:/i.test(src) && !/Authorization['"]?\]?\s*[:=]|authorization\.split|Bearer /.test(src);
+  const usesCookie = /res\.cookie\(|cookie-parser|express-session|httpOnly\s*:|HttpSession|getSession\(|session\.setAttribute/i.test(src) && !/Authorization['"]?\]?\s*[:=]|authorization\.split|Bearer /.test(src);
   const passOnly = !new RegExp(`req\\.body\\.${userField}|${userField}\\s*[,}]`).test(src) && /req\.body\.password|\{\s*password\s*\}/.test(src);
   return { type: usesCookie ? 'cookie' : 'bearer', loginPath: login.path, fields: passOnly ? { password: 'password' } : fields, csrf, guessed: true };
 }
@@ -96,7 +96,6 @@ function loadProject(def) {
   const p = { publicRoutes: [], ...def, root: expand(def.root) };
   p.name ??= path.basename(p.root || 'project');
   const detected = p.root && exists(p.root) ? detectParts(p.root) : [];
-  // 설정에 적은 부분이 있으면 그 값을 우선 (포트·주소 등)
   // 설정에 적은 부분은 감지한 것 위에 덮는다 (포트·주소 등). 적지 않은 부분은 감지한 그대로
   const listed = def.parts || [];
   const over = def.partOverrides || {};

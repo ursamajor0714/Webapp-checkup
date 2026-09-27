@@ -48,10 +48,8 @@ module.exports = {
     const items = [];
     for (const svc of ctx.services) {
       const mine = routes.filter(r => r.service === svc.id && !pub(ctx, r));
-      const saved = ctx.config.publicRoutes;
       const res = await authMatrix(ctx.forService(svc.id), { routes: mine, publicRoutes: [],
         bodyFor: () => ({}), realAs: ctx.sessions.owner ? 'owner' : null });
-      ctx.config.publicRoutes = saved;
       // 설정에 공개 경로가 없고 흔한 공개 경로(로그인 등)라면 '확인 필요' 로
       for (const it of res) {
         const path = it.name.split(' · ')[0].split(' ')[1];

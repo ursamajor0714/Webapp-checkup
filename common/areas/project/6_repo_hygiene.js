@@ -34,7 +34,7 @@ module.exports = {
     const files = isGit ? tracked : walk(root, null).map(f => path.relative(root, f).split(path.sep).join('/'));
 
     // 1) 병합 충돌 표시
-    const textFiles = files.filter(f => /\.(m?[jt]sx?|cjs|py|java|kt|html|ejs|css|scss|json|ya?ml|md|properties|sql|vue|svelte|txt)$/i.test(f) && !/node_modules|package-lock|\.min\./.test(f));
+    const textFiles = files.filter(f => /\.(m?[jt]sx?|cjs|py|java|kt|html|ejs|css|scss|json|ya?ml|md|properties|sql|vue|svelte|txt)$/i.test(f) && !/node_modules|package-lock|\.min\./.test(f) && !require('../_util').NOT_SHIPPED.test(f));
     const conflicts = [];
     for (const f of textFiles) {
       const s = read(path.join(root, f));
@@ -62,7 +62,8 @@ module.exports = {
     if (ctx.parts.some(p => p.lang === 'js' && fs.existsSync(path.join(p.absDir, 'package.json')))) needs.push(['node_modules', /node_modules/]);
     if (ctx.parts.some(p => p.lang === 'python')) needs.push(['__pycache__', /__pycache__|\*\.py\[?c/]);
     if (ctx.parts.some(p => p.stack === 'nextjs')) needs.push(['.next', /\.next/]);
-    needs.push(['.env', /(^|\/)\.env/m]);
+    const usesEnv = files.some(f => /(^|\/)\.env(\.|$)/.test(f) && !require('../_util').NOT_SHIPPED.test(f)) || ['.env', '.env.local'].some(f => fs.existsSync(path.join(root, f))) || ctx.parts.some(p => fs.existsSync(path.join(p.absDir, '.env')) || /dotenv|python-dotenv|django-environ/.test(read(path.join(p.absDir, 'package.json')) + read(path.join(p.absDir, 'requirements.txt'))));
+    if (usesEnv) needs.push(['.env', /(^|\/)\.env/m]);
     const giItems = !gi ? [{ name: '.gitignore', ok: false, detail: '없다 — 설치 폴더·비밀 파일이 통째로 올라간다' }]
       : needs.map(([n, re]) => ({ name: n, ok: re.test(gi), detail: re.test(gi) ? '막혀 있음' : `.gitignore 에 ${n} 이 없다` }));
     checks.push(checkItems('.gitignore 가 설치 폴더·캐시·.env 를 막는다', giItems));
@@ -96,7 +97,8 @@ module.exports = {
     for (const p of ctx.parts.filter(x => x.stack === 'django' && fs.existsSync(path.join(x.absDir, 'manage.py')))) {
       const { env } = serve.envFor({ ...ctx.project, id: ctx.project.id || ctx.project.name }, 0);
       serve.fillDefaults({ ...ctx.project, id: ctx.project.id || ctx.project.name }, p, env);
-      const r = spawnSync('python3', ['manage.py', 'makemigrations', '--check', '--dry-run'], { cwd: p.absDir, encoding: 'utf8', env, timeout: 120000 });
+      const py = serve.pythonFor({ ...ctx.project, id: ctx.project.id || ctx.project.name }, p) || 'python3';   // 서버를 켤 때와 같은 가상환경
+      const r = spawnSync(py, ['manage.py', 'makemigrations', '--check', '--dry-run'], { cwd: p.absDir, encoding: 'utf8', env, timeout: 120000 });
       const out = ((r.stdout || '') + (r.stderr || '')).trim();
       if (r.error) migItems.push({ name: `${p.dir} makemigrations --check`, ok: null, detail: `돌리지 못함: ${r.error.message}` });
       else if (r.status === 0) migItems.push({ name: `${p.dir} makemigrations --check`, ok: true, detail: '모델과 마이그레이션이 맞는다' });

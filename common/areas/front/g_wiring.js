@@ -22,10 +22,11 @@ module.exports = {
           continue;
         }
         if (!exists(path.join(p.absDir, 'node_modules'))) { cmds.push({ name: `${p.dir} 타입·린트`, ok: null, detail: 'node_modules 없음 — [서버 켜기]나 npm install 뒤에 잰다' }); continue; }
-        if (exists(path.join(p.absDir, 'tsconfig.json'))) { const r = run(['npx', 'tsc', '--noEmit', '-p', '.'], p.absDir); cmds.push({ name: `${p.dir} tsc --noEmit`, ok: r.ok, detail: r.ok ? '통과' : r.out.split('\n').slice(0, 3).join(' / ').slice(0, 200) }); }
+        if (exists(path.join(p.absDir, 'tsconfig.json')) && !exists(path.join(p.absDir, 'node_modules', '.bin', 'tsc'))) cmds.push({ name: `${p.dir} tsc --noEmit`, ok: null, detail: 'tsconfig.json 은 있는데 typescript 가 설치돼 있지 않아 타입 검사를 못 했다 (devDependencies 에 typescript)' });
+        else if (exists(path.join(p.absDir, 'tsconfig.json'))) { const r = run(['npx', '--no-install', 'tsc', '--noEmit', '-p', '.'], p.absDir); cmds.push({ name: `${p.dir} tsc --noEmit`, ok: r.ok, detail: r.ok ? '통과' : r.out.split('\n').slice(0, 3).join(' / ').slice(0, 200) }); }
         const hasLint = walk(p.absDir, ['eslint.config.js', 'eslint.config.mjs', '.eslintrc.js', '.eslintrc.json', '.eslintrc.cjs']).length || (require('../../stacks/util').readJson(path.join(p.absDir, 'package.json')) || {}).eslintConfig;
         if (hasLint) {
-          const r = run(['npx', 'eslint', '.', '-f', 'json'], p.absDir);
+          const r = run(['npx', '--no-install', 'eslint', '.', '-f', 'json'], p.absDir);
           let errs = null; try { const j = JSON.parse(r.out.slice(r.out.indexOf('['))); errs = j.reduce((a, f) => a + f.errorCount, 0); } catch { /* 결과를 못 읽음 */ }
           cmds.push({ name: `${p.dir} eslint`, ok: errs === null ? null : errs === 0, detail: errs === null ? r.out.split('\n')[0].slice(0, 120) : `오류 ${errs}건` });
         }

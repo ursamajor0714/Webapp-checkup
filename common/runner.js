@@ -91,9 +91,9 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   const auth = project.auth;
   ctx.authService = (routes.find(r => r.path === auth.loginPath) || {}).service || (ctx.primary && ctx.primary.id);
 
-  require('./session').timings.length = 0;
+  require('./session').timings.length = 0;   // 응답 시간 기록은 이번 검사 것만
   require('./session').hung.clear();
-  ctx.ignores = require('./ignore').load(project.root);   // 무시 목록   // 응답 시간 기록은 이번 검사 것만
+  ctx.ignores = require('./ignore').load(project.root);   // 무시 목록
   // 꺼진 서버는 직접 켠다 (설치·빌드·실행) — '딱 실행' 하면 서버까지 올라와 끝까지 잰다. 로그는 '서버 로그 오류' 영역이 읽는다
   const serve = require('./serve');
   ctx.serverStates = { ...servers };
@@ -150,6 +150,14 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   if (outside.length) { const k = new Set(outside.map(r => `${r.method} ${r.path}`)); ctx.contracts = ctx.contracts.filter(c => !k.has(`${c.method} ${c.path}`)); ctx.outsideRoutes = k; ctx.notes.push(`처리 코드가 밖으로 보내는(문자·메일·결제) 경로 ${outside.length}개는 건드리지 않는다: ${[...k].join(', ')}`); }
   log(`규칙 ${ctx.contracts.length}개 (엄격 ${ctx.contracts.filter(c => c.strict).length}) · 경로 ${routes.length} · 화면 호출 ${ctx.calls().length}`);
 
+  // 로그인 아이디 칸 — 추정(auth.guessed)이면 로그인 경로의 규칙(LoginRequest 등)에서 비밀번호가 아닌 칸을 쓴다
+  const loginRule = auth.guessed && !(def.auth && def.auth.fields) && ctx.contracts.find(c => c.method === 'POST' && c.path === auth.loginPath);
+  if (loginRule && auth.fields) {
+    const keys = Object.keys(loginRule.fields);
+    const pw = keys.find(k => /pass|pw/i.test(k));
+    const user = keys.find(k => k !== pw && /id|user|email|name|login|account/i.test(k));
+    if (pw && user) auth.fields = { user, password: pw }; else if (pw && keys.length === 1) auth.fields = { password: pw };
+  }
   // 로그인 — 설정 계정, 없으면 가입해서 만든 계정
   const base = ctx.baseUrl(ctx.authService);
   if (ctx.live && auth.type && auth.type !== 'none' && auth.loginPath) {
@@ -165,7 +173,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     ctx.accountFlow = [];
     const regContract = reg && ctx.contracts.find(c => c.path === reg.path && c.method === 'POST');
     while (accounts.length < 2 && reg && def.autoAccounts !== false) {
-      const r = await register(base, auth, reg, regContract ? Object.keys(regContract.fields) : []);
+      const r = await register(base, auth, reg, regContract ? regContract.fields : []);
       ctx.accountFlow.push({ name: `가입 ${reg.path}`, ok: r.ok, detail: r.ok ? `검사용 계정 ${r.acct.user} (${r.status})` : r.why });
       if (!r.ok) break;
       accounts.push({ user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입' });
@@ -181,7 +189,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
         setupFail.push(`⚙ 설정의 ${name === 'owner' ? '첫' : '두'} 번째 계정(${a.user || '비밀번호만'})으로 로그인하지 못했다: ${l.why}${locked ? ' — 계정이 잠겨 있다 (직전 검사의 무차별 대입 검사로 잠겼을 수 있다). 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ' — 아이디·비밀번호를 확인한다'}`);
         // 가입 경로가 있으면 검사용 계정을 만들어 이어 간다
         if (reg && def.autoAccounts !== false) {
-          const r = await register(base, auth, reg, regContract ? Object.keys(regContract.fields) : []);
+          const r = await register(base, auth, reg, regContract ? regContract.fields : []);
           if (r.ok) { a = accounts[i] = { user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입 (설정 계정 대신)' }; l = await login(base, auth, a, name); ctx.accountFlow.push({ name: `가입 ${reg.path} (설정 계정 대신)`, ok: true, detail: `검사용 계정 ${r.acct.user}` }); }
         }
         if (!l.ok) continue;
@@ -244,7 +252,7 @@ async function runProbe(ctx, probe) {
     return { id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file, owasp: probe.owasp || [], composite: COMPOSITE.includes(probe.id),
       skip: `설정 오류로 못 잼 (제품 결함 아님) — ${ctx.setupBlocked}`, setup: true, skipped: [], partial: null, universe: 0, scanned: 0, passed: 0, warned: 0, failed: 0, scanRate: 0, passRate: 1, ms: 0, checks: [], error: null, info: null };
   }
-  let checks = [], error = null, skip = null, skipped = [], partial = null, info = null;
+  let checks = [], error = null, skip = null, skipped = [], partial = null, info = null, finding = null;
   try {
     const out = await probe.run(ctx) || {};
     if (out.skip) skip = out.skip;
@@ -252,6 +260,7 @@ async function runProbe(ctx, probe) {
     skipped = out.skipped || [];
     partial = out.partial || null;
     info = out.info || null;   // 점수에 넣지 않는 참고 정보 (예: 기대는 외부 서비스 목록)
+    finding = out.finding || null;   // 잴 수 없어도 코드로 아는 것 (예: 검증 스키마가 하나도 없다)
     // 프로젝트 전용 검사는 대부분 로그인한 서버를 전제로 짠다 — 서버가 꺼졌거나 로그인하지 못했으면 오류 대신 건너뛴다
     const extrasReady = !ctx.services.length || (ctx.live && (!ctx.project.auth || ctx.project.auth.type === 'none' || !!ctx.sessions.owner));
     for (const ex of probe.extras || []) {
@@ -270,7 +279,7 @@ async function runProbe(ctx, probe) {
     universe, scanned, passed, warned, failed,
     scanRate: universe ? scanned / universe : 0,
     passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
-    ms: Date.now() - t0, checks, error, info,
+    ms: Date.now() - t0, checks, error, info, finding,
   };
   // 사람이 '의도된 것·오탐' 으로 표시한 문제는 통과로 센다 (대상 레포의 .qa-ignore.json)
   require('./ignore').apply(result, ctx.ignores);

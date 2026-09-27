@@ -121,14 +121,27 @@ function testAccount(auth) {
   const user = auth.fields.user === 'email' ? email : username;
   return { user, password, email, username, tag };
 }
-async function register(baseUrl, auth, registerRoute, fieldsGuess = []) {
+async function register(baseUrl, auth, registerRoute, fields = null) {
   const acct = testAccount(auth);
   const sess = new Session('register');
   await prepareCsrf(baseUrl, sess, auth);
-  // 흔한 가입 칸을 다 채워 본다 — 모르는 칸은 서버가 무시한다
-  const body = { email: acct.email, password: acct.password, password1: acct.password, password2: acct.password, passwordConfirm: acct.password, confirmPassword: acct.password,
-    username: acct.username, name: `QA${acct.tag}`, nickname: `qa${acct.tag}`, userId: acct.username, phone: '01000000000', agree: true, terms: true };
-  for (const f of fieldsGuess) if (!(f in body)) body[f] = 'qa' + acct.tag;
+  let body;
+  if (fields && !Array.isArray(fields) && Object.keys(fields).length) {
+    // 코드에서 읽은 가입 규칙이 있으면 그 칸만, 규칙에 맞는 값으로 (모르는 칸을 거절하는 서버도 있다)
+    body = require('./generate').baseline(fields);
+    for (const [k, spec] of Object.entries(fields)) {
+      const cut = v => (spec.max ? String(v).slice(0, spec.max) : v);
+      if (/pass|pw/i.test(k)) body[k] = acct.password;
+      else if (/e-?mail/i.test(k) || spec.format === 'email') body[k] = acct.email;
+      else if (/^(user(name|_?id)?|login_?id|account(_?id)?|id)$/i.test(k)) body[k] = cut(acct.username);
+      else if (/nick|name/i.test(k) && spec.type === 'string') body[k] = cut(`qa${acct.tag}`);
+    }
+  } else {
+    // 규칙을 모르면 흔한 가입 칸을 다 채워 본다 — 모르는 칸은 서버가 무시한다
+    body = { email: acct.email, password: acct.password, password1: acct.password, password2: acct.password, passwordConfirm: acct.password, confirmPassword: acct.password,
+      username: acct.username, name: `QA${acct.tag}`, nickname: `qa${acct.tag}`, userId: acct.username, loginId: acct.username, phone: '01000000000', agree: true, terms: true };
+    for (const f of fields || []) if (!(f in body)) body[f] = 'qa' + acct.tag;
+  }
   let r;
   if (auth.type === 'form') {
     const page = await request(baseUrl, sess, registerRoute.path);

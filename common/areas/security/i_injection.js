@@ -65,7 +65,14 @@ module.exports = {
       const parts = [...e.matchAll(/\$\{([^}]*)\}/g)].map(x => x[1]); if (e.trim().startsWith('`') && !parts.length) return true;
       return parts.length > 0 && parts.every(x => /escapeHtml\(|\besc\(|escape\w*\(|sanitize\w*\(|DOMPurify|Number\(|toLocaleString\(|toFixed\(|\.length\b/.test(x)); };
     for (const x of sinkHits.filter(x => /innerHTML/.test(x.h))) if (safeInner(x.h)) x.safe = true;
-    const sinkItems = sinkHits.filter(x => !x.safe).map(({ h, tag }) => ({ name: h.split(' — ')[0], ok: /innerHTML|<%-|escape/.test(h) ? null : false, detail: `${tag} · ${h.split(' — ')[1]}` }));
+    const unsafe = sinkHits.filter(x => !x.safe);
+    const byFile = new Map();
+    for (const x of unsafe.filter(x => /innerHTML|<%-|escape/.test(x.h))) { const f = x.h.split(':')[0]; (byFile.get(f) || byFile.set(f, []).get(f)).push(x); }
+    const sinkItems = [
+      ...unsafe.filter(x => !/innerHTML|<%-|escape/.test(x.h)).map(({ h, tag }) => ({ name: h.split(' — ')[0], ok: false, detail: `${tag} · ${h.split(' — ')[1]}` })),
+      // 화면의 innerHTML·escape 끈 템플릿은 기계가 escape 여부를 확신하지 못한다 — 파일마다 하나로 묶어 사람이 볼 곳을 줄인다
+      ...[...byFile.entries()].map(([f, xs]) => ({ name: f, ok: null, detail: `${xs[0].tag} · ${xs.length}곳에서 값을 HTML 로 꽂는다 (${xs.slice(0, 3).map(x => x.h.split(' — ')[0].split(':')[1]).join('·')}번째 줄${xs.length > 3 ? ' …' : ''}) — 사용자·서버가 준 값이 escape 를 거치는지 확인 (textContent 나 escape 함수)` })),
+    ];
     checks.push(owasp('A03', checkItems('위험한 코드 싱크 (eval·innerHTML·|safe·명령 실행·역직렬화)', sinkItems.length ? sinkItems : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));
     // 요청 값(req.·request.)이 바로 들어가면 불합격, 코드가 만든 조각(${whereSql}·자리표시자)이면 사람이 확인
     checks.push(owasp('A03', checkItems('SQL 을 문자열로 이어 붙이지 않는다', sqlHits.length ? sqlHits.map(({ h, ok }) => ({ name: h.split(' — ')[0], ok, detail: ok === false ? h.split(' — ').slice(1).join(' — ') : `${h.split(' — ').slice(1).join(' — ')} — 끼워 넣는 값이 사용자 입력에서 오지 않는지 확인` })) : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));

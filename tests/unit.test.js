@@ -211,3 +211,25 @@ test('지난 검사와 비교 — 이번에 못 잰 영역의 옛 문제를 "고
   assert.strictEqual(d.fixedCount, 0);
   assert.strictEqual(d.addedCount, 0);
 });
+
+test('서버 로그 — 요청 기록 줄은 상태 코드 자리만 본다 (응답 크기를 상태로 읽지 않는다)', () => {
+  const { accessStatus } = require('../common/areas/project/4_server_logs');
+  assert.strictEqual(accessStatus('[27/Sep/2026 12:26:04] "GET /accounts/login/?q=%27 HTTP/1.1" 500 145'), 500);   // Django — 끝의 145 는 크기
+  assert.strictEqual(accessStatus('GET /api/items 404 1.2 ms - 20'), 404);                                          // morgan
+  assert.strictEqual(accessStatus('INFO:     127.0.0.1:5 - "POST /x HTTP/1.1" 201 Created'), 201);                  // uvicorn
+  assert.strictEqual(accessStatus('TypeError: x is not a function'), null);
+});
+
+test('서버 켜기 — 설치 뒤에 package.json·requirements.txt 가 바뀌면 다시 설치한다', () => {
+  const { needsInstall } = require('../common/serve');
+  const root = write(tmp(), { 'package.json': '{}', 'node_modules/.package-lock.json': '{}', 'requirements.txt': 'django\n' });
+  const npm = { install: ['npm', 'install'] }, pip = { install: ['python3', '-m', 'pip', 'install', '-r', 'requirements.txt'] };
+  const past = (Date.now() - 60000) / 1000;
+  fs.utimesSync(path.join(root, 'package.json'), past, past);
+  assert.strictEqual(needsInstall(root, npm), null, '설치가 더 최근이면 다시 설치하지 않는다');
+  fs.utimesSync(path.join(root, 'package.json'), Date.now() / 1000 + 5, Date.now() / 1000 + 5);
+  assert.match(needsInstall(root, npm), /package\.json/);
+  assert.match(needsInstall(root, pip, null), /처음/);
+  assert.strictEqual(needsInstall(root, pip, Date.now() + 60000), null);
+  assert.match(needsInstall(root, pip, Date.now() - 3600000), /requirements/);
+});

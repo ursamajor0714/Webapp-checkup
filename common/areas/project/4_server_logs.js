@@ -8,12 +8,18 @@ const BUG = /Unhandled(?:PromiseRejection| Rejection| error)|uncaughtException|T
 // 오류를 뜻하지만 일부러 찍었을 수도 있는 것 (처리하고 남긴 기록)
 const WARN = /\b(?:error|exception|failed|ECONNREFUSED|ETIMEDOUT|EADDRINUSE|deprecat\w*|warn(?:ing)?)\b/i;
 // 요청 기록(access log) 한 줄 — 4xx 는 검사가 일부러 만든 것
-const ACCESS = /^\s*(?:\[[^\]]*\]\s*)?"?(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+\S+.*\b[1-4]\d\d\b|^\S+ - - \[.*\] ".*" [1-4]\d\d /;
+// 요청 기록(access log) 한 줄이면 그 상태 코드를, 아니면 null — 상태 코드 자리만 본다 (끝의 응답 크기 '145' 를 상태로 읽지 않게)
+//   Django·Apache·uvicorn: "GET /x HTTP/1.1" 500 145   ·   morgan: GET /x 500 12.3 ms - 45
+function accessStatus(l) {
+  const m = l.match(/"(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD) [^"]*"\s+(\d{3})\b/) || l.match(/^\s*(?:\[[^\]]*\]\s*)?(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+\S+\s+(\d{3})\b/);
+  return m ? Number(m[1]) : null;
+}
 
 // 같은 오류를 하나로 — 숫자·id·주소·따옴표 안 값을 지운다
 const signature = l => l.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z?|\b\d+(\.\d+)?\b|0x[0-9a-f]+|[0-9a-f]{8,}|'[^']*'|"[^"]*"|\/[\w./-]+:\d+/gi, '…').replace(/\s+/g, ' ').trim().slice(0, 160);
 
 module.exports = {
+  accessStatus,
   id: '4', name: '서버 로그 오류', weight: 5, last: 2,
   async run(ctx) {
     const states = Object.entries(ctx.serverStates || {});
@@ -25,10 +31,15 @@ module.exports = {
       const bugs = new Map(), warns = new Map();
       for (let i = 0; i < lines.length; i++) {
         const l = lines[i];
-        if (ACCESS.test(l) || /^\$ /.test(l) || /켜졌습니다/.test(l)) continue;
-        const bucket = BUG.test(l) ? bugs : WARN.test(l) && !/\[audit\]/.test(l) ? warns : null;
+        if (/^\$ /.test(l) || /켜졌습니다/.test(l)) continue;
+        // 요청 기록: 4xx 이하는 검사가 일부러 만든 것 — 넘어간다. 5xx 는 서버가 오류로 답한 것이다 (Django 는 DEBUG 가 꺼져 있으면 스택을 안 찍고 이 줄만 남긴다)
+        const st = accessStatus(l);
+        if (st !== null && st < 500) continue;
+        const bucket = st >= 500 || BUG.test(l) ? bugs : WARN.test(l) && !/\[audit\]/.test(l) ? warns : null;
         if (!bucket) continue;
-        const sig = signature(l);
+        // 5xx 요청 기록은 경로별로 묶는다 (따옴표 안의 경로를 지우는 signature 로는 전부 한 덩어리가 된다)
+        const req = st >= 500 && (l.match(/"?(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+([^\s?"]+)/) || []);
+        const sig = req && req[1] ? `요청 기록 ${req[1]} ${req[2].replace(/\/\d+(?=\/|$)/g, '/:id')} → ${st}` : signature(l);
         const e = bucket.get(sig) || { n: 0, first: l.trim(), next: (lines[i + 1] || '').trim() };
         e.n++; bucket.set(sig, e);
       }

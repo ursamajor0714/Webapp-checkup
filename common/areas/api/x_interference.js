@@ -11,7 +11,7 @@ module.exports = {
     if (!ctx.live) return { skip: '서버가 꺼져 있다' };
     const as = ctx.sessions.owner ? 'owner' : 'anon';
     const routes = ctx.routes();
-    const lists = routes.filter(r => r.method === 'GET' && !r.path.includes(':') && !/me|profile|health|ping|csrf|session/i.test(r.path)).slice(0, 15);
+    const lists = routes.filter(r => r.method === 'GET' && !r.path.includes(':') && !/(^|\/)(me|profile|health|healthz|ping|csrf|session)(\/|$)/i.test(r.path)).slice(0, 15);
     const creators = ctx.contracts.filter(c => c.method === 'POST' && !c.path.includes(':') && !/login|register|signup|auth|token|logout/i.test(c.path) && routes.some(r => r.method === 'DELETE' && r.path.startsWith(c.path.replace(/\/$/, '') + '/:')));
     if (!creators.length || lists.length < 2) return { skip: '만들고 지울 수 있는 자원이 없거나 목록이 하나뿐이다' };
     const snap = async () => Object.fromEntries(await Promise.all(lists.map(async r => { const b = (await ctx.call(r.path, { service: r.service, as })).body; const l = listOf(b); return [r.path, Array.isArray(l) ? l.length : JSON.stringify(b || '').length]; })));
