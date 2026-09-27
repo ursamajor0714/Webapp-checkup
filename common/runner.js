@@ -189,6 +189,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     if (!ctx.accountFlow.length) delete ctx.accountFlow;
   }
 
+  // 비어 있는 목록이 있으면 검사용 데이터를 몇 개 만든다 (끝나면 지운다)
+  if (def.seed !== false) await require('./seed').seed(ctx, log).catch(e => ctx.notes.push(`검사용 데이터를 만들지 못했다: ${e.message}`));
   const all = listAreas(def);
   const probes = all.filter(p => !p.todo)
     .filter(p => !only.length || only.map(s => s.toUpperCase()).includes(p.id))
@@ -305,6 +307,7 @@ function diffWithPrevious(dir, results, score) {
 
 async function finish(prep, results, { save = true } = {}) {
   const { ctx, project, todo } = prep;
+  if (ctx.seeded && ctx.seeded.length) { const n = await require('./seed').cleanup(ctx).catch(() => 0); if (n) ctx.notes.push(`검사용 데이터 ${n}개를 지웠다`); }
   const measured = results.filter(r => !r.skip);
   const tot = k => measured.reduce((s, r) => s + r[k], 0);
   const { scanRate, quality } = scoreOf(results);
