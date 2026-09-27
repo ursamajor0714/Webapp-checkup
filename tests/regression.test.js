@@ -64,6 +64,10 @@ test('Express 서버 — 심은 버그를 모두 잡는다', { timeout: 600000 }
   caught(rep, 'L', /오류 처리기/);
   caught(rep, 'H', /x-powered-by/i);
   assert.ok(rep.summary.notes.some(n => /검사용 데이터 \d+개를 지웠다/.test(n)), '검사용 데이터를 만들고 지운다');
+  caught(rep, '11', /server\.js:\d+.*api\.example\.com\/rate/, { warnOk: true });   // 제한 시간 없는 외부 호출 (△)
+  const r11 = rep.results.find(r => r.id === '11');
+  assert.ok(!r11.checks[0].items.some(i => /ping/.test(i.detail)), '제한 시간이 있는 호출은 잡지 않는다');
+  assert.deepStrictEqual((rep.summary.saas || []).map(x => x.name).sort(), ['OpenAI', 'Render', 'Resend']);
   const why = browserSkipped(rep);
   if (why) return t.skip(`브라우저 없음 — 화면 검사 단정은 건너뜀 (${why})`);
   caught(rep, '2', /\/api\/prices/, { warnOk: true });   // 화면이 부른 요청이 404

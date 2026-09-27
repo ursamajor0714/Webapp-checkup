@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: buggy-express
+    env: node
+    startCommand: node server.js
