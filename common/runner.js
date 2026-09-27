@@ -167,6 +167,11 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     }
     else if (auth.csrf) await require('./session').prepareCsrf(base, ctx.sessions.anon, auth);   // 익명 요청도 CSRF 토큰을 싣는다
     const reg = routes.find(r => r.method === 'POST' && /register|signup|join/i.test(r.path) && r.service === ctx.authService);
+    // 로그인 코드가 비교하는 환경변수(예: ADMIN_PASSWORD) — 레포 .env 에 값이 있으면 쓴다. 어떤 비밀번호를 넣어야 하는지 사람이 맞힐 필요가 없게
+    const svc = ctx.parts.find(p => p.id === ctx.authService);
+    const envPw = auth.passwordEnv && svc && (() => { const { readEnvFile } = require('./deps'); const v = { ...readEnvFile(path.join(project.root, '.env')), ...readEnvFile(path.join(svc.absDir, '.env')), ...readEnvFile(path.join(svc.absDir, '.env.local')) }; return v[auth.passwordEnv] || process.env[auth.passwordEnv] || null; })();
+    if (envPw && !auth.password) { auth.password = envPw; ctx.notes.push(`로그인 비밀번호는 레포 .env 의 ${auth.passwordEnv} 를 썼다 (${auth.loginPath} 가 이 값과 비교한다 — ⚙ 설정에 넣지 않아도 된다)`); }
+    else if (envPw && auth.password !== envPw) { ctx.notes.push(`⚙ 설정의 비밀번호가 레포 .env 의 ${auth.passwordEnv} 와 다르다 — ${auth.loginPath} 는 ${auth.passwordEnv} 와 비교한다. 설정 값으로 안 되면 .env 값으로 다시 해 본다`); ctx.envPassword = envPw; }
     const accounts = [];
     if (auth.password && (auth.user || !auth.fields.user)) accounts.push({ user: auth.user, password: auth.password, from: '설정' });
     if (auth.user2 && auth.password2) accounts.push({ user: auth.user2, password: auth.password2, from: '설정' });
@@ -184,6 +189,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     for (const [i, name] of ['owner', 'other'].entries()) {
       let a = accounts[i]; if (!a) break;
       let l = await login(base, auth, a, name);
+      // 설정 비밀번호가 틀렸는데 레포 .env 에 비교 대상 값이 있으면 그것으로 한 번 더
+      if (!l.ok && a.from === '설정' && ctx.envPassword && i === 0) { const b = { ...a, password: ctx.envPassword, from: `레포 .env 의 ${auth.passwordEnv}` }; const l2 = await login(base, auth, b, name); if (l2.ok) { a = accounts[0] = b; l = l2; ctx.notes.push(`설정 비밀번호로는 실패해서 레포 .env 의 ${auth.passwordEnv} 로 로그인했다 — ⚙ 설정의 비밀번호를 지우거나 고치면 이 안내가 사라진다`); } }
       if (!l.ok && a.from === '설정') {
         const locked = /\b(429|423)\b|잠김|잠겼|locked|too many/i.test(l.why || '');
         setupFail.push(`⚙ 설정의 ${name === 'owner' ? '첫' : '두'} 번째 계정(${a.user || '비밀번호만'})으로 로그인하지 못했다: ${l.why}${locked ? ' — 계정이 잠겨 있다 (직전 검사의 무차별 대입 검사로 잠겼을 수 있다). 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ' — 아이디·비밀번호를 확인한다'}`);

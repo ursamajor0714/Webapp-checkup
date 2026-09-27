@@ -233,3 +233,17 @@ test('서버 켜기 — 설치 뒤에 package.json·requirements.txt 가 바뀌�
   assert.strictEqual(needsInstall(root, pip, Date.now() + 60000), null);
   assert.match(needsInstall(root, pip, Date.now() - 3600000), /requirements/);
 });
+
+test('로그인 비밀번호 — 로그인 코드가 비교하는 환경변수를 찾는다 (관리자 비밀번호 하나로 들어가는 앱)', () => {
+  const { guessAuth, loadProject } = require('../common/project');
+  const { makeContext } = require('../common/context');
+  const root = write(tmp(), {
+    'package.json': '{"dependencies":{"express":"4"}}',
+    'config.js': 'module.exports = { ADMIN_PASSWORD: process.env.ADMIN_PW_VALUE };',
+    'server.js': "const express = require('express'); const { ADMIN_PASSWORD } = require('./config'); const app = express();\napp.post('/api/admin/login', (req, res) => { const { password } = req.body; if (safeCompare(password, ADMIN_PASSWORD)) return res.json({ token: 'x' }); res.status(401).end(); });\napp.listen(3000);",
+  });
+  const p = loadProject({ root });
+  const a = guessAuth(root, p.parts, makeContext(p).routes());
+  assert.strictEqual(a.loginPath, '/api/admin/login');
+  assert.strictEqual(a.passwordEnv, 'ADMIN_PW_VALUE', '상수를 만드는 process.env 이름까지 따라간다');
+});

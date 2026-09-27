@@ -86,8 +86,18 @@ function guessAuth(root, parts, routes) {
   const csrfHeader = (src.match(/headers\[\s*["'](x-[\w-]*(?:csrf|xsrf)[\w-]*)["']\s*\]|\.(?:get|header)\(\s*["'](x-[\w-]*(?:csrf|xsrf)[\w-]*)["']/i) || []).slice(1).find(Boolean);
   const csrf = /csurf|csrf/i.test(src) ? { getPath: (routes.find(r => r.method === 'GET' && /csrf/i.test(r.path) && r.service === svc.id) || {}).path || null, header: csrfHeader || undefined } : null;
   const usesCookie = /res\.cookie\(|cookie-parser|express-session|httpOnly\s*:|HttpSession|getSession\(|session\.setAttribute/i.test(src) && !/Authorization['"]?\]?\s*[:=]|authorization\.split|Bearer /.test(src);
+  const passwordEnv = passwordEnvOf(login.handler || '', src);
   const passOnly = !new RegExp(`req\\.body\\.${userField}|${userField}\\s*[,}]`).test(src) && /req\.body\.password|\{\s*password\s*\}/.test(src);
-  return { type: usesCookie ? 'cookie' : 'bearer', loginPath: login.path, fields: passOnly ? { password: 'password' } : fields, csrf, guessed: true };
+  return { type: usesCookie ? 'cookie' : 'bearer', loginPath: login.path, fields: passOnly ? { password: 'password' } : fields, csrf, guessed: true, ...(passwordEnv ? { passwordEnv } : {}) };
+}
+
+// password 를 무엇과 비교하나 — safeCompare(password, ADMIN_PASSWORD) · password === process.env.X · X === password
+//   비교 대상이 상수면 그 상수를 만드는 process.env.Y 를 코드에서 찾는다 (없으면 상수 이름을 환경변수 이름으로 본다)
+function passwordEnvOf(handler, src) {
+  const m = handler.match(/\b\w*[Pp]assword\b\s*,\s*(?:process\.env\.)?([A-Z][A-Z0-9_]{2,})\b/) || handler.match(/\b\w*[Pp]assword\b\s*!?===?\s*(?:process\.env\.)?([A-Z][A-Z0-9_]{2,})\b/) || handler.match(/(?:process\.env\.)?([A-Z][A-Z0-9_]{2,})\s*!?===?\s*\w*[Pp]assword\b/);
+  if (!m || !/PASS|PW|SECRET|KEY/.test(m[1])) return null;
+  const via = src.match(new RegExp(`\\b${m[1]}\\b\\s*[:=]\\s*process\\.env\\.([A-Z][A-Z0-9_]*)`));
+  return via ? via[1] : m[1];
 }
 
 // 설정을 합친다: 추정값 ← projects/<id>/project.js ← 화면 설정(.qa-local.json)

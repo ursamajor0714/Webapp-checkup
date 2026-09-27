@@ -72,6 +72,14 @@ function settingsOf(id) {
     user: auth.user || '', user2: auth.user2 || '',
     // 비밀번호·OTP 값은 돌려주지 않는다 — 넣었는지와 어디서 왔는지만
     secrets: ['password', 'password2', ...(needOtp ? ['otp'] : [])].map(k => ({ field: k, set: !!auth[k], from: mine[k] ? '화면 설정' : auth[k] ? '환경변수·설정 파일' : null })),
+    login: (() => { try {   // 어느 로그인에 쓰는 비밀번호인지 — 코드에서 추정한 로그인 경로와, 비교 대상 환경변수
+      if (!def.root || !fs.existsSync(def.root)) return null;
+      const { guessAuth } = require('./common/project'); const { makeContext } = require('./common/context');
+      const p = loadProject(def); const g = guessAuth(def.root, p.parts, makeContext(p).routes());
+      const a = { ...g, ...(def.auth || {}) };
+      const envVal = a.passwordEnv && (() => { const { readEnvFile } = require('./common/deps'); const svc = p.parts.find(x => x.kind !== 'client'); return { ...readEnvFile(path.join(def.root, '.env')), ...(svc ? readEnvFile(path.join(svc.absDir, '.env')) : {}) }[a.passwordEnv]; })();
+      return a.loginPath ? { path: a.loginPath, passwordEnv: a.passwordEnv || null, envHasValue: !!envVal } : null;
+    } catch { return null; } })(),
     parts: projectInfo(id).parts.filter(p => p.canServe).map(p => ({ dir: p.dir, stack: p.label, port: ((mine.parts || {})[p.dir] || {}).port || '', baseUrl: p.baseUrl })),
   };
 }

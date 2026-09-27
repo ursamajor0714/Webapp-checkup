@@ -479,7 +479,8 @@ function fillSettings() {
   const hint = x => !x ? '' : x.set ? `— 저장됨 (${esc(x.from)}) · 바꿀 때만 입력` : '— 비어 있음';
   $('#lUser').style.display = st.passwordOnly ? 'none' : '';
   $('#acct2').style.display = st.passwordOnly ? 'none' : 'grid';
-  $('#pwHint').innerHTML = hint(sec('password')); $('#pw2Hint').innerHTML = hint(sec('password2'));
+  $('#pwHint').innerHTML = hint(sec('password')) + (st.login ? `<div class="hint">이 비밀번호로 <b>POST ${esc(st.login.path)}</b> 에 로그인한다${st.login.passwordEnv ? ` — 코드가 <b>${esc(st.login.passwordEnv)}</b> 와 비교한다.${st.login.envHasValue ? ' 레포 .env 에 값이 있어 <b>비워 두면 그 값을 쓴다</b>.' : ' 레포 .env 에 이 값을 넣거나 여기에 같은 값을 넣는다.'}` : ''}</div>` : '');
+  $('#pw2Hint').innerHTML = hint(sec('password2'));
   $('#lOtp').style.display = sec('otp') ? '' : 'none'; $('#otpHint').innerHTML = hint(sec('otp'));
   $('#portBox').innerHTML = st.parts.length ? '<div style="font-weight:600;font-size:13px;margin-bottom:6px">부분별 포트 <span class="hint">비우면 코드에서 찾은 값</span></div>' + st.parts.map(p => `<label style="display:grid;grid-template-columns:1fr auto 90px;gap:8px;align-items:center;font-weight:400;margin-bottom:4px"><span>${esc(p.stack)} · ${esc(p.dir)}</span><span class="hint">${esc(p.baseUrl || '')}</span><input data-port="${esc(p.dir)}" value="${esc(p.port)}" inputmode="numeric" placeholder="자동"></label>`).join('') : '';
   const t = cur();
