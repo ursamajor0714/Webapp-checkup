@@ -10,7 +10,9 @@
 
 ## 실행
 
-**딸깍** — `QA 실행.command`(Mac) / `QA 실행.bat`(Windows) 더블클릭 → 브라우저에 화면이 열린다.
+**딸깍** — `QA 실행 (Mac).command` / `QA 실행 (Windows).bat` 더블클릭 → 브라우저에 화면이 열린다.
+맥에서 `.command` 가 편집기(VS Code 등)로 열리면: 우클릭 → **다음으로 열기 → 터미널**. 또는 터미널에서 QA 폴더로 가서 `npm run ui`.
+처음 한 번 "확인되지 않은 개발자" 경고가 뜨면 우클릭 → 열기.
 
 1. **＋ 프로젝트 추가** → 레포 폴더 경로 (스택은 알아서 찾는다)
 2. **⚙ 설정** → 로그인이 있는 서비스면 검사용 계정 (가입 경로가 있으면 비워 둬도 두 개를 자동으로 만든다)
@@ -187,7 +189,7 @@ module.exports = {
 ## 구조
 
 ```
-run.js · ui.js · QA 실행.command/.bat
+run.js · ui.js · QA 실행 (Mac).command · QA 실행 (Windows).bat
 common/
   stacks/     스택 어댑터 — 감지·경로·화면 호출·페이지·켜는 방법
   lang/       언어별 규칙 — 위험 싱크·SQL·비밀·약한 암호·시간·오류 처리 (js·python·java)

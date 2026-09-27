@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ============================================================
 // QA 조회 화면 — 프로젝트를 고르고, 영역마다 버튼을 누르면 검사가 돌고, 본 것 하나하나가 O/X 로 나온다
-//   더블클릭:  QA 실행.command (Mac) · QA 실행.bat (Windows)
+//   더블클릭:  QA 실행 (Mac).command · QA 실행 (Windows).bat
 //   직접:      node ui.js [--open]      → http://localhost:4545
 //
 // 화면에서 할 수 있는 것
