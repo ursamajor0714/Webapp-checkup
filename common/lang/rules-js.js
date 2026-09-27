@@ -3,7 +3,7 @@ const path = require('path');
 const { read, readJson, exists, walk } = require('../stacks/util');
 
 module.exports = {
-  id: 'js', exts: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
+  id: 'js', exts: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.vue'],
   // 의존성 파일
   manifest(dir) {
     const pkg = readJson(path.join(dir, 'package.json'));
@@ -25,6 +25,7 @@ module.exports = {
   // 위험한 코드 — [정규식, 설명, OWASP, 어디서 (server|client|all)]
   sinks: [
     [/dangerouslySetInnerHTML/, 'dangerouslySetInnerHTML 로 HTML 을 직접 꽂는다', 'A03', 'client'],
+    [/\bv-html\s*=/, 'Vue v-html 로 HTML 을 직접 꽂는다 (escape 여부 확인)', 'A03', 'client'],
     [/\.innerHTML\s*=(?!\s*['"`]\s*['"`])(?!\s*['"`][^'"`$]*['"`]\s*;)/, 'innerHTML 에 값을 넣는다 (escape 여부 확인)', 'A03', 'client'],
     [/document\.write\(/, 'document.write', 'A03', 'client'],
     [/(?<![\w.$])eval\(|new Function\(/, 'eval / new Function', 'A03', 'all'],
@@ -55,9 +56,9 @@ module.exports = {
   // 오류를 삼키는 꼴
   swallow: /catch\s*(?:\(\s*\w*\s*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\w*\s*\)\s*=>\s*\{\s*\}\s*\)|\.catch\(\s*\(\)\s*=>\s*(?:null|undefined|void 0)\s*\)/,
   // 전역 오류 처리기 / 요청 로그 / 보안 이벤트 로그
-  errorHandler: /app\.use\(\s*(?:async\s*)?\(\s*err\s*,|export\s+function\s+onRequestError|error\.(?:tsx|jsx|js)/,
+  errorHandler: /app\.use\(\s*(?:async\s*)?\(\s*err\s*,|export\s+function\s+onRequestError|error\.(?:tsx|jsx|js)|@Catch\(|implements\s+ExceptionFilter|useGlobalFilters|nitroApp\.hooks\.hook\(\s*['"]error/,
   requestLog: /\bmorgan\b|\bpino\b|\bwinston\b|\bbunyan\b|console\.(?:log|info)\([^)]*req\.(?:method|url|path)/,
-  rateLimit: /express-rate-limit|rate-limiter|rateLimit\(|limiter|tooManyAttempts|lockedUntil|MAX_FAILURES|429/,
+  rateLimit: /express-rate-limit|rate-limiter|rateLimit\(|limiter|tooManyAttempts|lockedUntil|MAX_FAILURES|429|@nestjs\/throttler|ThrottlerGuard/,
   helmet: /\bhelmet\b|headers\(\)\s*\{|Content-Security-Policy/,
   hashLib: /bcrypt|argon2|scrypt|pbkdf2/,
   // N+1 — 반복문 안에서 DB 를 두드리는 꼴

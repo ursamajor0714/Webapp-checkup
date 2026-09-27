@@ -4,7 +4,7 @@ const path = require('path');
 const { walk, read, exists, pkgDeps, readJson, normParams } = require('./util');
 const js = require('../lang/js');
 
-const JS_EXT = ['.js', '.jsx', '.ts', '.tsx', '.mjs'];
+const JS_EXT = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.vue'];
 const srcFiles = dir => walk(dir, JS_EXT).filter(f => !/\.(test|spec|config|d)\.[jt]sx?$/.test(f) && !/vite\.config|eslint|babel\.config|metro\.config/.test(f));
 
 // HTML·템플릿에서 부르는 경로: href·src·action·폼 method, <script> 안의 fetch
@@ -48,6 +48,23 @@ const react = {
   },
   assets(dir) { return assetRefs([path.join(dir, 'index.html')].filter(exists), dir); },
   serve(dir) { const d = pkgDeps(dir) || {}; return { install: ['npm', 'install'], start: d.vite ? ['npx', 'vite', '--port', '{PORT}', '--strictPort'] : ['npm', 'start'] }; },
+};
+
+// Vue (Vite · Vue CLI) — 화면만. Nuxt 는 서버까지 있어 stacks/nuxt.js
+const vue = {
+  id: 'vue', label: 'Vue (Vite/Vue CLI)', kind: 'client', lang: 'js',
+  detect: dir => { const d = pkgDeps(dir); return !!(d && d.vue && !d.nuxt && (d.vite || d['@vue/cli-service'])); },
+  defaultPort: dir => { const d = pkgDeps(dir) || {}; const m = read(walk(dir, ['vite.config.js', 'vite.config.ts'])[0] || '').match(/port\s*:\s*(\d+)/); return m ? Number(m[1]) : d.vite ? 5173 : 8080; },
+  sources: dir => srcFiles(path.join(dir, exists(path.join(dir, 'src')) ? 'src' : '.')),
+  calls(dir) { const files = this.sources(dir); return js.extractCalls(files, dir).map(c => ({ ...c, prefixes: js.basePrefixes(files) })); },
+  // vue-router 의 path: '/x' (파라미터 없는 것)
+  pages(dir) {
+    const out = new Set(['/']);
+    for (const f of this.sources(dir)) for (const m of read(f).matchAll(/\bpath\s*:\s*["'](\/[^"']*)["']/g)) if (!m[1].includes(':') && !m[1].includes('*')) out.add(m[1]);
+    return [...out];
+  },
+  assets(dir) { return assetRefs([path.join(dir, 'index.html')].filter(exists), dir); },
+  serve(dir) { const d = pkgDeps(dir) || {}; return { install: ['npm', 'install'], start: d.vite ? ['npx', 'vite', '--port', '{PORT}', '--strictPort'] : ['npx', 'vue-cli-service', 'serve', '--port', '{PORT}'] }; },
 };
 
 const expo = {
@@ -94,4 +111,4 @@ const templates = {
   assets(dir) { return assetRefs(walk(dir, ['.ejs', '.html', '.hbs']), dir); },
 };
 
-module.exports = { react, expo, static: staticSite, templates, templateCalls, assetRefs };
+module.exports = { react, vue, expo, static: staticSite, templates, templateCalls, assetRefs };
