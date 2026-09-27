@@ -19,7 +19,7 @@ module.exports = {
       if (bad.length) dates.push({ name: `GET ${r.path}`, ok: null, detail: `날짜 칸 형식이 ISO 가 아니다: ${bad.map(m => `${m[1]}="${m[2].slice(0, 20)}"`).join(', ')}` });
     }
     // 오류도 JSON 으로 오는가 — 없는 경로
-    for (const s of ctx.services) {
+    for (const s of ctx.services.filter(s => !ctx.up || ctx.up[s.id])) {   // 뜬 서버만
       const pre = ctx.routes().some(r => r.service === s.id && r.path.startsWith('/api')) ? '/api' : '';
       if (!pre) continue;
       const r = await ctx.call(`${pre}/qa-no-such`, { service: s.id, as });

@@ -1,7 +1,7 @@
 // E. 에러 처리 — 잘못된 요청에 5xx 가 아니라 4xx, 없는 것엔 404, 오류 응답에 내부 사정이 안 보인다
 //   자동 생성: 모든 쓰기 경로 × 이상한 본문 8가지 (칸 값 퍼징은 F)
 const { check, checkItems, owasp } = require('../_util');
-const { shapeRoute, DANGEROUS } = require('../../generate');
+const { shapeRoute, untouchable } = require('../../generate');
 
 const LEAK = /\bat\s+\S+\s+\(.*:\d+:\d+\)|Traceback \(most recent|Exception in thread|SQLSTATE|PrismaClient|Sequelize\w*Error|"stack"\s*:|node_modules\/|\.java:\d+\)|django\.core\.exceptions/;
 
@@ -24,7 +24,7 @@ module.exports = {
     const loose = [];
     // 3. 없는 id · 이상한 id
     const idItems = [];
-    for (const r of routes.filter(x => x.path.includes(':') && ['GET', 'PUT', 'PATCH', 'DELETE'].includes(x.method) && !DANGEROUS.test(x.path)).slice(0, 40)) {
+    for (const r of routes.filter(x => x.path.includes(':') && ['GET', 'PUT', 'PATCH', 'DELETE'].includes(x.method) && !untouchable(ctx, x)).slice(0, 40)) {
       for (const [label, v] of [['없는 id', '999999999'], ['문자 id', 'qa-no-such'], ['음수', '-1'], ['아주 긴 값', 'x'.repeat(300)]]) {
         const url = r.path.replace(/:[A-Za-z0-9_]+\*?/g, v);
         const res = await ctx.call(url, { service: r.service, as, method: r.method, body: ['PUT', 'PATCH'].includes(r.method) ? {} : undefined });
@@ -36,7 +36,7 @@ module.exports = {
     if (idItems.length) checks.push(checkItems('없는·이상한 id 에 4xx 로 답한다', idItems));
     // 4. 없는 경로·안 되는 메서드
     const misc = [];
-    for (const s of ctx.services) {
+    for (const s of ctx.services.filter(s => !ctx.up || ctx.up[s.id])) {   // 뜬 서버만
       const apiPrefix = (routes.find(r => r.service === s.id && r.path.startsWith('/api')) ? '/api' : '');
       const nf = await ctx.call(`${apiPrefix}/qa-no-such-route-${Date.now()}`, { service: s.id, as });
       misc.push({ name: `${s.id} · 없는 경로`, ok: nf.status === 404, detail: `${nf.status}${nf.status === 200 ? ' — 없는 경로에 200 (SPA 라면 화면 경로만 그래야 한다)' : ''}` });

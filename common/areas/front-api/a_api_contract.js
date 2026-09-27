@@ -13,7 +13,7 @@ module.exports = {
   id: 'A', name: 'API 계약 (화면↔서버)', weight: 5,
   async run(ctx) {
     const calls = ctx.calls().filter(c => c.kind !== 'link' || c.path.startsWith('/api'));
-    const routes = ctx.routes();
+    const routes = ctx.allRoutes();   // 코드끼리 대조 — 서버가 꺼져 있어도 전체 경로
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
     if (!calls.length) return { skip: '화면에서 서버를 부르는 코드를 찾지 못했다' };
     const pageRoutes = new Set(ctx.pages().map(p => p.path));

@@ -1,6 +1,6 @@
 // O. 응답 크기·속도 — 요청 본문 상한, 목록 응답의 크기·시간, 목록이 끝없이 커지지 않게 나눠 주는가
 const { checkItems, owasp } = require('../_util');
-const { fillPath, DANGEROUS } = require('../../generate');
+const { fillPath, untouchable } = require('../../generate');
 
 module.exports = {
   id: 'O', name: '응답 크기·속도', weight: 5, owasp: ['A04'],
@@ -11,7 +11,7 @@ module.exports = {
     const as = ctx.sessions.owner ? 'owner' : 'anon';
     // 1. 본문 크기 상한 — 5MB 를 받아 주면 서버 메모리를 쉽게 채운다
     const big = [];
-    for (const r of ctx.routes().filter(x => ['POST', 'PUT', 'PATCH'].includes(x.method) && !DANGEROUS.test(x.path)).slice(0, 6)) {
+    for (const r of ctx.routes().filter(x => ['POST', 'PUT', 'PATCH'].includes(x.method) && !untouchable(ctx, x)).slice(0, 6)) {
       const url = await fillPath(ctx, r, as);
       const res = await ctx.call(url, { service: r.service, as, method: r.method, raw: JSON.stringify({ qa: 'x'.repeat(5 * 1024 * 1024) }), headers: { 'Content-Type': 'application/json' } }).catch(e => ({ status: 0, text: e.message }));
       if (res.status === 401 || res.status === 403) continue;

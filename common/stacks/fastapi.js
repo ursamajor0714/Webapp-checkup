@@ -27,9 +27,11 @@ module.exports = {
     return out;
   },
   serve(dir) {
+    // 레포의 가상환경이 있으면 그 파이썬 (Homebrew 파이썬은 전역 pip install 을 막는다 — PEP 668)
+    const py = ['.venv', 'venv'].map(v => path.join(dir, v, 'bin', 'python')).find(exists) || 'python3';
     const main = walk(dir, ['.py']).find(f => /FastAPI\(/.test(read(f)));
     const mod = main ? path.relative(dir, main).replace(/\.py$/, '').replace(/\//g, '.') : 'main';
     const app = main ? (read(main).match(/(\w+)\s*=\s*FastAPI\(/) || [])[1] || 'app' : 'app';
-    return { install: exists(path.join(dir, 'requirements.txt')) ? ['python3', '-m', 'pip', 'install', '-r', 'requirements.txt'] : null, start: ['python3', '-m', 'uvicorn', `${mod}:${app}`, '--port', '{PORT}'] };
+    return { install: exists(path.join(dir, 'requirements.txt')) ? [py, '-m', 'pip', 'install', '-r', 'requirements.txt'] : null, start: [py, '-m', 'uvicorn', `${mod}:${app}`, '--port', '{PORT}'] };
   },
 };

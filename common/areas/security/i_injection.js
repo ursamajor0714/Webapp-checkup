@@ -32,7 +32,21 @@ module.exports = {
       }
     }
     // 화면 위험 코드는 escape 여부를 기계가 확신할 수 없다 → 확인 필요, 서버 명령 실행·역직렬화는 불합격
-    const sinkItems = sinkHits.map(({ h, tag }) => ({ name: h.split(' — ')[0], ok: /innerHTML|<%-|escape/.test(h) ? null : false, detail: `${tag} · ${h.split(' — ')[1]}` }));
+    // innerHTML 은 줄이 아니라 '대입한 식 전체' 를 본다 — 값을 끼우지 않은 고정 문자열이거나, 끼운 값이 전부 escape 함수를 거치면 통과
+    const assigned = (file, line) => {
+      const src = require('../_util').read(require('path').join(ctx.root, file)); const lines = src.split('\n');
+      const at = lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
+      const m = src.slice(at).match(/\.innerHTML\s*\+?=\s*/); if (!m) return null;
+      let i = at + m.index + m[0].length; const q = src[i];
+      if (q !== '`') { const end = src.indexOf(';', i); return src.slice(i, end < 0 ? undefined : end); }
+      let d = 0, j = i + 1; for (; j < src.length; j++) { const c = src[j]; if (c === '\\') { j++; continue; } if (c === '$' && src[j + 1] === '{') { d++; j++; continue; } if (c === '}' && d) { d--; continue; } if (c === '`' && !d) break; }
+      return src.slice(i, j + 1);
+    };
+    const safeInner = h => { const [loc] = h.split(' — '); const [file, ln] = loc.split(':'); const e = assigned(file, Number(ln)); if (e === null) return false;
+      const parts = [...e.matchAll(/\$\{([^}]*)\}/g)].map(x => x[1]); if (e.trim().startsWith('`') && !parts.length) return true;
+      return parts.length > 0 && parts.every(x => /escapeHtml\(|\besc\(|escape\w*\(|sanitize\w*\(|DOMPurify|Number\(|toLocaleString\(|toFixed\(|\.length\b/.test(x)); };
+    for (const x of sinkHits.filter(x => /innerHTML/.test(x.h))) if (safeInner(x.h)) x.safe = true;
+    const sinkItems = sinkHits.filter(x => !x.safe).map(({ h, tag }) => ({ name: h.split(' — ')[0], ok: /innerHTML|<%-|escape/.test(h) ? null : false, detail: `${tag} · ${h.split(' — ')[1]}` }));
     checks.push(owasp('A03', checkItems('위험한 코드 싱크 (eval·innerHTML·|safe·명령 실행·역직렬화)', sinkItems.length ? sinkItems : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));
     // 요청 값(req.·request.)이 바로 들어가면 불합격, 코드가 만든 조각(${whereSql}·자리표시자)이면 사람이 확인
     checks.push(owasp('A03', checkItems('SQL 을 문자열로 이어 붙이지 않는다', sqlHits.length ? sqlHits.map(({ h, ok }) => ({ name: h.split(' — ')[0], ok, detail: ok === false ? h.split(' — ').slice(1).join(' — ') : `${h.split(' — ').slice(1).join(' — ')} — 끼워 넣는 값이 사용자 입력에서 오지 않는지 확인` })) : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));

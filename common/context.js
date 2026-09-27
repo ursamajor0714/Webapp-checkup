@@ -57,6 +57,7 @@ function makeContext(project) {
         return calls.map(x => ({ ...x, client: c.id }));
       } catch (e) { ctx.notes.push(`${c.id} 화면 호출을 읽지 못함: ${e.message}`); return []; }
     })),
+    allRoutes: () => ctx.routes(),   // prepare 가 '뜬 서버만' 으로 routes 를 좁히면 이것이 전체
     livePages: () => ctx.pages().filter(pg => !ctx.up || ctx.up[pg.part] !== false),
     pages: () => once('pages', () => project.parts.filter(p => !p.native).flatMap(p => {
       const st = STACKS[p.stack];

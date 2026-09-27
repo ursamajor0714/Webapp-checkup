@@ -27,6 +27,8 @@ class Session {
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const timings = [];
+const hung = new Set();   // 시간 초과가 난 경로 (이번 검사 동안)
+const REQUEST_TIMEOUT_MS = Number(process.env.QA_REQUEST_TIMEOUT_MS) || 15000;
 // 요청 하나 — 세션의 쿠키·토큰·CSRF 를 붙이고, 받은 쿠키를 담는다
 async function request(baseUrl, sess, p, { method = 'GET', body, headers = {}, form, raw, redirect = 'manual' } = {}) {
   const h = { ...headers };
@@ -42,16 +44,27 @@ async function request(baseUrl, sess, p, { method = 'GET', body, headers = {}, f
   if (raw !== undefined) payload = raw;
   else if (form) { payload = new URLSearchParams(form).toString(); h['Content-Type'] ??= 'application/x-www-form-urlencoded'; }
   else if (body !== undefined) { payload = JSON.stringify(body); h['Content-Type'] ??= 'application/json'; }
-  const go = () => fetch(baseUrl + p, { method, headers: h, body: payload, redirect });
-  // 긴 검사 뒤 keep-alive 소켓이 끊겨 있으면 한 번만 다시 건다
+  // 제한 시간 — 응답을 붙잡는 경로 하나가 검사 전체를 멈추지 않게. 한 번 시간 초과가 난 경로는 다시 기다리지 않는다
+  const key = `${method} ${baseUrl}${p.split('?')[0]}`;
+  const fake = (status, text) => ({ status, headers: new Headers(), text: async () => text, timedOut: status === 504 });
   const t0 = Date.now();
-  const res = await go().catch(() => go());
+  let res;
+  if (hung.has(key)) res = fake(504, 'QA: 이 경로는 앞서 15초 안에 답하지 않아 다시 기다리지 않았다');
+  else {
+    const go = () => fetch(baseUrl + p, { method, headers: h, body: payload, redirect, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    res = await go().catch(e => {
+      if (e.name === 'TimeoutError') { hung.add(key); return fake(504, `QA: ${REQUEST_TIMEOUT_MS / 1000}초 안에 응답이 없다 — 서버가 요청을 붙잡고 있다`); }
+      // 긴 검사 뒤 keep-alive 소켓이 끊긴 경우 한 번만 다시 건다 — 읽기만. 쓰기를 다시 보내면 같은 데이터가 두 번 생길 수 있다
+      if (method === 'GET') return go().catch(() => fake(0, 'QA: 연결하지 못했다'));
+      return fake(0, 'QA: 보낸 뒤 연결이 끊겼다 (처리됐는지 알 수 없어 다시 보내지 않았다)');
+    });
+  }
   if (sess) sess.absorb(res);
   const text = await res.text().catch(() => '');
   // 응답 시간 기록 — '느린 API' 영역이 경로별로 모아 본다 (주입·거대 본문처럼 일부러 이상한 요청도 섞여 있다)
-  if (timings.length < 50000) timings.push({ method, path: p.split('?')[0], ms: Date.now() - t0, status: res.status, big: (payload ? String(payload).length : 0) > 100000 });
+  if (timings.length < 50000) timings.push({ method, path: p.split('?')[0], ms: Date.now() - t0, status: res.status, timedOut: !!res.timedOut, big: (payload ? String(payload).length : 0) > 100000 });
   let parsed = null; try { parsed = JSON.parse(text); } catch { /* JSON 이 아닐 수 있다 */ }
-  return { status: res.status, ok: res.ok, body: parsed, text, headers: res.headers, bytes: text.length, location: res.headers.get('location') };
+  return { status: res.status, ok: res.status >= 200 && res.status < 300, body: parsed, text, headers: res.headers, bytes: text.length, location: res.headers.get('location'), timedOut: !!res.timedOut };
 }
 
 // 응답에서 토큰 찾기 — 흔한 이름들
@@ -127,4 +140,4 @@ async function register(baseUrl, auth, registerRoute, fieldsGuess = []) {
   return { ok, acct, status: r.status, why: ok ? '' : `가입 실패 (${r.status}) ${String(r.text).slice(0, 100)}` };
 }
 
-module.exports = { Session, request, login, register, findToken, prepareCsrf, timings };
+module.exports = { Session, request, login, register, findToken, prepareCsrf, timings, hung };

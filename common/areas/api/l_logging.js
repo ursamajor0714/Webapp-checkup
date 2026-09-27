@@ -8,12 +8,12 @@ module.exports = {
     const checks = [];
     const src = ctx.serverSrc;
     // 1. 상태 확인 경로 — 밖에서 살았는지 알 수 있는가
-    const health = ctx.routes().filter(r => r.method === 'GET' && /(^|\/)(health|healthz|ping|status|ready|live)(\/|$)/i.test(r.path));
+    const health = ctx.allRoutes().filter(r => r.method === 'GET' && /(^|\/)(health|healthz|ping|status|ready|live)(\/|$)/i.test(r.path));
     const hItems = [];
     for (const s of ctx.services) {
       const h = health.find(r => r.service === s.id);
       if (!h) { hItems.push({ name: `${s.id}`, ok: false, detail: '상태 확인 경로(/health·/ping) 없음 — 죽었는지 밖에서 알 방법이 없다' }); continue; }
-      if (!ctx.live) { hItems.push({ name: `${s.id} ${h.path}`, ok: true, detail: '경로 있음 (서버가 꺼져 있어 호출은 안 했다)' }); continue; }
+      if (!ctx.live || (ctx.up && !ctx.up[s.id])) { hItems.push({ name: `${s.id} ${h.path}`, ok: true, detail: '경로 있음 (서버가 꺼져 있어 호출은 안 했다)' }); continue; }
       const r = await ctx.call(h.path, { service: s.id, as: 'none' });
       hItems.push({ name: `${s.id} GET ${h.path}`, ok: r.status === 200, detail: `${r.status}` });
     }
