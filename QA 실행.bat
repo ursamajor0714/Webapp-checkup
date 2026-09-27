@@ -13,8 +13,8 @@ if errorlevel 1 (
 set QA_UI_LAUNCHER=1
 set OPEN=--open
 :loop
-rem 브라우저 검사용 부품(playwright-core) — 없으면 설치 (브라우저는 이미 깔린 크롬·엣지를 쓴다)
-if not exist node_modules\playwright-core (
+rem 브라우저·접근성 검사용 부품(playwright-core·axe-core) — 없으면 설치 (브라우저는 이미 깔린 크롬·엣지를 쓴다)
+if not exist node_modules\axe-core (
   echo 처음 한 번 필요한 부품을 설치합니다...
   call npm install --no-audit --no-fund --loglevel=error
 )

@@ -2,6 +2,7 @@
 //   화면마다 버튼·탭·접기 메뉴를 차례로 눌러 보고: 잡히지 않은 예외, 오류 알림창, 눌러도 아무 반응 없는 버튼(죽은 버튼)
 //   안전장치: 서버로 가는 쓰기 요청(POST·PUT·PATCH·DELETE)은 브라우저 안에서 전부 막고 가짜 응답을 준다 → 데이터는 바뀌지 않는다
 //            삭제·로그아웃·결제·저장·제출처럼 보이는 버튼은 아예 누르지 않는다. 다른 사이트로 나가는 링크도 막는다
+//   저장 실패: 쓰기 요청을 보낸 버튼은 한 번 더 누르며 서버가 거절(500)한 것처럼 답한다 → 화면이 실패를 알리는가·예외로 죽는가
 const { checkItems } = require('../_util');
 const { openBrowser, startPages, newContext } = require('../../browser');
 
@@ -23,7 +24,7 @@ module.exports = {
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
-    const items = [], dead = [], skipped = [];
+    const items = [], dead = [], failItems = [], skipped = [];
     let blockedTotal = 0, missed = 0;
     try {
       const { context, note } = await newContext(ctx, b.browser, ctx.baseUrl(start[0].part));
@@ -33,7 +34,7 @@ module.exports = {
         const origin = new URL(url).origin;
         const page = await context.newPage();
         const events = [];   // 이 화면에서 일어난 일 (클릭마다 잘라 본다)
-        let blocked = 0, requests = 0;
+        let blocked = 0, requests = 0, failMode = false;
         page.on('pageerror', e => events.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
         page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR_|favicon|DevTools|\[HMR\]/i.test(m.text())) events.push({ kind: '콘솔 오류', text: m.text().split('\n')[0] }); });
         page.on('dialog', async d => { events.push({ kind: '알림창', text: d.message() }); await d.dismiss().catch(() => {}); });
@@ -44,7 +45,10 @@ module.exports = {
           if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method())) {
             blocked++; blockedTotal++;
             events.push({ kind: '막은 쓰기', text: `${req.method()} ${u.pathname}` });
-            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, ok: true, data: {}, message: 'QA: 쓰기 요청은 막았다' }) });
+            // 보통은 가짜 성공, 저장 실패를 볼 때는 가짜 거절(500)
+            return failMode
+              ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, ok: false, error: 'QA: 서버가 거절했다', message: 'QA: 서버가 거절했다' }) })
+              : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, ok: true, data: {}, message: 'QA: 쓰기 요청은 막았다' }) });
           }
           requests++;
           return route.continue();
@@ -98,6 +102,24 @@ module.exports = {
           else if (clickErr) missed++;
           else if (after === snap && requests === reqBefore && blocked === blockedBefore && !got.length) dead.push({ name, ok: null, detail: '눌러도 화면·주소·요청에 아무 변화가 없다 — 연결이 끊긴 버튼인지 확인' });
           else items.push({ name, ok: true, detail: `반응함${wrote.length ? ` (쓰기 요청 ${wrote.length}건은 막음: ${wrote.map(w => w.text).join(', ').slice(0, 80)})` : ''}${got.some(e => e.kind === '알림창') ? ` · 알림창: ${got.filter(e => e.kind === '알림창').map(e => e.text).join(' / ').slice(0, 80)}` : ''}` });
+          // 저장 실패 — 쓰기 요청을 보낸 버튼은 서버가 거절한 것처럼 한 번 더 눌러 본다
+          if (wrote.length && after.split('|')[0] === snap.split('|')[0] && (await page.$(t.sel).catch(() => null))) {
+            const textBefore = await page.evaluate(() => document.body.innerText).catch(() => '');
+            const e0 = events.length; failMode = true;
+            try { await page.click(t.sel, { timeout: 800 }); } catch { await page.evaluate(sel => { const el = document.querySelector(sel); if (el) el.click(); }, t.sel).catch(() => {}); }
+            await page.waitForTimeout(900); failMode = false;
+            const ev = events.slice(e0);
+            const textAfter = await page.evaluate(() => document.body.innerText).catch(() => '');
+            const fresh = textAfter.split('\n').filter(l => l.trim() && !textBefore.includes(l.trim())).join(' / ');
+            const errWords = /오류|에러|실패|거절|다시 시도|문제가|못했|없습니다|error|fail|denied|try again|QA: 서버가 거절/i;
+            const told = ev.some(e => e.kind === '알림창' && errWords.test(e.text)) || errWords.test(fresh);
+            const crashed = ev.filter(e => e.kind === '예외');
+            const saidOk = ev.some(e => e.kind === '알림창' && /완료|성공|저장되었|success|done/i.test(e.text) && !errWords.test(e.text));
+            failItems.push({ name, ok: crashed.length || saidOk ? false : told ? true : null,
+              detail: crashed.length ? `서버가 거절하자 예외: ${crashed[0].text.slice(0, 150)} — 실패를 처리하지 않는다`
+                : saidOk ? `서버가 거절했는데 "성공" 알림을 띄운다: ${ev.find(e => e.kind === '알림창').text.slice(0, 120)}`
+                : told ? `실패를 알린다${fresh ? `: ${fresh.slice(0, 100)}` : ''}` : '서버가 거절했는데 화면에 아무 표시가 없다 — 사용자는 저장된 줄 안다 (조용히 되돌리는지 확인)' });
+          }
           // 다른 화면으로 넘어갔으면 돌아온다
           if (after.split('|')[0] !== url && !after.startsWith(url + '#')) { await page.goto(url, { waitUntil: 'load', timeout: 20000 }).catch(() => {}); await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {}); await mark(); }
         }
@@ -109,6 +131,7 @@ module.exports = {
     return { checks: [
       checkItems('버튼을 눌러도 예외·오류 알림이 나지 않는다', items.length ? items : [{ name: '클릭', ok: null, detail: '누른 것이 없다' }]),
       ...(dead.length ? [checkItems('누르면 무언가 일어난다 (죽은 버튼)', dead)] : []),
+      ...(failItems.length ? [checkItems('저장이 실패하면 사용자에게 알린다 (서버 거절 흉내)', failItems)] : []),
     ], skipped };
   },
 };

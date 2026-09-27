@@ -252,6 +252,26 @@ function owaspSummary(results) {
     status: x.scanned === 0 ? '못 잼' : x.failed ? '문제' : x.warned ? '확인 필요' : '통과' }));
 }
 
+// 먼저 고칠 것 — 검사 묶음마다 점수: 영역 가중치 × 종류(보안 1.5 · 예외·크래시 1.3) × (1 + log10 건수)
+const SECURITY = new Set(['B', 'C', 'I', 'K', 'P', 'H', 'V']);
+const CRASH = /예외|죽지|서버 오류|5xx|500|크래시|충돌|멈춘다|테스트가 통과|빌드|tsc|충돌 표시|마이그레이션|잠금 파일/;
+function topFixes(results, n = 10) {
+  const out = [];
+  for (const r of results) for (const c of r.checks || []) {
+    if (!c.failed) continue;
+    const bad = (c.items || []).filter(i => i.ok === false);
+    const examples = bad.length ? bad.slice(0, 2).map(i => `${i.name}${i.detail ? ' — ' + String(i.detail).slice(0, 120) : ''}`) : (c.notes || []).slice(0, 2).map(x => String(x).slice(0, 160));
+    // 실제로 터지는 것(서버 로그 예외·화면 예외·API 장애 시 죽음·테스트 실패)은 보안만큼 무겁다
+    const kind = ['1', '4', '8'].includes(r.id) || (r.id === '2' && /예외/.test(c.name)) ? 1.6 : SECURITY.has(r.id) || c.owasp ? 1.5 : CRASH.test(c.name + ' ' + examples.join(' ')) ? 1.3 : 1;
+    out.push({ area: r.id, areaName: r.name, check: c.name, failed: c.failed, owasp: c.owasp || null, examples,
+      priority: Math.round((r.weight || 3) * kind * (1 + Math.log10(Math.max(1, c.failed))) * 10) / 10 });
+  }
+  // 한 영역이 목록을 다 차지하지 않게 — 영역당 2개까지 (여러 종류의 문제를 한눈에)
+  const per = {}, top = [];
+  for (const t of out.sort((a, b) => b.priority - a.priority)) { if ((per[t.area] = (per[t.area] || 0) + 1) <= 2) top.push(t); if (top.length >= n) break; }
+  return top;
+}
+
 async function finish(prep, results, { save = true } = {}) {
   const { ctx, project, todo } = prep;
   const measured = results.filter(r => !r.skip);
@@ -279,6 +299,7 @@ async function finish(prep, results, { save = true } = {}) {
     maturity: { got: mat.got, total: mat.total, factor: Math.round(mat.factor * 100) / 100 },
     score, grade: gradeOf(score).label, tier: tierOf(score),
     owasp: owaspSummary(results),
+    top: topFixes(results),
   };
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
@@ -326,6 +347,13 @@ async function run(arg) {
   console.log(`설정 필요·해당 없음 ${s.skippedAreas.length}개 영역 (점수에서 뺌)`);
   console.log('\nOWASP Top 10 (2021)');
   for (const o of s.owasp) console.log(`  ${o.id} ${o.name.padEnd(18)} ${o.status.padEnd(6)} 검사 ${o.scanned} · 문제 ${o.failed}${o.warned ? ` · 확인 ${o.warned}` : ''}`);
+  if (s.top && s.top.length) {
+    console.log('\n★ 먼저 고칠 것 (영향 큰 순서)');
+    s.top.forEach((t, i) => {
+      console.log(`${String(i + 1).padStart(2)}. [${t.area}] ${t.check} — ${t.failed}건${t.owasp ? ' · OWASP ' + [].concat(t.owasp).join(',') : ''}`);
+      for (const e of t.examples) console.log('      ' + e);
+    });
+  }
   const failing = results.filter(r => r.failed > 0);
   if (failing.length) {
     console.log('\n■ 걸린 항목');
