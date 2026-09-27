@@ -66,7 +66,7 @@ const ITEMS = [
   { key: 'e2e', weight: 2, label: '화면까지 도는 회귀 검사(E2E·QA)가 CI 에 붙어 있다',
     why: '단위 테스트는 부품만 본다. 실제 화면에서 로그인 → 저장 → 확인이 되는지는 끝까지 돌려 봐야 안다.',
     look: 'playwright.config · cypress.config · e2e/ · CI 에서 이 QA(run.js --ci) 실행',
-    test: S => findFile(S, /(^|\/)(playwright|cypress)\.config\.[cm]?[jt]s$|(^|\/)(e2e|cypress)\/|(^|\/)wdio\.conf/) || findConfig(S, /run\.js[^\n]*--ci|ursamajor0714\/QA/),
+    test: S => findFile(S, /(^|\/)(playwright|cypress)\.config\.[cm]?[jt]s$|(^|\/)(e2e|cypress)\/|(^|\/)wdio\.conf/) || findConfig(S, /run\.js[^\n]*--ci|ursamajor0714\/(?:QA|[Ww]ebapp-checkup)\b/i),
     how: ['가장 쉬운 길: QA 레포의 docs/ci/qa-github-actions.yml 을 이 레포 .github/workflows/qa.yml 로 복사',
       '직접 만들려면: npm init playwright@latest → 로그인·핵심 저장 흐름 2~3개를 e2e/ 에'] },
   { key: 'monitor', weight: 2, label: '장애를 사람보다 먼저 알려 주는 감시가 있다',

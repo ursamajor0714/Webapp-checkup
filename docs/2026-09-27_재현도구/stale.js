@@ -1,6 +1,6 @@
 // 소스를 고치고(커밋 안 함) 다시 켜면 다시 빌드하는가 / 패키지를 추가하면 설치하는가
 const path = require('path'), fs = require('fs');
-const QA = path.join(process.env.HOME, 'Developer/QA');
+const QA = path.join(process.env.HOME, 'Developer/webapp-checkup');
 const serve = require(path.join(QA, 'common/serve'));
 const { loadProject } = require(path.join(QA, 'common/project'));
 // 가짜 Next 프로젝트를 임시 폴더에 만든다 — package.json 에 next 가 있으면 QA 는 Next.js 로 본다
