@@ -347,7 +347,20 @@ const failKeys = results => {
   }
   return m;
 };
-function diffWithPrevious(dir, results, score, level = 'advanced') {
+// 이 검사를 돌린 QA 자신의 버전 — QA 를 고치면 같은 코드라도 점수가 바뀌므로 리포트에 남긴다
+function qaVersion() {
+  const git = args => require('child_process').execFileSync('git', ['-C', QA_ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  try {
+    const [commit, at] = git(['log', '-1', '--format=%h %cI']).split(' ');
+    // 커밋 안 한 검사 코드 수정 — 내용의 지문을 남겨, 같은 수정 상태끼리는 같은 버전으로 본다
+    const d = git(['diff', 'HEAD', '--', 'common', 'run.js', 'ui.js']);
+    const dirty = d ? require('crypto').createHash('sha1').update(d).digest('hex').slice(0, 7) : false;
+    return { commit, at, dirty };
+  } catch { return null; }   // 깃 없이 받은 QA (zip 등)
+}
+const sameQa = (a, b) => !!(a && b && a.commit === b.commit && (a.dirty || false) === (b.dirty || false));
+
+function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
   if (!fs.existsSync(dir)) return null;
   // 일부 영역만 돌린 검사(--only·영역 조회)는 비교 기준이 못 된다 — 전체 검사끼리만
   let prev = null, prevFile = null;
@@ -379,7 +392,12 @@ function diffWithPrevious(dir, results, score, level = 'advanced') {
   // 두 번 다 잰 영역끼리만 매긴 점수 — 못 잰 영역이 달라져 흔들린 것을 빼고 본다
   const both = results.filter(r => !r.skip && byId.has(r.id) && !byId.get(r.id).skip).map(r => r.id);
   const same = both.length ? { areas: both.length, prev: scoreOf((prev.results || []).filter(r => both.includes(r.id))).raw, now: scoreOf(results.filter(r => both.includes(r.id))).raw } : null;
-  return { areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
+  // QA 버전이 다르면 점수 차이 일부는 대상 코드가 아니라 QA 의 검사 기준이 바뀐 탓이다
+  const prevQa = (prev.summary && prev.summary.qa) || null;
+  const qaChanged = sameQa(prevQa, qa) ? null : { from: prevQa, to: qa };
+  const ver = v => v ? `${v.commit}${v.dirty ? ` + 커밋 안 한 수정${typeof v.dirty === 'string' ? `(${v.dirty})` : ''}` : ''}` : '기록 없음';
+  const qaNote = qaChanged ? `QA 버전이 다르다 (${ver(prevQa)} → ${ver(qa)}) — 점수 차이 일부는 대상 코드가 아니라 QA 검사 기준이 바뀐 탓일 수 있다` : null;
+  return { qaChanged, qaNote, areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
 }
 
 async function finish(prep, results, { save = true } = {}) {
@@ -419,12 +437,13 @@ async function finish(prep, results, { save = true } = {}) {
     ignored: results.reduce((a, r) => a + (r.ignored || 0), 0),
     saas: ((results.find(r => r.id === '11') || {}).info || {}).items || null,
     level: { id: ctx.level.id, label: ctx.level.label, desc: ctx.level.desc, strict: ctx.level.strict },
+    qa: qaVersion(),
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
   summary.full = !prep.only || !prep.only.length;
-  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score, summary.level.id); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
+  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score, summary.level.id, summary.qa); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
-  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');   // 초까지 — 같은 분에 두 번 돌려도 앞 리포트를 덮어쓰지 않는다
   if (save) {
     const dir = prep.toolDir;
     fs.mkdirSync(dir, { recursive: true });
@@ -512,6 +531,7 @@ async function run(arg) {
   if (s.diff) {
     const d = s.diff, delta = Math.round((d.score - d.prevScore) * 10) / 10;
     console.log(`\n▲ 지난 검사(${String(d.prevAt || d.prevFile).slice(0, 16).replace('T', ' ')})와 비교: 점수 ${d.prevScore} → ${d.score} (${delta >= 0 ? '+' : ''}${delta}) · 새 문제 ${d.addedCount} · 고친 것 ${d.fixedCount}`);
+    if (d.qaNote) console.log(`   ⚠ ${d.qaNote}`);
     if (Math.abs(delta) >= 0.5 && (d.areaChanges || []).length) {
       console.log(`   점수가 바뀐 이유${d.same ? ` (두 번 다 잰 영역 ${d.same.areas}개끼리: ${d.same.prev} → ${d.same.now})` : ''}`);
       for (const c of d.areaChanges.slice(0, 6)) console.log(`   · [${c.id}] ${c.name} ${c.before ?? '못 잼'} → ${c.after ?? '못 잼'} — ${c.why.join(' · ')}`);

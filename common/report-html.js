@@ -43,7 +43,7 @@ details.area{background:var(--panel);border:1px solid var(--line);border-radius:
 .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 </style></head><body><main>
 <h1>QA 리포트 — ${esc(s.target)}</h1>
-<div class="muted">${esc(String(s.at).slice(0, 16).replace('T', ' '))} (UTC) · ${esc(s.root)} · ${(s.parts || []).map(p => esc(`${p.stack}@${p.dir}`)).join(' · ')}</div>
+<div class="muted">${esc(String(s.at).slice(0, 16).replace('T', ' '))} (UTC) · ${esc(s.root)} · ${(s.parts || []).map(p => esc(`${p.stack}@${p.dir}`)).join(' · ')} · QA ${esc(s.qa ? s.qa.commit + (s.qa.dirty ? ` + 커밋 안 한 수정${typeof s.qa.dirty === 'string' ? `(${s.qa.dirty})` : ''}` : '') : '버전 모름')}</div>
 <div class="cards">
   <div class="card"><div class="k">제품 점수${s.level ? ` · ${esc(s.level.label)} 검사` : ''}</div><div class="v">${esc(s.score)}</div><div class="k">등급 ${esc(s.grade)}${s.level && s.level.strict ? ' · 확인 필요도 감점' : ''}</div></div>
   <div class="card"><div class="k">운영 성숙도 (따로 본다)</div><div class="v">${esc(s.maturity.got)}/${esc(s.maturity.total)}</div><div class="k">${esc(s.maturity.label || '')}</div></div>
@@ -53,6 +53,7 @@ details.area{background:var(--panel);border:1px solid var(--line);border-radius:
 </div>
 ${d ? `<h2>▲ 지난 검사와 비교 <span class="chip">${esc(String(d.prevAt || '').slice(0, 16).replace('T', ' '))}</span></h2>
 <p>점수 ${esc(d.prevScore)} → <b>${esc(d.score)}</b> (${delta >= 0 ? '+' : ''}${esc(delta)}) · <span class="chip bad">새 문제 ${esc(d.addedCount)}</span><span class="chip ok">고친 것 ${esc(d.fixedCount)}</span>${d.same ? `<span class="chip">같은 영역 ${esc(d.same.areas)}개끼리 ${esc(d.same.prev)} → ${esc(d.same.now)}</span>` : ''}</p>
+${d.qaNote ? `<p class="muted">⚠ ${esc(d.qaNote)}</p>` : ''}
 ${(d.areaChanges || []).length && Math.abs(delta) >= 0.5 ? `<div class="box" style="margin-bottom:10px"><table>${d.areaChanges.map(c => `<tr><td class="m warn">Δ</td><td class="c">[${esc(c.id)}] ${esc(c.name)}</td><td>${esc(c.before ?? '못 잼')} → ${esc(c.after ?? '못 잼')}</td><td class="muted">${esc(c.why.join(' · '))}</td></tr>`).join('')}</table></div>` : ''}
 <div class="box"><table>${d.added.map(x => `<tr class="bad"><td class="m bad">+</td><td class="c">[${esc(x.area)}] ${esc(x.check)}</td><td>${esc(x.item)}</td><td class="muted">${esc(x.detail)}</td></tr>`).join('')}${d.fixed.map(x => `<tr><td class="m ok">✓</td><td class="c">[${esc(x.area)}] ${esc(x.check)}</td><td>${esc(x.item)}</td><td class="muted">고쳐졌다</td></tr>`).join('')}</table></div>` : ''}
 ${(s.setupErrors || []).length ? `<h2>⚠ 설정 오류 <span class="chip warn">제품 결함 아님 — 점수에 넣지 않았다</span></h2><div class="box"><table>${s.setupErrors.map(e => `<tr><td class="m warn">⚙</td><td>${esc(e)}</td></tr>`).join('')}</table></div>` : ''}

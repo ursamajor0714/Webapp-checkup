@@ -47,10 +47,11 @@ async function dockerReady(log) {
   const tried = [];
   // 맥: Docker Desktop · OrbStack · Rancher Desktop 앱, 또는 Colima — 깔린 것을 차례로 켜 본다
   const starters = process.platform === 'darwin'
-    ? [['Docker Desktop', 'open', ['-a', 'Docker']], ['OrbStack', 'open', ['-a', 'OrbStack']], ['Rancher Desktop', 'open', ['-a', 'Rancher Desktop']], ['Colima', 'colima', ['start']]]
+    // OrbStack 은 앱이 떠 있고 엔진만 멈춘 상태(orb stop)면 앱을 열어도 엔진이 안 켜진다 — orb start 를 먼저 쓴다
+    ? [['Docker Desktop', 'open', ['-a', 'Docker']], ['OrbStack', 'orb', ['start']], ['OrbStack 앱', 'open', ['-a', 'OrbStack']], ['Rancher Desktop', 'open', ['-a', 'Rancher Desktop']], ['Colima', 'colima', ['start']]]
     : process.platform === 'win32' ? [['Docker Desktop', 'cmd', ['/c', 'start', '', 'Docker Desktop']]] : [['Docker 서비스', 'systemctl', ['--user', 'start', 'docker']]];
   for (const [name, cmd, args] of starters) {
-    const r = sh(cmd, args, { timeout: name === 'Colima' ? 180000 : 15000 });
+    const r = sh(cmd, args, { timeout: cmd === 'open' ? 15000 : 180000 });   // orb start·colima start 는 엔진이 뜰 때까지 기다린다
     if (!r.ok) { tried.push(`${name}: ${r.missing ? '없음' : '켜지 못함'}`); continue; }
     log(`${name} 을(를) 켜는 중… (처음엔 30초쯤 걸린다)`);
     for (let i = 0; i < 45; i++) { if (ready()) return { ok: true, via: name }; await sleep(2000); }

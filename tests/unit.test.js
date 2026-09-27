@@ -178,4 +178,18 @@ test('지난 검사와 비교 — 점수가 바뀐 이유와 같은 영역끼리
   assert.deepStrictEqual(d.same, { areas: 1, prev: 100, now: 100 });
   assert.match(d.areaChanges[0].why[0], /이번엔 못 잼/);
   assert.strictEqual(diffWithPrevious(dir, now, 100, 'expert'), null, '다른 수준과는 견주지 않는다');
+  assert.match(d.qaNote, /QA 버전이 다르다 \(기록 없음/, '지난 리포트에 QA 버전이 없으면 알린다');
+});
+
+test('지난 검사와 비교 — QA 버전이 같으면 조용하고, 다르면 알린다', () => {
+  const { diffWithPrevious } = require('../common/runner');
+  const dir = tmp();
+  const res = [{ id: 'A', name: 'A', weight: 5, universe: 10, scanned: 10, passed: 10, warned: 0, failed: 0, passRate: 1, checks: [] }];
+  const v1 = { commit: 'aaa1111', dirty: false };
+  fs.writeFileSync(path.join(dir, '2026-01-01-00-00.json'), JSON.stringify({ summary: { full: true, rawScore: 100, level: { id: 'advanced' }, qa: v1 }, results: res }));
+  assert.strictEqual(diffWithPrevious(dir, res, 100, 'advanced', v1).qaNote, null);
+  assert.match(diffWithPrevious(dir, res, 100, 'advanced', { commit: 'bbb2222', dirty: false }).qaNote, /aaa1111 → bbb2222/);
+  assert.match(diffWithPrevious(dir, res, 100, 'advanced', { ...v1, dirty: 'c0ffee1' }).qaNote, /커밋 안 한 수정/, '같은 커밋이라도 고치는 중이면 같은 자가 아니다');
+  fs.writeFileSync(path.join(dir, '2026-01-02-00-00.json'), JSON.stringify({ summary: { full: true, rawScore: 100, level: { id: 'advanced' }, qa: { ...v1, dirty: 'c0ffee1' } }, results: res }));
+  assert.strictEqual(diffWithPrevious(dir, res, 100, 'advanced', { ...v1, dirty: 'c0ffee1' }).qaNote, null, '똑같은 수정 상태끼리는 같은 버전');
 });
