@@ -161,8 +161,20 @@ const state = { projects: [], owasp: {}, project: null, results: {}, report: nul
 const json = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const cur = () => state.projects.find(x => x.id === state.project);
 
+// QA 창(터미널)을 닫으면 화면은 남아 있어도 뒤에서 일할 서버가 없다 — 버튼이 먹통이 되기 전에 크게 알린다
+function setDisconnected(off) {
+  if (state.disconnected === off) return;
+  state.disconnected = off;
+  let bar = document.getElementById('offline');
+  if (!bar) { bar = document.createElement('div'); bar.id = 'offline'; bar.style.cssText = 'position:sticky;top:0;z-index:50;padding:12px 20px;background:var(--bad);color:#fff;font-weight:700;display:none'; document.body.prepend(bar); }
+  bar.innerHTML = '⚠ QA 창(터미널)이 닫혀 이 화면과 연결이 끊겼습니다. <b>QA 실행 파일을 다시 여세요</b> — 다시 열리면 이 화면이 저절로 이어집니다. (대상 서버와는 상관없습니다)';
+  bar.style.display = off ? 'block' : 'none';
+  if (!off) { loadProjects().then(() => { renderAll(); pollServer(); }).catch(() => {}); }
+}
 async function api(path, opt) {
-  const r = await fetch(path, opt);
+  let r;
+  try { r = await fetch(path, opt); } catch (e) { setDisconnected(true); throw new Error('QA 창이 닫혀 연결이 끊겼습니다 — QA 실행 파일을 다시 여세요'); }
+  setDisconnected(false);
   const body = await r.json().catch(() => null);
   if (!r.ok) throw new Error((body && body.error) || r.status);
   return body;
@@ -380,6 +392,7 @@ async function pollServer() {
   const mine = state.project;
   const sv = await api('/api/server?project=' + encodeURIComponent(mine)).catch(() => null);
   if (mine !== state.project) return;
+  if (state.disconnected) { clearTimeout(state.srvTimer); state.srvTimer = setTimeout(pollServer, 3000); return; }   // 다시 열릴 때까지 3초마다 두드린다
   state.server = sv || [];
   renderServer(); renderHeader();
   const busy = state.server.some(p => ['installing', 'building', 'starting', 'stopping'].includes(p.phase));
