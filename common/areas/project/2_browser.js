@@ -1,10 +1,10 @@
 // 2. 브라우저 실행 오류 — 실제 크롬으로 화면을 열어 사람이 보면 바로 아는 오류를 잡는다
 //   · 잡히지 않은 예외(pageerror)·콘솔 오류     · 실패한 요청(5xx·없는 파일·끊긴 요청)
 //   · 화면에 찍힌 undefined·NaN·[object Object]·Invalid Date     · 깨진 이미지
-//   · 모바일 폭(375px)에서 가로로 넘침
+//   · 모바일 폭(375px)에서 가로로 넘침     · 화면 무게(JS 크기)·불러오기 시간
 // 버튼은 누르지 않는다(데이터를 바꾸지 않게). 같은 사이트 링크를 따라가며 최대 25개 화면. 로그인 쿠키가 있으면 싣는다.
 const { checkItems } = require('../_util');
-const { openBrowser } = require('../../browser');
+const { openBrowser, startPages, newContext } = require('../../browser');
 
 const MAX_PAGES = 25;
 const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date|\{\{\s*[\w.]+\s*\}\}|\$\{[\w.]+\}/;
@@ -12,23 +12,17 @@ const JUNK = /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date|\{\{\s*[\w.]+
 module.exports = {
   id: '2', name: '브라우저 실행 오류', weight: 7,
   async run(ctx) {
-    // 로그아웃·삭제 화면은 열지 않는다 (열면 로그인이 풀리거나 데이터가 바뀐다)
-    const start = ctx.livePages().filter(pg => { const p = ctx.parts.find(x => x.id === pg.part); return p && !p.native && !/logout|signout|delete|remove/i.test(pg.path); });
+    const start = startPages(ctx);
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다 — 서버를 켜거나, 끈 채로 돌리면 QA 가 켠다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
-    const errs = [], reqs = [], junk = [], imgs = [], mobile = [];
+    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [];
     const skipped = [];
     try {
-      const owner = ctx.sessions.owner;
-      const context = await b.browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
-      const mob = await b.browser.newContext({ viewport: { width: 375, height: 740 }, isMobile: true, hasTouch: true, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
-      // 로그인 쿠키 싣기 (쿠키로 로그인하는 서비스). 토큰을 localStorage 에 두는 화면은 로그인 전 화면만 본다
       const base0 = ctx.baseUrl(start[0].part);
-      if (owner && Object.keys(owner.cookies || {}).length) {
-        const cookies = Object.entries(owner.cookies).map(([name, value]) => ({ name, value: String(value), url: base0 }));
-        await context.addCookies(cookies).catch(() => {}); await mob.addCookies(cookies).catch(() => {});
-      } else if (ctx.project.auth && ctx.project.auth.type && ctx.project.auth.type !== 'none') skipped.push('로그인 쿠키가 없어 로그인 전 화면만 본다');
+      const { context, note } = await newContext(ctx, b.browser, base0);
+      const { context: mob } = await newContext(ctx, b.browser, base0, { viewport: { width: 375, height: 740 }, isMobile: true, hasTouch: true });
+      if (note) skipped.push(note);
 
       const seen = new Set(); const queue = start.map(pg => ({ url: new URL(pg.path, ctx.baseUrl(pg.part)).href, part: pg.part, from: null }));
       while (queue.length && seen.size < MAX_PAGES) {
@@ -86,8 +80,23 @@ module.exports = {
         if (info.broken.length) for (const s of info.broken) imgs.push({ name, ok: false, detail: `깨진 이미지: ${s}` });
         else imgs.push({ name, ok: true, detail: '깨진 이미지 없음' });
         for (const l of info.links) if (!/logout|signout|delete|remove/i.test(l) && !seen.has(l.replace(/#.*$/, ''))) queue.push({ url: l, from: where });
+        // 4) 무게·속도 — 시작 화면만. 개발 서버(vite dev·next dev)는 압축·묶음 전이라 부풀어 보인다
+        if (!from) {
+          const m = await page.evaluate(() => {
+            const nav = performance.getEntriesByType('navigation')[0] || {};
+            const res = performance.getEntriesByType('resource');
+            const size = e => e.transferSize || e.encodedBodySize || 0;
+            return { load: Math.round(nav.loadEventEnd || nav.duration || 0), js: res.filter(e => e.initiatorType === 'script' || /\.m?js(\?|$)/.test(e.name)).reduce((a, e) => a + size(e), 0),
+              total: res.reduce((a, e) => a + size(e), 0) + (nav.transferSize || 0), n: res.length };
+          }).catch(() => null);
+          if (m) {
+            const mb = x => (x / 1024 / 1024).toFixed(2) + 'MB';
+            const bad = m.js > 3 * 1024 * 1024 || m.load > 8000, warn = m.js > 1.5 * 1024 * 1024 || m.load > 4000 || m.total > 5 * 1024 * 1024;
+            perf.push({ name: where, ok: bad ? false : warn ? null : true, detail: `불러오기 ${(m.load / 1000).toFixed(1)}초 · JS ${mb(m.js)} · 전체 ${mb(m.total)} (${m.n}개 파일)${bad || warn ? ' — 느린 폰·데이터 요금에 부담 (개발 서버라면 배포 빌드로 다시 재 볼 것)' : ''}` });
+          }
+        }
         await page.close();
-        // 4) 모바일 폭 — 시작 화면들만 (링크 따라간 화면까지 하면 오래 걸린다)
+        // 5) 모바일 폭 — 시작 화면들만 (링크 따라간 화면까지 하면 오래 걸린다)
         if (!from) {
           const mp = await mob.newPage();
           try {
@@ -107,6 +116,7 @@ module.exports = {
       checkItems('화면에 undefined·NaN·[object Object] 가 찍히지 않는다', junk),
       checkItems('이미지가 깨지지 않는다', imgs),
       checkItems('모바일 폭(375px)에서 가로로 넘치지 않는다', mobile.length ? mobile : [{ name: '모바일', ok: null, detail: '열지 못함' }]),
+      ...(perf.length ? [checkItems('화면이 가볍고 빨리 뜬다 (JS 1.5MB·4초 이하)', perf)] : []),
     ], skipped };
   },
 };

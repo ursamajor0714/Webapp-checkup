@@ -43,4 +43,19 @@ async function openBrowser() {
   return { why: `크롬·엣지를 찾지 못했다 — 크롬을 깔거나 QA_CHROME 에 실행 파일 경로를 준다 (${errors.join(' / ')})` };
 }
 
-module.exports = { openBrowser };
+// 열 화면 — 로그아웃·삭제 화면은 뺀다 (열면 로그인이 풀리거나 데이터가 바뀐다)
+function startPages(ctx) {
+  return ctx.livePages().filter(pg => { const p = ctx.parts.find(x => x.id === pg.part); return p && !p.native && !/logout|signout|delete|remove/i.test(pg.path); });
+}
+
+// 브라우저 창 하나 — 로그인 쿠키(쿠키로 로그인하는 서비스)를 싣는다. note 는 로그인 없이 보는 경우의 안내
+async function newContext(ctx, browser, baseUrl, opt = {}) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul', ...opt });
+  const owner = ctx.sessions.owner;
+  let note = null;
+  if (owner && Object.keys(owner.cookies || {}).length) await context.addCookies(Object.entries(owner.cookies).map(([name, value]) => ({ name, value: String(value), url: baseUrl }))).catch(() => {});
+  else if (ctx.project.auth && ctx.project.auth.type && ctx.project.auth.type !== 'none') note = '로그인 쿠키가 없어 로그인 전 화면만 본다 (토큰을 브라우저 저장소에 두는 화면이면 로그인 뒤 화면은 못 연다)';
+  return { context, note };
+}
+
+module.exports = { openBrowser, startPages, newContext };
