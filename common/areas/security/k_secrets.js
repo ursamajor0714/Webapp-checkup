@@ -65,7 +65,7 @@ module.exports = {
     checks.push(owasp('A02', check('코드·설정에 비밀이 박혀 있지 않다', { universe: files, scanned: files, passed: files - new Set(hits.map(h => h.split(':')[0])).size, notes: hits })));
     // 2. .env 가 깃에 올라갔는가
     let tracked = [];
-    try { tracked = execFileSync('git', ['ls-files'], { cwd: ctx.root, encoding: 'utf8' }).split('\n').filter(f => /(^|\/)\.env(\.|$)/.test(f) && !/\.env\.(example|sample|template)$/.test(f)); } catch { /* git 레포가 아니면 건너뛴다 */ }
+    try { tracked = execFileSync('git', ['ls-files'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(f => /(^|\/)\.env(\.|$)/.test(f) && !/\.env\.(example|sample|template)$/.test(f)); } catch { /* git 레포가 아니면 건너뛴다 */ }
     checks.push(owasp('A05', check('.env(비밀 파일)가 깃에 올라가 있지 않다', { universe: 1, scanned: 1, passed: tracked.length ? 0 : 1, notes: tracked.map(f => `${f} 가 깃에 있다 — 지워도 기록에 남는다. 키를 바꿔야 한다`) })));
     // 3. 약한 암호화
     const weak = [];

@@ -1,0 +1,7 @@
+{
+  "name": "qa-fixture-buggy-express",
+  "private": true,
+  "description": "QA 시험용 — 버그를 일부러 심은 Express 서버",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.21.2" }
+}

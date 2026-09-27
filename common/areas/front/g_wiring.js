@@ -13,6 +13,14 @@ module.exports = {
     const cmds = [];
     for (const p of ctx.parts) {
       if (p.lang === 'js') {
+        // package.json 없는 순수 JS(정적 사이트·public 폴더) — 설치할 것이 없으니 node --check 로 문법만 본다
+        if (!exists(path.join(p.absDir, 'package.json'))) {
+          const bad = [];
+          const files = walk(p.absDir, ['.js']).filter(f => !/node_modules|\.min\.js$/.test(f)).slice(0, 300);
+          for (const f of files) { const r = run(['node', '--check', f], p.absDir); if (!r.ok) bad.push(`${path.relative(p.absDir, f)}: ${(r.out.split('\n').find(l => /Error/.test(l)) || r.out).slice(0, 120)}`); }
+          if (files.length) cmds.push({ name: `${p.dir} 자바스크립트 문법 (node --check ${files.length}개)`, ok: !bad.length, detail: bad.length ? bad.slice(0, 3).join(' / ') : '통과' });
+          continue;
+        }
         if (!exists(path.join(p.absDir, 'node_modules'))) { cmds.push({ name: `${p.dir} 타입·린트`, ok: null, detail: 'node_modules 없음 — [서버 켜기]나 npm install 뒤에 잰다' }); continue; }
         if (exists(path.join(p.absDir, 'tsconfig.json'))) { const r = run(['npx', 'tsc', '--noEmit', '-p', '.'], p.absDir); cmds.push({ name: `${p.dir} tsc --noEmit`, ok: r.ok, detail: r.ok ? '통과' : r.out.split('\n').slice(0, 3).join(' / ').slice(0, 200) }); }
         const hasLint = walk(p.absDir, ['eslint.config.js', 'eslint.config.mjs', '.eslintrc.js', '.eslintrc.json', '.eslintrc.cjs']).length || (require('../../stacks/util').readJson(path.join(p.absDir, 'package.json')) || {}).eslintConfig;
@@ -26,7 +34,7 @@ module.exports = {
         cmds.push({ name: `${p.dir} 파이썬 문법 (compileall)`, ok: r.ok, detail: r.ok ? '통과' : r.out.slice(0, 200) });
       } else if (p.lang === 'java') cmds.push({ name: `${p.dir} 자바 컴파일`, ok: null, detail: 'Gradle·Maven 빌드는 무거워 여기서 돌리지 않는다 — CI 에서 확인' });
     }
-    checks.push(checkItems('타입·린트·문법 검사', cmds.length ? cmds : [{ name: '해당 없음', ok: null, detail: '' }]));
+    if (cmds.length) checks.push(checkItems('타입·린트·문법 검사', cmds));
     // 2. HTML·템플릿이 부르는 파일이 있는가 (script src · link href · img src)
     const { STACKS } = require('../../stacks');
     const assetItems = [];
