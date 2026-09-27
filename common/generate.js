@@ -90,7 +90,7 @@ async function fuzzRoute(ctx, c, { as = 'owner', limit = 400 } = {}) {
   if (untouchable(ctx, c)) return { items: [], skipped: `${c.method} ${c.path} — 밖에 흔적이 남거나(문자·메일·결제) 세션을 끊는 경로라 건드리지 않음` };
   const url = await fillPath(ctx, c, sess);
   const send = body => c.form
-    ? ctx.call(url, { service: c.service, as: sess, method: c.method, form: Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])), headers: { Referer: ctx.baseUrl(c.service) + url }, withFormCsrf: true })
+    ? ctx.call(url, { service: c.service, as: sess, method: c.method, form: Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])), headers: { Referer: ctx.baseUrl(c.service) + url } })
     : ctx.call(url, { service: c.service, as: sess, method: c.method, body });
   const b0 = uniquify(baseline(c.fields), c.fields);
   const r0 = await send(b0);

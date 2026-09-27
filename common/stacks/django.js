@@ -60,8 +60,7 @@ module.exports = {
   pages(dir) { return this.routes(dir).filter(r => r.method === 'GET' && !r.path.includes(':')).map(r => r.path); },
   settings: settingsFile,
   serve(dir) {
-    // 레포의 가상환경이 있으면 그 파이썬 (Homebrew 파이썬은 전역 pip install 을 막는다 — PEP 668)
-    const py = ['.venv', 'venv'].map(v => path.join(dir, v, 'bin', 'python')).find(exists) || 'python3';
+    const py = 'python3';   // 실제 파이썬(레포 .venv · QA 가 만든 가상환경)은 serve.js 가 바꿔 끼운다
     return { install: exists(path.join(dir, 'requirements.txt')) ? [py, '-m', 'pip', 'install', '-r', 'requirements.txt'] : null,
       build: [py, 'manage.py', 'migrate', '--noinput'], start: [py, 'manage.py', 'runserver', '127.0.0.1:{PORT}', '--noreload'] };
   },

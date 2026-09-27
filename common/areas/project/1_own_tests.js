@@ -61,6 +61,7 @@ module.exports = {
       const { env } = serve.envFor({ ...ctx.project, id: ctx.project.id || ctx.project.name }, p.port || 0);
       const filled = serve.fillDefaults({ ...ctx.project, id: ctx.project.id || ctx.project.name }, p, env);
       delete env.PORT; delete env.SERVER_PORT;
+      if (p.lang === 'python' && cmd[0] === 'python3') cmd = [serve.pythonFor({ ...ctx.project, id: ctx.project.id || ctx.project.name }, p) || 'python3', ...cmd.slice(1)];   // 서버를 켤 때와 같은 가상환경
       const t0 = Date.now();
       const r = run(cmd, dir, env);
       if (filled.length) why += ` · 검사용 설정: ${filled.join(', ')}`;

@@ -40,6 +40,28 @@ function runStep(st, cmd, cwd, env) {
     p.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd.join(' ')} 이(가) 실패했습니다 (code ${code}) — 로그를 보세요`))));
   });
 }
+// 다시 빌드·설치할지 — 커밋하지 않은 수정도, 새로 추가한 패키지도 놓치지 않게 파일 수정 시각으로 본다
+const mtime = f => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
+function newestSource(dir) {
+  const { walk } = require('./stacks/util');   // node_modules·.next·dist 등은 건너뛴다
+  return walk(dir, ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.css', '.json', '.html', '.py', '.java', '.kt']).reduce((m, f) => Math.max(m, mtime(f)), 0);
+}
+function needsInstall(dir, plan, installedAt) {
+  if (/^npm$/.test(plan.install[0])) {
+    if (!fs.existsSync(path.join(dir, 'node_modules'))) return '처음 설치';
+    const lock = path.join(dir, 'node_modules', '.package-lock.json');
+    return mtime(path.join(dir, 'package.json')) > (mtime(lock) || mtime(path.join(dir, 'node_modules'))) ? 'package.json 이 설치 뒤에 바뀌었다' : null;
+  }
+  const req = path.join(dir, 'requirements.txt');
+  return !installedAt ? '처음 설치' : mtime(req) > installedAt ? 'requirements.txt 가 설치 뒤에 바뀌었다' : null;
+}
+// 파이썬 — 레포의 가상환경(.venv·venv)이 있으면 그것, 없으면 QA 폴더(.qa-data/venvs)에 만든 것. 시스템 파이썬에는 설치하지 않는다 (PEP 668)
+const qaVenv = (def, part) => path.join(__dirname, '..', '.qa-data', 'venvs', `${String(def.id || 'project').replace(/[^\w.-]/g, '_')}-${part.dir === '.' ? 'root' : String(part.dir).replace(/[^\w.-]/g, '_')}`);
+function pythonFor(def, part) {
+  const bin = process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python'];
+  for (const d of [path.join(part.absDir, '.venv'), path.join(part.absDir, 'venv'), qaVenv(def, part)]) { const py = path.join(d, ...bin); if (fs.existsSync(py)) return py; }
+  return null;
+}
 const gitHead = dir => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
 
 // 대상에 넣을 환경변수 — 프로젝트 설정의 serveEnv (설정값 ↔ 대상의 키) + 포트
@@ -95,15 +117,28 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     if (!deps.ok) throw new Error(deps.why);
     const filled = fillDefaults(def, part, env);
     if (filled.length) { st.filledEnv = filled; logLine(st, `비어 있던 설정에 QA 가 검사용 값을 넣었다: ${filled.join(', ')}`); }
-    const sub = a => a.map(x => x.replace('{PORT}', port));
-    if (plan.install && (/^npm$/.test(plan.install[0]) ? !fs.existsSync(path.join(part.absDir, 'node_modules')) : !(readLocal().installed || {})[key])) {
+    // 파이썬인데 쓸 가상환경이 없으면 QA 폴더에 만든다
+    let py = part.lang === 'python' ? pythonFor(def, part) : null;
+    if (part.lang === 'python' && !py) {
       st.phase = 'installing';
-      try { await runStep(st, sub(plan.install), part.absDir, env); const l = readLocal(); l.installed = { ...(l.installed || {}), [key]: true }; writeLocal(l); }
+      const dir = qaVenv(def, part); fs.mkdirSync(path.dirname(dir), { recursive: true });
+      await runStep(st, ['python3', '-m', 'venv', dir], part.absDir, env);
+      py = pythonFor(def, part);
+      logLine(st, `가상환경을 QA 폴더에 만들었다 — ${dir} (레포에는 만들지 않는다)`);
+    }
+    const sub = a => a.map(x => x.replace('{PORT}', port)).map((x, i) => (i === 0 && py && /^python3?$/.test(x) ? py : x));
+    const whyInstall = plan.install && needsInstall(part.absDir, plan, (readLocal().installed || {})[key]);
+    if (whyInstall) {
+      st.phase = 'installing'; logLine(st, `설치: ${whyInstall}`);
+      try { await runStep(st, sub(plan.install), part.absDir, env); const l = readLocal(); l.installed = { ...(l.installed || {}), [key]: Date.now() }; writeLocal(l); }
       // 설치가 실패해도(버전 고정이 이 컴퓨터와 안 맞는 등) 이미 깔린 것으로 켜 본다 — 켜지지 않으면 설치 실패를 함께 알린다
       catch (e) { st.installError = e.message; logLine(st, `설치 실패 — 이미 깔린 것으로 켜 본다: ${e.message}`); }
     }
     const head = gitHead(part.absDir);
-    if (plan.build && (rebuild || (plan.buildMarker && !fs.existsSync(path.join(part.absDir, plan.buildMarker))) || (head && (readLocal().built || {})[key] !== head))) {
+    const marker = plan.buildMarker && path.join(part.absDir, plan.buildMarker);
+    const stale = marker && fs.existsSync(marker) && newestSource(part.absDir) > mtime(marker);   // 커밋 안 한 수정도 다시 빌드한다
+    if (plan.build && (rebuild || stale || (marker && !fs.existsSync(marker)) || (head && (readLocal().built || {})[key] !== head))) {
+      if (stale) logLine(st, '빌드 뒤에 바뀐 소스가 있어 다시 빌드한다');
       st.phase = 'building'; await runStep(st, sub(plan.build), part.absDir, env);
       const l = readLocal(); l.built = { ...(l.built || {}), [key]: head }; writeLocal(l);
     }
@@ -146,4 +181,4 @@ function stop(st) {
 
 const canServe = part => !!(STACKS[part.stack] && STACKS[part.stack].serve) && !part.servedBy && !part.native && !!part.baseUrl;
 
-module.exports = { healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
+module.exports = { pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };

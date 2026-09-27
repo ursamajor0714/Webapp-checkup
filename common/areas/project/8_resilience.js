@@ -7,7 +7,7 @@ const { checkItems } = require('../_util');
 const { openBrowser, startPages, newContext } = require('../../browser');
 
 const MAX_PAGES = 8;
-const TOLD = /오류|에러|실패|다시 시도|새로고침|문제가|불러오지 못|연결|네트워크|잠시 후|error|fail|retry|try again|unavailable|offline|went wrong/i;
+const TOLD = /오류|에러|실패|다시 시도|새로고침|문제가 (생|발생|있)|불러오지 못|연결(할 수 없|하지 못|이 끊|에 실패)|네트워크 (오류|연결)|잠시 후|error|fail|retry|try again|unavailable|offline|went wrong/i;
 
 module.exports = {
   id: '8', name: '장애 대응', weight: 5,

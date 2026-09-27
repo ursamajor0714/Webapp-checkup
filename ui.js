@@ -80,8 +80,11 @@ function settingsOf(id) {
 function latestReport(id) {
   const dir = path.join(ROOT, 'reports', id);
   if (!fs.existsSync(dir)) return null;
-  const file = fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().reverse()[0];
-  return file ? { file, ...JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')) } : null;
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().reverse()) {
+    let r; try { r = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')); } catch { continue; }
+    if (r.summary && r.summary.full !== false) return { file, ...r };   // 영역 몇 개만 돌린 명령줄 검사는 건너뛴다
+  }
+  return null;
 }
 
 // ── 대상 서버 켜기·끄기 (부분마다) — 실제 일은 common/serve.js
