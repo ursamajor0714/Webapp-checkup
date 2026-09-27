@@ -15,7 +15,6 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
 const { prepare, runProbe, finish, listAreas, projectDefs, SECTIONS, OWASP, CRED_KEYS } = require('./common/runner');
 const { loadProject, detectParts } = require('./common/project');
@@ -85,111 +84,19 @@ function latestReport(id) {
   return file ? { file, ...JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')) } : null;
 }
 
-// ── 대상 서버 켜기·끄기 (부분마다) ─────────────────────────
+// ── 대상 서버 켜기·끄기 (부분마다) — 실제 일은 common/serve.js
+const serve = require('./common/serve');
+const { healthy } = serve;
 const servers = {};   // `${id}:${dir}` → { child, phase, log[], error }
-async function healthy(baseUrl) {
-  if (!baseUrl) return { up: false };
-  try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 1500);
-    const r = await fetch(baseUrl, { signal: ctl.signal, redirect: 'manual' });
-    clearTimeout(t);
-    return { up: true, status: r.status };
-  } catch { return { up: false }; }
-}
-const serverState = key => (servers[key] ??= { child: null, phase: 'idle', log: [], error: null });
-function logLine(st, text) {
-  for (const line of String(text).split(/\r?\n/)) if (line.trim()) st.log.push(line.replace(/\x1b\[[0-9;]*m/g, ''));
-  if (st.log.length > 400) st.log.splice(0, st.log.length - 400);
-}
-function runStep(st, cmd, cwd, env) {
-  return new Promise((resolve, reject) => {
-    logLine(st, `$ ${cmd.join(' ')}`);
-    const p = spawn(cmd[0], cmd.slice(1), { cwd, env, shell: process.platform === 'win32' });
-    p.stdout.on('data', d => logLine(st, d));
-    p.stderr.on('data', d => logLine(st, d));
-    p.on('error', e => reject(new Error(`${cmd[0]} 을(를) 실행하지 못했습니다: ${e.message}`)));
-    p.on('close', code => (code === 0 ? resolve() : reject(new Error(`${cmd.join(' ')} 이(가) 실패했습니다 (code ${code}) — 로그를 보세요`))));
-  });
-}
-const gitHead = dir => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim(); } catch { return null; } };
-
-// 대상에 넣을 환경변수 — 프로젝트 설정의 serveEnv (화면 설정값 ↔ 대상의 키) + 포트
-function envFor(def, port) {
-  const env = { ...process.env, PORT: String(port), SERVER_PORT: String(port) };
-  const se = def.serveEnv || {};
-  const auth = def.auth || {};
-  for (const [field, key] of Object.entries(se)) if (field !== 'random' && auth[field]) env[key] = auth[field];
-  const local = readLocal();
-  const saved = (local.generated ||= {});
-  for (const key of se.random || []) {
-    if (process.env[key]) continue;
-    saved[key] ??= crypto.randomBytes(24).toString('base64url');   // 한 번 만든 값은 계속 쓴다 (세션이 안 깨지게)
-    env[key] = saved[key];
-  }
-  writeLocal(local);
-  const missing = Object.entries(se).filter(([f]) => f !== 'random' && !auth[f]).map(([f]) => ({ password: '비밀번호', otp: 'OTP', user: '아이디' }[f] || f));
-  return { env, missing };
-}
-
-async function startPart(id, dir, { rebuild = false } = {}) {
+const serverState = key => (servers[key] ??= serve.newState());
+async function startPart(id, dir, opt = {}) {
   const def = defOf(id);
   const part = loadProject(def).parts.find(p => p.dir === dir);
   const st = serverState(`${id}:${dir}`);
-  if (['installing', 'building', 'starting'].includes(st.phase)) return;
-  st.log = []; st.error = null;
-  try {
-    if (!part) throw new Error(`부분을 찾을 수 없습니다: ${dir}`);
-    const plan = STACKS[part.stack].serve && STACKS[part.stack].serve(part.absDir);
-    if (!plan) throw new Error(`${part.stack} 는 켜는 방법을 모릅니다`);
-    if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; logLine(st, '이미 켜져 있습니다'); return; }
-    const port = new URL(part.baseUrl).port || '80';
-    const { env, missing } = envFor(def, port);
-    if (missing.length) throw new Error(`⚙ 설정에서 ${missing.join('·')}를 먼저 넣어 주세요 (서버를 켤 때 필요합니다)`);
-    const sub = a => a.map(x => x.replace('{PORT}', port));
-    if (plan.install && (/^npm$/.test(plan.install[0]) ? !fs.existsSync(path.join(part.absDir, 'node_modules')) : !(readLocal().installed || {})[`${id}:${dir}`])) {
-      st.phase = 'installing'; await runStep(st, sub(plan.install), part.absDir, env);
-      const l = readLocal(); l.installed = { ...(l.installed || {}), [`${id}:${dir}`]: true }; writeLocal(l);
-    }
-    const head = gitHead(part.absDir);
-    const builtKey = `${id}:${dir}`;
-    if (plan.build && (rebuild || (plan.buildMarker && !fs.existsSync(path.join(part.absDir, plan.buildMarker))) || (head && (readLocal().built || {})[builtKey] !== head))) {
-      st.phase = 'building'; await runStep(st, sub(plan.build), part.absDir, env);
-      const l = readLocal(); l.built = { ...(l.built || {}), [builtKey]: head }; writeLocal(l);
-    }
-    st.phase = 'starting';
-    const cmd = sub(plan.start);
-    logLine(st, `$ ${cmd.join(' ')}  (PORT=${port})`);
-    const child = spawn(cmd[0], cmd.slice(1), { cwd: part.absDir, env, shell: process.platform === 'win32', detached: process.platform !== 'win32' });
-    st.child = child;
-    child.stdout.on('data', d => logLine(st, d));
-    child.stderr.on('data', d => logLine(st, d));
-    child.on('error', e => { st.error = e.message; });
-    child.on('close', code => {
-      if (st.child !== child) return;
-      st.child = null;
-      if (st.phase !== 'stopping') { st.phase = 'error'; st.error = `서버가 꺼졌습니다 (code ${code}) — 로그를 보세요`; } else st.phase = 'idle';
-    });
-    for (let i = 0; i < 180; i++) {
-      await new Promise(r => setTimeout(r, 1000));
-      if (!st.child) throw new Error(st.error || '서버가 켜지다가 꺼졌습니다');
-      if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; logLine(st, `켜졌습니다 — ${part.baseUrl}`); return; }
-    }
-    throw new Error('3분 안에 켜지지 않았습니다 — 로그를 보세요');
-  } catch (e) {
-    st.phase = 'error'; st.error = e.message; logLine(st, '✗ ' + e.message);
-  }
+  if (!part) { st.phase = 'error'; st.error = `부분을 찾을 수 없습니다: ${dir}`; return; }
+  await serve.startPart(def, part, st, opt);
 }
-function stopKey(key) {
-  const st = servers[key];
-  if (!st || !st.child) return false;
-  st.phase = 'stopping';
-  try {
-    if (process.platform === 'win32') execFileSync('taskkill', ['/pid', String(st.child.pid), '/T', '/F']);
-    else process.kill(-st.child.pid, 'SIGTERM');
-  } catch { /* 이미 꺼졌다 */ }
-  return true;
-}
+const stopKey = key => serve.stop(servers[key]);
 const stopAll = () => { for (const k of Object.keys(servers)) stopKey(k); };
 process.on('exit', stopAll);
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { stopAll(); process.exit(0); });
@@ -206,6 +113,8 @@ async function serverStatus(id) {
   }
   return out;
 }
+
+const gitHead = dir => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
 
 // ── 최신 코드 받기 (git pull) ──────────────────────────────
 function pull(dir) {
@@ -225,7 +134,8 @@ async function startJob(id, ids) {
   job = { id: Date.now().toString(36), project: id, ids, status: 'running', current: null, results: [], report: null, error: null, notes: [], startedAt: Date.now() };
   const my = job;
   try {
-    const prep = await prepare(defOf(id), { only: ids });
+    // 화면이 켠 서버는 화면이 로그를 갖고 있다 — 검사(서버 로그 오류 영역)에 넘긴다. 꺼져 있으면 검사가 직접 켠다
+    const prep = await prepare(defOf(id), { only: ids, servers: Object.fromEntries(Object.entries(servers).filter(([k]) => k.startsWith(id + ':')).map(([k, st]) => [k.slice(id.length + 1), st])) });
     my.notes = prep.ctx.notes;
     my.total = prep.probes.length;
     for (const probe of prep.probes) {
@@ -235,6 +145,7 @@ async function startJob(id, ids) {
     my.current = null;
     const full = !ids.length;   // 전체를 돌렸을 때만 리포트 파일로 남긴다
     const { report, stamp } = await finish(prep, my.results, { save: full });
+    for (const [dir, st] of Object.entries(prep.ctx.startedServers || {})) servers[`${id}:${dir}`] = st;   // 검사가 켠 서버는 화면이 이어받아 끌 수 있게
     my.report = { summary: report.summary, selfcheck: report.selfcheck, maturity: report.maturity, full, file: full ? `${stamp}.json` : null };
     my.status = 'done';
   } catch (e) {

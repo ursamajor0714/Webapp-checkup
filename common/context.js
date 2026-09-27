@@ -45,7 +45,8 @@ function makeContext(project) {
       return s && (s.baseUrl || (s.servedBy && project.parts.find(p => p.id === s.servedBy).baseUrl));
     },
     routes: () => once('routes', () => services.flatMap(s => {
-      try { return STACKS[s.stack].routes(s.absDir).map(r => ({ ...r, service: s.id })); } catch (e) { ctx.notes.push(`${s.id} 경로를 읽지 못함: ${e.message}`); return []; }
+      // '나머지 전부 받기' 경로(/api/:path* · *)는 뺀다 — 없는 경로 404·SPA 화면 돌려주기라 경로 하나로 두드릴 게 아니다
+      try { return STACKS[s.stack].routes(s.absDir).filter(r => !/(^|\/)(:\w+\*|\*)$/.test(r.path)).map(r => ({ ...r, service: s.id })); } catch (e) { ctx.notes.push(`${s.id} 경로를 읽지 못함: ${e.message}`); return []; }
     })),
     calls: () => once('calls', () => clients.flatMap(c => {
       const st = STACKS[c.stack === 'nextjs' || c.stack === 'django' ? (c.stack === 'django' ? 'templates' : 'react') : c.stack];

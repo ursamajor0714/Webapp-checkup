@@ -1,0 +1,12 @@
+{
+  "name": "qa",
+  "private": true,
+  "description": "범용 QA — 레포를 넣으면 스택을 감지해 A~Z·OWASP·브라우저 실행 오류까지 잰다",
+  "scripts": {
+    "ui": "node ui.js --open",
+    "qa": "node run.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

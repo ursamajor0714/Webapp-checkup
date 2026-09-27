@@ -1,0 +1,46 @@
+// 브라우저 열기 — 실제 크롬으로 화면을 열어 콘솔 오류·예외·깨진 요청을 본다
+//   playwright-core 만 쓴다 (브라우저를 따로 내려받지 않는다). 이 컴퓨터에 깔린 것을 차례로 찾는다:
+//   QA_CHROME 로 준 경로 → Playwright 가 받아 둔 크로미움 → 크롬 → 엣지 → 크로미움
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+function loadPlaywright() {
+  for (const name of ['playwright-core', 'playwright']) { try { return require(name); } catch { /* 다음 */ } }
+  try {   // 전역으로 깔린 것
+    const root = require('child_process').execFileSync('npm', ['root', '-g'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: process.platform === 'win32' }).trim();
+    for (const name of ['playwright-core', 'playwright']) { try { return require(path.join(root, name)); } catch { /* 다음 */ } }
+  } catch { /* npm 이 없다 */ }
+  return null;
+}
+
+// Playwright 가 받아 둔 크로미움 (PLAYWRIGHT_BROWSERS_PATH 또는 기본 캐시)
+function downloadedChromium() {
+  const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH, path.join(os.homedir(), '.cache', 'ms-playwright'), path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright'), path.join(os.homedir(), 'AppData', 'Local', 'ms-playwright')].filter(Boolean);
+  const rel = process.platform === 'darwin' ? ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'] : process.platform === 'win32' ? ['chrome-win', 'chrome.exe'] : ['chrome-linux', 'chrome'];
+  for (const r of roots) {
+    if (fs.existsSync(path.join(r, 'chromium')) && fs.statSync(path.join(r, 'chromium')).isFile()) return path.join(r, 'chromium');
+    let dirs = []; try { dirs = fs.readdirSync(r).filter(d => /^chromium-\d+$/.test(d)).sort().reverse(); } catch { continue; }
+    for (const d of dirs) { const f = path.join(r, d, ...rel); if (fs.existsSync(f)) return f; }
+  }
+  return null;
+}
+
+/** { browser } 또는 { why } — 못 열면 이유를 돌려준다 (검사를 멈추지 않는다) */
+async function openBrowser() {
+  const pw = loadPlaywright();
+  if (!pw) return { why: 'playwright-core 가 없다 — QA 폴더에서 npm install 한 번 (QA 실행 파일은 알아서 한다)' };
+  const tries = [
+    process.env.QA_CHROME && { executablePath: process.env.QA_CHROME },
+    downloadedChromium() && { executablePath: downloadedChromium() },
+    { channel: 'chrome' }, { channel: 'msedge' }, { channel: 'chromium' },
+  ].filter(Boolean);
+  const errors = [];
+  for (const opt of tries) {
+    try { return { browser: await pw.chromium.launch({ headless: true, ...opt }), via: opt.channel || opt.executablePath }; }
+    catch (e) { errors.push(`${opt.channel || opt.executablePath}: ${String(e.message).split('\n')[0].slice(0, 80)}`); }
+  }
+  return { why: `크롬·엣지를 찾지 못했다 — 크롬을 깔거나 QA_CHROME 에 실행 파일 경로를 준다 (${errors.join(' / ')})` };
+}
+
+module.exports = { openBrowser };

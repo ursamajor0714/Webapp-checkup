@@ -346,8 +346,8 @@ function guide() {
     <p>${esc(t.name)} — ${t.parts.map(p => esc(p.label)).join(' + ') || '스택을 찾지 못함'}</p>
     <ol class="steps">
       <li>${t.rootExists ? '✅' : '①'} <b>⚙ 설정</b>에서 레포 폴더 확인 · 로그인이 있으면 검사용 계정 (가입 경로가 있으면 비워 둬도 자동으로 만듭니다)</li>
-      <li>${up ? '✅' : '②'} 위쪽 <b>[서버 켜기]</b> — 설치·빌드·실행을 알아서 합니다 (서버 없이도 코드 검사는 됩니다)</li>
-      <li>③ <b>[전체 검사]</b> 또는 왼쪽 영역의 <b>[조회]</b> → 결과가 O / X 목록으로 · 보안은 왼쪽 위 <b>OWASP Top 10</b></li>
+      <li>${up ? '✅' : '②'} 서버는 켜 두지 않아도 됩니다 — <b>[전체 검사]</b> 때 QA 가 설치·빌드·실행까지 하고 서버 로그의 오류도 봅니다</li>
+      <li>③ <b>[전체 검사]</b> → 자체 테스트·실제 브라우저·설정·서버 로그·A~Z 26개 영역을 한 번에, 결과는 O / X 목록 · 보안은 왼쪽 위 <b>OWASP Top 10</b></li>
     </ol></div>`;
 }
 
@@ -479,7 +479,7 @@ async function loadProject(id) {
 
 async function run(ids) {
   const down = state.server.filter(p => !p.up);
-  if (down.length && !confirm(`꺼진 서버가 있습니다 (${down.map(p => p.label + ' ' + p.dir).join(', ')}).\n서버가 필요한 검사는 '잴 수 없음' 으로 나옵니다. 그대로 검사할까요?`)) return;
+  if (down.length && !confirm(`꺼진 서버가 있습니다 (${down.map(p => p.label + ' ' + p.dir).join(', ')}).\nQA 가 설치·빌드·실행까지 해서 켠 뒤 검사합니다 (처음엔 몇 분). 서버 로그의 오류까지 봅니다. 계속할까요?`)) return;
   try { await api('/api/run', json({ project: state.project, ids })); } catch (e) { alert(e.message); return; }
   if (ids.length === 1) state.selected = ids[0];
   state.running = { status: 'running', project: state.project, ids, results: [], current: null };

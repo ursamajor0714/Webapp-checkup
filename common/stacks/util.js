@@ -8,10 +8,12 @@ function walk(dir, exts, out = [], depth = 0) {
   if (depth > 12) return out;
   let es; try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
   for (const e of es) {
-    if (SKIP.has(e.name) || e.name.startsWith('.')) continue;
+    if (SKIP.has(e.name)) continue;
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) walk(p, exts, out, depth + 1);
-    else if (!exts || exts.some(x => e.name.endsWith(x))) out.push(p);
+    // 숨김 폴더(.git·.next·.venv …)는 건너뛰고, 숨김 파일(.env.example·.eslintrc.js)은 찾는 이름일 때만 본다
+    if (e.isDirectory()) { if (!e.name.startsWith('.')) walk(p, exts, out, depth + 1); continue; }
+    if (e.name.startsWith('.') && !(exts && exts.some(x => x.startsWith('.') && x.length > 4 && e.name.endsWith(x) && e.name.startsWith(x.split('.').slice(0, 2).join('.'))))) continue;
+    if (!exts || exts.some(x => e.name.endsWith(x))) out.push(p);
   }
   return out;
 }

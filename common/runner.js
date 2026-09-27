@@ -17,7 +17,7 @@ const { makeContext } = require('./context');
 const { extractContracts } = require('./extract');
 const { login, register, Session, request } = require('./session');
 
-const SECTIONS = [['front', '순수 프론트'], ['front-api', 'API 받아오는 프론트'], ['api', 'API 기능'], ['security', '보안']];
+const SECTIONS = [['project', '프로젝트 전체 (테스트·브라우저·설정·로그)'], ['front', '순수 프론트'], ['front-api', 'API 받아오는 프론트'], ['api', 'API 기능'], ['security', '보안']];
 const COMPOSITE = ['X', 'W', 'Y'];
 const QA_ROOT = path.join(__dirname, '..');
 const OWASP = {
@@ -78,7 +78,7 @@ function listAreas(def) {
 }
 
 // ── 준비: 부분 감지 · 로그인 방식 · 서버 살았나 · 계정 · 규칙 추출
-async function prepare(def, { only = [], singleOnly = false, log = () => {} } = {}) {
+async function prepare(def, { only = [], singleOnly = false, log = () => {}, servers = {}, autoServe = true } = {}) {
   const project = loadProject(def);
   if (!project.root || !fs.existsSync(project.root)) throw new Error(`레포 폴더가 없다: ${project.root}`);
   const ctx = makeContext(project);
@@ -88,12 +88,28 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {} } = 
   const auth = project.auth;
   ctx.authService = (routes.find(r => r.path === auth.loginPath) || {}).service || (ctx.primary && ctx.primary.id);
 
+  // 꺼진 서버는 직접 켠다 (설치·빌드·실행) — '딱 실행' 하면 서버까지 올라와 끝까지 잰다. 로그는 '서버 로그 오류' 영역이 읽는다
+  const serve = require('./serve');
+  ctx.serverStates = { ...servers };
+  ctx.startedServers = {};
+  if (autoServe) {
+    const targets = project.parts.filter(serve.canServe).sort((a, b) => (a.kind === 'client') - (b.kind === 'client'));
+    for (const p of targets) {
+      if ((await serve.healthy(p.baseUrl)).up) continue;
+      log(`서버 켜는 중: ${p.stack}@${p.dir} → ${p.baseUrl} (설치·빌드가 필요하면 몇 분 걸린다)`);
+      const st = serve.newState();
+      await serve.startPart({ ...def, id: def.id || project.name }, p, st);
+      if (st.phase === 'running') { ctx.serverStates[p.dir] = st; ctx.startedServers[p.dir] = st; ctx.notes.push(`${p.stack}@${p.dir} 를 QA 가 켰다 (${p.baseUrl}) — 서버 로그까지 본다${st.filledEnv ? ` · 비어 있던 설정에 검사용 값: ${st.filledEnv.join(', ')}` : ''}${st.installError ? ' · 의존성 설치는 실패했지만 이미 깔린 것으로 떴다' : ''}`); }
+      else { ctx.notes.push(`${p.stack}@${p.dir} 를 켜지 못했다: ${st.error}${st.log.length ? ' · 마지막 로그: ' + st.log.slice(-3).join(' / ').slice(0, 200) : ''}`); if (st.child) serve.stop(st); }
+    }
+  }
+
   // 서버가 살아 있는가 — 서비스마다 아무 응답이라도
   const up = {};
   for (const s of ctx.services) { try { const r = await request(ctx.baseUrl(s.id), null, '/', {}); up[s.id] = r.status > 0; } catch { up[s.id] = false; } }
   // 떠 있는 서버가 정말 이 레포인가 — 같은 포트에 다른 프로젝트가 떠 있으면 엉뚱한 서버를 재게 된다.
   // 이 레포의 GET 경로(값 없는 것)를 몇 개 불러 전부 404 면 다른 서버로 본다
-  for (const s of ctx.services.filter(s => up[s.id])) {
+  for (const s of ctx.services.filter(s => up[s.id] && !ctx.startedServers[s.dir])) {
     const probe = routes.filter(r => r.service === s.id && r.method === 'GET' && !r.path.includes(':') && !r.path.includes('*') && r.path !== '/').slice(0, 6);
     if (probe.length < 2) continue;
     // 없는 경로에 어떻게 답하는지와 견준다 (모든 /api 를 401 로 막는 서버도 있다)
@@ -175,7 +191,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {} } = 
     .filter(p => !only.length || only.map(s => s.toUpperCase()).includes(p.id))
     .filter(p => !singleOnly || !COMPOSITE.includes(p.id));
   // 로그인 잠금처럼 뒤 검사를 막을 수 있는 영역(last: true)은 맨 뒤에 돈다
-  probes.sort((a, b) => (a.last ? 1 : 0) - (b.last ? 1 : 0));
+  probes.sort((a, b) => (+a.last || 0) - (+b.last || 0));
   return { def, project, ctx, probes, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
 }
 
@@ -278,11 +294,15 @@ async function finish(prep, results, { save = true } = {}) {
 async function run(arg) {
   const args = process.argv.slice(2);
   const target = arg || args.find(a => !a.startsWith('--'));
-  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
   const only = (args.find(a => a.startsWith('--only=')) || '').replace('--only=', '').split(',').filter(Boolean);
   const jsonOnly = args.includes('--json');
   const def = resolveProject(target);
-  const prep = await prepare(def, { only, singleOnly: args.includes('--single'), log: m => !jsonOnly && console.log(m) });
+  const prep = await prepare(def, { only, singleOnly: args.includes('--single'), autoServe: !args.includes('--no-serve'), log: m => !jsonOnly && console.error(m) });
+  // 검사가 켠 서버는 끝나면 끈다 (Ctrl+C 로 멈춰도)
+  const stopStarted = () => { for (const st of Object.values(prep.ctx.startedServers || {})) require('./serve').stop(st); };
+  process.once('exit', stopStarted);
+  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { stopStarted(); process.exit(130); });
   const { ctx, project } = prep;
   if (!jsonOnly) {
     console.log(`대상: ${project.name} (${project.root})`);
@@ -297,6 +317,7 @@ async function run(arg) {
     if (!jsonOnly) process.stdout.write(`${r.error ? '⚠' : r.skip ? '·' : r.failed === 0 ? '✓' : '✗'} ${r.id}. ${r.name}  ${r.skip ? `— ${r.skip}` : `검사 ${r.scanned}  통과 ${r.passed}  문제 ${r.failed}${r.warned ? `  확인필요 ${r.warned}` : ''}`}${r.error ? '  (실행 오류: ' + r.error.split('\n')[0] + ')' : ''}  ${r.ms}ms\n`);
   }
   const { report, stamp } = await finish(prep, results);
+  stopStarted();
   if (jsonOnly) { console.log(JSON.stringify(report, null, 2)); return; }
   const s = report.summary;
   console.log('\n' + '='.repeat(64));

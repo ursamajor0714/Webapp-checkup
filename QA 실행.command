@@ -16,6 +16,11 @@ fi
 export QA_UI_LAUNCHER=1
 OPEN="--open"
 while true; do
+  # 브라우저 검사용 부품(playwright-core) — 없거나 package.json 이 바뀌었으면 설치 (브라우저는 이미 깔린 크롬을 쓴다)
+  if [ ! -d node_modules/playwright-core ] || [ package.json -nt node_modules/.package-lock.json ]; then
+    echo "처음 한 번 필요한 부품을 설치합니다…"
+    npm install --no-audit --no-fund --loglevel=error || echo "설치하지 못했습니다 — 브라우저 검사만 건너뛰고 나머지는 돕니다."
+  fi
   node ui.js $OPEN
   code=$?
   # 75 = 화면에서 [최신 코드 받기] 로 QA 코드가 바뀜 → 새 코드로 다시 띄운다

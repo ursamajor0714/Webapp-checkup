@@ -6,3 +6,6 @@ node_modules/
 
 # 검사 결과 (프로젝트별)
 /reports/
+
+# QA 가 검사용으로 만든 임시 DB
+/.qa-data/
