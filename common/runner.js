@@ -310,9 +310,10 @@ async function finish(prep, results, { save = true } = {}) {
   let self = { items: [] };
   const selfFile = prep.def.dir && path.join(prep.def.dir, 'selfcheck.js');
   if (selfFile && fs.existsSync(selfFile)) self = await require(selfFile).run(ctx);
-  const mat = maturity.measure(project.root);
+  const mat = maturity.measure(project.root, project.parts.map(p => p.absDir));
   const rawScore = Math.round(quality * Math.sqrt(scanRate) * 1000) / 10;
   const score = Math.round(rawScore * mat.factor * 10) / 10;
+  maturity.gains(mat, rawScore);   // 항목마다 '갖추면 최종 +몇 점'
   const generated = results.flatMap(r => r.checks).filter(c => /자동 생성|규칙:|칸 이름만 앎|매트릭스|주입 문자열을 넣어도|경계값/.test(c.name)).reduce((s, c) => s + c.scanned, 0);
   const summary = {
     project: project.id || prep.def.id, target: project.name, root: project.root, at: new Date().toISOString(),
@@ -396,6 +397,11 @@ async function run(arg) {
   console.log('\n' + '='.repeat(64));
   console.log(`검사 ${s.scanned} (자동 생성 ${s.generated}) · 통과 ${s.passed} · 문제 ${s.failed} · 확인필요 ${s.warned}`);
   console.log(`제품 점수 ${s.rawScore} × 운영 성숙도 ${s.maturity.got}/${s.maturity.total}(계수 ${s.maturity.factor}) → 최종 ${s.score} ${s.grade}`);
+  const miss = report.maturity.items.filter(i => !i.ok).sort((a, b) => b.plus - a.plus);
+  if (miss.length) {
+    console.log(`\n◆ 운영 성숙도 — 빠진 것 ${miss.length}개 (다 갖추면 최종 +${Math.round(miss.reduce((a, i) => a + i.plus, 0) * 10) / 10})`);
+    for (const i of miss) console.log(`  ✗ ${i.label} (+${i.plus}) — ${i.how[0]}`);
+  }
   console.log(`설정 필요·해당 없음 ${s.skippedAreas.length}개 영역 (점수에서 뺌)`);
   console.log('\nOWASP Top 10 (2021)');
   for (const o of s.owasp) console.log(`  ${o.id} ${o.name.padEnd(18)} ${o.status.padEnd(6)} 검사 ${o.scanned} · 문제 ${o.failed}${o.warned ? ` · 확인 ${o.warned}` : ''}`);
