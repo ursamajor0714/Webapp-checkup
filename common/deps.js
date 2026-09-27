@@ -120,4 +120,4 @@ async function ensureLocalServices(part, root, env, log = () => {}) {
   return { ok: true, notes };
 }
 
-module.exports = { ensureLocalServices, localServices, portOpen };
+module.exports = { ensureLocalServices, localServices, portOpen, readEnvFile };
