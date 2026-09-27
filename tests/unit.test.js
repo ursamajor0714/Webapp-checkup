@@ -140,3 +140,42 @@ test('외부 서비스 — 목록은 의존성·환경변수 이름·설정 파�
   assert.match(items[0].name, /server\.js:2/);
   assert.strictEqual(items[0].ok, null);   // 확인 필요 — 문제(X)로 세지 않는다
 });
+
+test('손댈 곳 — 같은 경로·같은 파일에서 나온 문제는 한 곳으로 묶는다', () => {
+  const { actionable, placeOf } = require('../common/runner');
+  assert.strictEqual(placeOf('POST /api/items · name null'), 'POST /api/items');
+  assert.strictEqual(placeOf('src/app.js:12 — 비밀 키'), 'src/app.js');
+  const items = n => Array.from({ length: n }, (_, i) => ({ name: `POST /api/items · 입력 ${i}`, ok: false, detail: '500' }));
+  const a = actionable([
+    { id: 'F', checks: [{ name: '서버 오류가 안 난다', items: items(20) }] },
+    { id: '4', checks: [{ name: '서버 로그', items: [{ name: '서버 · 3번', ok: false }, { name: '서버 · 5번', ok: null }] }] },
+    { id: 'C', skip: '로그인 필요', checks: [{ name: 'x', items: [{ name: 'y', ok: false }] }] },
+  ]);
+  assert.deepStrictEqual(a, { fix: 2, failed: 21, look: 1, warned: 1 });
+});
+
+test('설정 오류 — 로그인이 설정 오류로 막히면 로그인이 필요한 영역은 결함 대신 설정 오류로 뺀다', async () => {
+  const { runProbe, scoreOf } = require('../common/runner');
+  const { levelOf } = require('../common/level');
+  const ctx = { level: levelOf(), services: [], ignores: [], setupBlocked: '⚙ 설정 계정으로 로그인하지 못했다: 401' };
+  let ran = false;
+  const r = await runProbe(ctx, { id: 'F', name: '입력 검증', weight: 5, run: async () => { ran = true; return { checks: [{ name: 'c', universe: 1, scanned: 1, passed: 0, failed: 1 }] }; } });
+  assert.ok(!ran && r.setup && /설정 오류/.test(r.skip));
+  const other = await runProbe(ctx, { id: 'K', name: '비밀', weight: 5, run: async () => ({ checks: [{ name: 'c', universe: 1, scanned: 1, passed: 1, failed: 0 }] }) });
+  assert.ok(!other.skip, '코드만 보는 영역은 그대로 돈다');
+  assert.strictEqual(scoreOf([r, other]).raw, 100);
+});
+
+test('지난 검사와 비교 — 점수가 바뀐 이유와 같은 영역끼리 점수를 낸다', () => {
+  const { diffWithPrevious } = require('../common/runner');
+  const dir = tmp();
+  const area = (id, o) => ({ id, name: id, weight: 5, universe: 10, scanned: 10, passed: 10, warned: 0, failed: 0, passRate: 1, checks: [], ...o });
+  const prev = [area('A'), area('B', { passed: 5, failed: 5, passRate: 0.5 })];
+  fs.writeFileSync(path.join(dir, '2026-01-01-00-00.json'), JSON.stringify({ summary: { full: true, rawScore: 75, level: { id: 'advanced' } }, results: prev }));
+  const now = [area('A'), area('B', { skip: '서버가 꺼져 있다', scanned: 0, universe: 0 })];
+  const d = diffWithPrevious(dir, now, 100, 'advanced');
+  assert.strictEqual(d.prevScore, 75);
+  assert.deepStrictEqual(d.same, { areas: 1, prev: 100, now: 100 });
+  assert.match(d.areaChanges[0].why[0], /이번엔 못 잼/);
+  assert.strictEqual(diffWithPrevious(dir, now, 100, 'expert'), null, '다른 수준과는 견주지 않는다');
+});

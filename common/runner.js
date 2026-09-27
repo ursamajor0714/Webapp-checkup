@@ -160,12 +160,29 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       accounts.push({ user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입' });
     }
     ctx.accounts = accounts;   // 브라우저가 화면에서 직접 로그인할 때 쓴다
+    // 설정 계정으로 못 들어간 것(비밀번호 틀림·잠김)은 '설정 오류' — 제품 결함으로 세지 않는다
+    const setupFail = [];
     for (const [i, name] of ['owner', 'other'].entries()) {
-      const a = accounts[i]; if (!a) break;
-      const l = await login(base, auth, a, name);
+      let a = accounts[i]; if (!a) break;
+      let l = await login(base, auth, a, name);
+      if (!l.ok && a.from === '설정') {
+        const locked = /429/.test(l.why || '');
+        setupFail.push(`⚙ 설정의 ${name === 'owner' ? '첫' : '두'} 번째 계정(${a.user || '비밀번호만'})으로 로그인하지 못했다: ${l.why}${locked ? ' — 직전 검사의 무차별 대입 검사로 잠겼을 수 있다. 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ' — 아이디·비밀번호를 확인한다'}`);
+        // 가입 경로가 있으면 검사용 계정을 만들어 이어 간다
+        if (reg && def.autoAccounts !== false) {
+          const r = await register(base, auth, reg, regContract ? Object.keys(regContract.fields) : []);
+          if (r.ok) { a = accounts[i] = { user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입 (설정 계정 대신)' }; l = await login(base, auth, a, name); ctx.accountFlow.push({ name: `가입 ${reg.path} (설정 계정 대신)`, ok: true, detail: `검사용 계정 ${r.acct.user}` }); }
+        }
+        if (!l.ok) continue;
+      }
       if (ctx.accountFlow) ctx.accountFlow.push({ name: `로그인 (${name} · ${a.from})`, ok: l.ok, detail: l.ok ? `${l.status}` : l.why });
       if (l.ok) { ctx.sessions[name] = l.sess; ctx.tokens[name] = l.sess.token; if (name === 'owner') ctx.loginResponse = { cookies: Object.entries(l.sess.cookies).map(([k]) => k) }; }
       else ctx.notes.push(`로그인 실패 (${name}): ${l.why}${/429/.test(l.why || '') ? ' — 직전 실행의 무차별 대입 검사로 잠겼다. 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ''}`);
+    }
+    if (setupFail.length) {
+      ctx.setupErrors = setupFail;
+      // 설정 계정도, 대신 만든 계정도 없으면 로그인이 꼭 필요한 영역은 '설정 오류로 못 잼'
+      if (!ctx.sessions.owner) ctx.setupBlocked = setupFail[0];
     }
     if (ctx.sessions.owner) {
       const l2 = await login(base, auth, accounts[0], 'attacker');
@@ -203,8 +220,14 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
 }
 
 // ── 영역 하나 실행
+// 로그인한 계정으로 서버를 두드려야만 뜻이 있는 영역 — 로그인이 설정 오류로 막히면 익명 결과(401 투성이)가 잡음이 된다
+const LOGIN_ONLY = new Set(['W', 'X', 'Y', 'M', 'R', 'S', 'D', 'E', 'F', 'J', 'O', 'Q', 'Z', 'C']);
 async function runProbe(ctx, probe) {
   const t0 = Date.now();
+  if (ctx.setupBlocked && LOGIN_ONLY.has(probe.id)) {
+    return { id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file, owasp: probe.owasp || [], composite: COMPOSITE.includes(probe.id),
+      skip: `설정 오류로 못 잼 (제품 결함 아님) — ${ctx.setupBlocked}`, setup: true, skipped: [], partial: null, universe: 0, scanned: 0, passed: 0, warned: 0, failed: 0, scanRate: 0, passRate: 1, ms: 0, checks: [], error: null, info: null };
+  }
   let checks = [], error = null, skip = null, skipped = [], partial = null, info = null;
   try {
     const out = await probe.run(ctx) || {};
@@ -285,6 +308,34 @@ function topFixes(results, n = 10) {
   return top;
 }
 
+// 손댈 곳 — 같은 원인에서 나온 문제를 묶는다 (같은 경로에 이상한 입력 20가지가 모두 500 이면 문제 20건, 손댈 곳 1곳)
+//   묶는 기준: 검사 + 항목 앞머리가 'METHOD /경로' 면 그 경로, '파일:줄' 이면 그 파일, 아니면 항목 그대로
+function placeOf(name) {
+  const s = String(name || '');
+  const route = s.match(/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+/);
+  if (route) return route[0];
+  const file = s.match(/^([\w./@-]+\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|kt|html|ejs|vue|svelte|json|yml|yaml|md))(?::\d+)?/);
+  if (file) return file[1];
+  return s.split(' — ')[0];
+}
+function actionable(results) {
+  const fix = new Map(), look = new Map();
+  for (const r of results) {
+    if (r.skip) continue;
+    for (const c of r.checks || []) {
+      if (c.items && c.items.length) for (const i of c.items) {
+        const k = `${r.id}|${c.name}|${placeOf(i.name)}`;
+        if (i.ok === false) fix.set(k, (fix.get(k) || 0) + 1); else if (i.ok === null) look.set(k, (look.get(k) || 0) + 1);
+      } else {
+        if (c.failed) fix.set(`${r.id}|${c.name}`, c.failed);
+        if (c.warned) look.set(`${r.id}|${c.name}`, c.warned);
+      }
+    }
+  }
+  const sum = m => [...m.values()].reduce((a, b) => a + b, 0);
+  return { fix: fix.size, failed: sum(fix), look: look.size, warned: sum(look) };
+}
+
 // 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)
 const failKeys = results => {
   const { findingKey } = require('./ignore');
@@ -307,7 +358,28 @@ function diffWithPrevious(dir, results, score, level = 'advanced') {
   const a = failKeys(prev.results), b = failKeys(results);
   const added = [...b.entries()].filter(([k]) => !a.has(k)).map(([, v]) => v);
   const fixed = [...a.entries()].filter(([k]) => !b.has(k)).map(([, v]) => v);
-  return { prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && prev.summary.score, score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
+  // 점수가 왜 바뀌었나 — 영역마다 전과 후, 그리고 이유 (못 잰 영역이 달라졌나 · 검사 수가 달라졌나 · 확인 필요가 달라졌나)
+  const byId = new Map((prev.results || []).map(r => [r.id, r]));
+  const areaChanges = [];
+  for (const r of results) {
+    const p = byId.get(r.id); if (!p) continue;
+    const before = p.skip ? null : scoreOf([p]).raw, after = r.skip ? null : scoreOf([r]).raw;
+    const why = [];
+    if (!p.skip && r.skip) why.push(`이번엔 못 잼: ${String(r.skip).slice(0, 80)}`);
+    else if (p.skip && !r.skip) why.push('지난번엔 못 잼 → 이번엔 잼');
+    else if (!p.skip && !r.skip) {
+      if (p.scanned !== r.scanned) why.push(`검사 수 ${p.scanned} → ${r.scanned}`);
+      if (p.failed !== r.failed) why.push(`문제 ${p.failed} → ${r.failed}`);
+      if (p.warned !== r.warned) why.push(`확인 필요 ${p.warned} → ${r.warned}`);
+      if (!!p.error !== !!r.error) why.push(r.error ? '이번엔 실행 오류' : '실행 오류가 풀림');
+    }
+    if (why.length && before !== after) areaChanges.push({ id: r.id, name: r.name, before, after, why, impact: Math.abs((after ?? 0) - (before ?? 0)) * (r.weight || 1) });
+  }
+  areaChanges.sort((a, b) => b.impact - a.impact);
+  // 두 번 다 잰 영역끼리만 매긴 점수 — 못 잰 영역이 달라져 흔들린 것을 빼고 본다
+  const both = results.filter(r => !r.skip && byId.has(r.id) && !byId.get(r.id).skip).map(r => r.id);
+  const same = both.length ? { areas: both.length, prev: scoreOf((prev.results || []).filter(r => both.includes(r.id))).raw, now: scoreOf(results.filter(r => both.includes(r.id))).raw } : null;
+  return { areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
 }
 
 async function finish(prep, results, { save = true } = {}) {
@@ -325,7 +397,9 @@ async function finish(prep, results, { save = true } = {}) {
   if (selfFile && fs.existsSync(selfFile)) self = await require(selfFile).run(ctx);
   const mat = maturity.measure(project.root, project.parts.map(p => p.absDir));
   const rawScore = Math.round(quality * Math.sqrt(scanRate) * 1000) / 10;
-  const score = Math.round(rawScore * mat.factor * 10) / 10;
+  // 대표 점수 = 제품 점수. 운영 성숙도는 곱하지 않고 나란히 보여 준다 — 곱하면 멀쩡한 제품이 '초급' 으로 보인다
+  const score = rawScore;
+  const combined = Math.round(rawScore * mat.factor * 10) / 10;   // 예전 방식(제품 × 성숙도 계수) — 참고로만 남긴다
   maturity.gains(mat, rawScore);   // 항목마다 '갖추면 최종 +몇 점'
   const generated = results.flatMap(r => r.checks).filter(c => /자동 생성|규칙:|칸 이름만 앎|매트릭스|주입 문자열을 넣어도|경계값/.test(c.name)).reduce((s, c) => s + c.scanned, 0);
   const summary = {
@@ -333,11 +407,13 @@ async function finish(prep, results, { save = true } = {}) {
     parts: project.parts.map(p => ({ id: p.id, stack: p.stack, kind: p.kind, dir: p.dir, baseUrl: p.baseUrl })),
     baseUrl: ctx.primary && ctx.primary.baseUrl, auth: { type: project.auth.type, loginPath: project.auth.loginPath, guessed: !!project.auth.guessed },
     live: ctx.live, notes: ctx.notes,
-    areas: measured.length, skippedAreas: results.filter(r => r.skip).map(r => ({ id: r.id, name: r.name, why: r.skip })), todo: todo.length, sections,
+    areas: measured.length, skippedAreas: results.filter(r => r.skip).map(r => ({ id: r.id, name: r.name, why: r.skip, setup: !!r.setup })),
+    setupErrors: ctx.setupErrors || [], todo: todo.length, sections,
     universe: tot('universe'), scanned: tot('scanned'), passed: tot('passed'), warned: tot('warned'), failed: tot('failed'), generated,
     scanRate: Math.round(scanRate * 1000) / 10, qualityRate: Math.round(quality * 1000) / 10, rawScore,
-    maturity: { got: mat.got, total: mat.total, factor: Math.round(mat.factor * 100) / 100 },
-    score, grade: gradeOf(score).label, tier: tierOf(score),
+    maturity: { got: mat.got, total: mat.total, factor: Math.round(mat.factor * 100) / 100, label: maturityLabel(mat) },
+    actionable: actionable(results),
+    combined, score, grade: gradeOf(score).label, tier: tierOf(score),
     owasp: owaspSummary(results),
     top: topFixes(results),
     ignored: results.reduce((a, r) => a + (r.ignored || 0), 0),
@@ -358,10 +434,13 @@ async function finish(prep, results, { save = true } = {}) {
   return { report, stamp };
 }
 
+// 운영 성숙도 한 줄 평 — 제품 점수 등급과 섞이지 않게 다른 말을 쓴다
+function maturityLabel(m) { const r = m.got / (m.total || 1); return r >= 0.75 ? '갖춤' : r >= 0.4 ? '일부 갖춤' : '거의 없음'; }
+
 // GitHub Actions 요약 (마크다운)
 function ciMarkdown(report, reasons) {
   const s = report.summary, d = s.diff;
-  const L = [`## QA — ${s.target} (${s.level ? s.level.label : '고급'})`, '', `**최종 ${s.score}** (${s.grade}) · 검사 ${s.scanned} · 문제 ${s.failed} · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
+  const L = [`## QA — ${s.target} (${s.level ? s.level.label : '고급'})`, '', `**제품 점수 ${s.score}** (${s.grade}) · 운영 성숙도 ${s.maturity.got}/${s.maturity.total} · 검사 ${s.scanned} · 손댈 곳 ${s.actionable ? s.actionable.fix : '-'}곳 (문제 ${s.failed}건) · 확인 필요 ${s.warned}${d ? ` · 지난 검사 ${d.prevScore} → ${d.score}, 새 문제 ${d.addedCount}, 고친 것 ${d.fixedCount}` : ''}`, ''];
   if (reasons.length) L.push(`> ✗ 실패: ${reasons.join(' · ')}`, '');
   if (d && d.added.length) { L.push('### 새로 생긴 문제', '', '| 영역 | 검사 | 항목 |', '|---|---|---|'); for (const x of d.added.slice(0, 30)) L.push(`| ${x.area} | ${x.check.replace(/\|/g, '/')} | ${String(x.item).replace(/\|/g, '/').slice(0, 120)} |`); L.push(''); }
   if ((s.top || []).length) { L.push('### 먼저 고칠 것', ''); s.top.forEach((t, i) => L.push(`${i + 1}. **[${t.area}] ${t.check}** — ${t.failed}건 · ${(t.examples[0] || '').replace(/\|/g, '/').slice(0, 140)}`)); L.push(''); }
@@ -412,13 +491,20 @@ async function run(arg) {
   if (jsonOnly) { console.log(JSON.stringify(report, null, 2)); return; }
   const s = report.summary;
   console.log('\n' + '='.repeat(64));
-  console.log(`검사 ${s.scanned} (자동 생성 ${s.generated}) · 통과 ${s.passed} · 문제 ${s.failed} · 확인필요 ${s.warned}`);
+  console.log(`검사 ${s.scanned} · 통과 ${s.passed} · 문제 ${s.failed} · 확인필요 ${s.warned}  (자동으로 만든 시험 입력 ${s.generated}개 포함 — 문제 수가 아니다)`);
+  console.log(`→ 손댈 곳 ${s.actionable.fix}곳 (문제 ${s.actionable.failed}건을 원인별로 묶음) · 사람이 볼 곳 ${s.actionable.look}곳 (확인 필요 ${s.actionable.warned}건)`);
   console.log(`${s.level.label} 검사${s.level.strict ? ' (확인 필요도 감점)' : ''} — 다른 수준의 점수와는 견주지 않는다`);
-  console.log(`제품 점수 ${s.rawScore} × 운영 성숙도 ${s.maturity.got}/${s.maturity.total}(계수 ${s.maturity.factor}) → 최종 ${s.score} (등급 ${s.grade})`);
+  if (s.setupErrors.length) {
+    console.log('\n⚠ 설정 오류 — 제품 결함이 아니라 검사 설정 문제다 (점수·먼저 고칠 것에 넣지 않았다)');
+    for (const e of s.setupErrors) console.log('  · ' + e);
+    const blocked = s.skippedAreas.filter(a => a.setup);
+    if (blocked.length) console.log(`  → 이 때문에 못 잰 영역 ${blocked.length}개: ${blocked.map(a => a.id).join(' ')} — 설정을 고치고 다시 돌리면 잰다`);
+  }
+  console.log(`제품 점수 ${s.score} (등급 ${s.grade}) · 운영 성숙도 ${s.maturity.got}/${s.maturity.total} (${s.maturity.label}) — 두 점수는 따로 본다`);
   const miss = report.maturity.items.filter(i => !i.ok).sort((a, b) => b.plus - a.plus);
   if (miss.length) {
-    console.log(`\n◆ 운영 성숙도 — 빠진 것 ${miss.length}개 (다 갖추면 최종 +${Math.round(miss.reduce((a, i) => a + i.plus, 0) * 10) / 10})`);
-    for (const i of miss) console.log(`  ✗ ${i.label} (+${i.plus}) — ${i.how[0]}`);
+    console.log(`\n◆ 운영 성숙도 — 빠진 것 ${miss.length}개 (다 갖추면 ${report.maturity.total}/${report.maturity.total})`);
+    for (const i of miss) console.log(`  ✗ ${i.label} (+${i.plus}점) — ${i.how[0]}`);
   }
   console.log(`설정 필요·해당 없음 ${s.skippedAreas.length}개 영역 (점수에서 뺌)`);
   console.log('\nOWASP Top 10 (2021)');
@@ -426,6 +512,10 @@ async function run(arg) {
   if (s.diff) {
     const d = s.diff, delta = Math.round((d.score - d.prevScore) * 10) / 10;
     console.log(`\n▲ 지난 검사(${String(d.prevAt || d.prevFile).slice(0, 16).replace('T', ' ')})와 비교: 점수 ${d.prevScore} → ${d.score} (${delta >= 0 ? '+' : ''}${delta}) · 새 문제 ${d.addedCount} · 고친 것 ${d.fixedCount}`);
+    if (Math.abs(delta) >= 0.5 && (d.areaChanges || []).length) {
+      console.log(`   점수가 바뀐 이유${d.same ? ` (두 번 다 잰 영역 ${d.same.areas}개끼리: ${d.same.prev} → ${d.same.now})` : ''}`);
+      for (const c of d.areaChanges.slice(0, 6)) console.log(`   · [${c.id}] ${c.name} ${c.before ?? '못 잼'} → ${c.after ?? '못 잼'} — ${c.why.join(' · ')}`);
+    }
     for (const x of d.added.slice(0, 8)) console.log(`   + [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
     if (d.addedCount > 8) console.log(`     … 새 문제 ${d.addedCount - 8}건 더`);
     for (const x of d.fixed.slice(0, 5)) console.log(`   ✓ [${x.area}] ${x.check.slice(0, 50)} · ${String(x.item).slice(0, 70)}`);
@@ -456,4 +546,4 @@ async function run(arg) {
   if (ciLine) console.log(ciLine);
 }
 
-module.exports = { CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };
+module.exports = { CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, actionable, placeOf, diffWithPrevious, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };

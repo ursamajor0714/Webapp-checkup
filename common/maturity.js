@@ -131,7 +131,8 @@ function measure(root, partDirs = []) {
 
 // 갖추면 최종 점수가 얼마나 오르나 — 제품 점수 × 0.45 × 가중치 ÷ 총점
 function gains(mat, rawScore) {
-  for (const i of mat.items) if (!i.ok) i.plus = Math.round(rawScore * 0.45 * i.weight / mat.total * 10) / 10;
+  // 제품 점수와 곱하지 않는다 (따로 본다) — 갖추면 성숙도가 몇 점 오르는지
+  for (const i of mat.items) if (!i.ok) i.plus = i.weight;
   return mat;
 }
 
