@@ -47,7 +47,7 @@ function findRoles(routes, auth = {}, contracts = []) {
         continue;
       }
     }
-    out.push({ ...role, desc: '검사용 계정을 만들 길을 코드에서 찾지 못했다 — ⚙ 설정에 이 입구의 계정을 넣으면 쓴다' });
+    out.push({ ...role, desc: '검사용 계정을 만들 길을 코드에서 찾지 못했다 — 이 입구의 계정을 넣어 주면 그걸로 검사한다' });
   }
   return out;
 }
