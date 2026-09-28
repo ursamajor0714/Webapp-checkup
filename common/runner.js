@@ -482,12 +482,20 @@ async function finish(prep, results, { save = true } = {}) {
   if (ctx.seeded && ctx.seeded.length) { const n = await require('./seed').cleanup(ctx).catch(() => 0); if (n) ctx.notes.push(`검사용 데이터 ${n}개를 지웠다`); }
   if (ctx.created && ctx.created.length) {
     const routes = ctx.routes(); let gone = 0; const left = new Map();
+    const pending = [];
     for (const c of ctx.created.reverse()) {
       const del = routes.find(r => r.method === 'DELETE' && r.path.replace(/\/:[\w]+$/, '') === c.path.replace(/\/+$/, ''));
-      if (!del) { left.set(c.path, (left.get(c.path) || 0) + 1); continue; }
+      if (!del) { pending.push(c); continue; }
       const r = await ctx.call(del.path.replace(/:[\w]+/, encodeURIComponent(c.id)), { service: c.service, as: ctx.sessions.owner ? 'owner' : 'anon', method: 'DELETE' }).catch(() => null);
       // 404 — 앞의 검사용 데이터 정리가 이미 지웠다
-      if (r && (r.status < 300 || r.status === 404 || r.status === 410)) gone++; else left.set(c.path, (left.get(c.path) || 0) + 1);
+      if (r && (r.status < 300 || r.status === 404 || r.status === 410)) gone++; else pending.push(c);
+    }
+    // 지우는 경로가 없거나 거절했어도, 부모를 지울 때 함께 지워졌을 수 있다 (/api/members/7/messages) — 다 지운 뒤 목록을 다시 읽어 확인
+    for (const c of pending) {
+      const again = await ctx.call(c.path, { service: c.service, as: ctx.sessions.owner ? 'owner' : 'anon' }).catch(() => null);
+      const list = again && (Array.isArray(again.body) ? again.body : again.body && Array.isArray(again.body.data) ? again.body.data : null);
+      if (again && (again.status === 404 || (list && !list.some(x => x && String(x.id ?? x._id) === String(c.id))))) gone++;
+      else left.set(c.path, (left.get(c.path) || 0) + 1);
     }
     ctx.notes.push(`검사가 만든 것 ${ctx.created.length}개 중 ${gone}개를 지웠다${left.size ? ` · 남긴 것: ${[...left].map(([p, n]) => `${p} ${n}개`).join(', ')} (지우는 경로가 없거나 거절)` : ''}`);
   }

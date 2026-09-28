@@ -373,7 +373,7 @@ test('언어 규칙 — 빈 줄에 맞는 패턴이 없다 (빈 줄마다 문제
 });
 
 test('다른 로그인 입구 — 계정 얻는 길: 가입 · 관리자가 만들기 · 공용 비밀번호 · 못 찾음', () => {
-  const { findRoles } = require('../common/roles');
+  const { findRoles, tokenHeaderOf } = require('../common/roles');
   const R = (method, p, handler) => ({ method, path: p, service: 's', handler });
   const how = routes => findRoles(routes, { loginPath: '/api/admin/login' }).map(r => r.how);
   assert.deepStrictEqual(how([R('POST', '/api/shop/login', 'const { email, password } = req.body;'), R('POST', '/api/shop/register', '')]), ['register']);
@@ -381,6 +381,10 @@ test('다른 로그인 입구 — 계정 얻는 길: 가입 · 관리자가 만�
   assert.deepStrictEqual(how([R('POST', '/api/kiosk/login', 'const { password } = req.body; if (safeCompare(password, KIOSK_PASSWORD))')]), ['shared']);
   assert.deepStrictEqual(how([R('POST', '/api/partner/login', "const { id, password } = req.body; db.get('SELECT * FROM partners WHERE id = ?')")]), [null]);   // 만들 길이 없다 → 설정 칸
   assert.deepStrictEqual(how([R('POST', '/api/admin/login', 'const { password } = req.body;')]), []);   // 주 로그인은 제외
+  // 토큰을 자기 헤더로 받는 입구 — 이름에 입구 이름이 든 헤더를 고른다
+  const root = write(tmp(), { 'mw.js': "const a = req.headers['x-contract-token']; const b = req.get('x-api-token');" });
+  assert.strictEqual(tokenHeaderOf(root, '/api/contract/login'), 'x-contract-token');
+  assert.strictEqual(tokenHeaderOf(root, '/api/member/login'), null);
 });
 
 test('배포 주소 검사 — 읽기만 하고, 헤더·민감 파일·오류 화면·CORS·가드 빠진 API·옛 파일을 잡는다', async () => {

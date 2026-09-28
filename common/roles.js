@@ -6,6 +6,8 @@
 //     shared   — 계정 없이 공용 비밀번호 하나(예: ADMIN_PASSWORD)와 비교한다 → 그 값으로 들어간다
 //   못 찾으면 how: null — 그때만 ⚙ 설정에 그 입구의 계정 칸이 뜬다
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const LOGIN = /(^|\/)(login|signin|sign-in|log-in)\/?$/i;
 const PW = /pass|pw$|pwd|pin/i;
@@ -50,6 +52,18 @@ function findRoles(routes, auth = {}, contracts = []) {
   return out;
 }
 
+// 토큰을 자기 헤더로 받는 입구 — 코드에서 req.headers['x-contract-token'] 을 찾아, 이름에 입구 이름(contract)이 든 것을 고른다
+function tokenHeaderOf(root, loginPath) {
+  const words = loginPath.split('/').filter(w => w && !/^(api|v\d+|login|signin|auth)$/i.test(w));
+  if (!words.length || !root) return null;
+  const names = new Set();
+  const walk = dir => { let es = []; try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of es) { if (/^(node_modules|\.|dist|build|coverage)/.test(e.name)) continue; const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f); else if (/\.(js|ts|mjs|cjs|py)$/.test(e.name)) for (const m of fs.readFileSync(f, 'utf8').matchAll(/headers\s*(?:\[\s*|\.get\(\s*)['"](x-[\w-]*token)['"]|req\.get\(\s*['"](x-[\w-]*token)['"]/gi)) names.add((m[1] || m[2]).toLowerCase()); } };
+  walk(root);
+  return [...names].find(n => words.some(w => n.includes(w.toLowerCase()))) || null;
+}
+
 // 계정 얻기 + 로그인. 만든 계정은 ctx.call 을 거치므로 ctx.created 에 남아 finish 에서 지워진다
 async function acquireRoles(ctx, base, log = () => {}) {
   const { login, register } = require('./session');
@@ -59,7 +73,9 @@ async function acquireRoles(ctx, base, log = () => {}) {
   for (const role of findRoles(ctx.routes(), auth, ctx.contracts)) {
     const a = { type: 'bearer', loginPath: role.loginPath, fields: role.fields };
     const r = { ...role, accounts: [], sessions: [], why: null };
-    const tryLogin = async (acct, i) => { const l = await login(base, a, acct, `role${i}`); if (l.ok) { r.accounts.push(acct); r.sessions.push(l.sess); } else r.why = `로그인 실패 — ${l.why}`; };
+    const header = tokenHeaderOf(ctx.project.root, role.loginPath);
+    if (header) r.tokenHeader = header;
+    const tryLogin = async (acct, i) => { const l = await login(base, a, acct, `role${i}`); if (l.ok) { if (header) l.sess.tokenHeader = header; r.accounts.push(acct); r.sessions.push(l.sess); } else r.why = `로그인 실패 — ${l.why}`; };
     if (given[role.loginPath] && given[role.loginPath].password) await tryLogin({ ...given[role.loginPath], from: '설정' }, 0);
     else if (role.how === 'shared') {
       // 관리자 로그인이 실제로 통한 비밀번호 (설정 값이 틀려 .env 값으로 들어갔으면 그 값)
@@ -96,4 +112,4 @@ async function acquireRoles(ctx, base, log = () => {}) {
   return ctx.roles;
 }
 
-module.exports = { findRoles, acquireRoles, guardLine };
+module.exports = { findRoles, acquireRoles, guardLine, tokenHeaderOf };

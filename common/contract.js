@@ -363,7 +363,15 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
       const res = mine || await ctx.call(url, { method: r.method, as: realAs, body });
       // 403 은 '로그인은 됐지만 이 역할로는 못 쓴다' 라서 인증 실패가 아니다
       const passes = res.status !== 401;
-      items.push({ name: `${r.method} ${r.path} · 진짜 토큰`, ok: passes, detail: passes ? `${res.status}${res.status === 403 ? ' 인증 통과 · 이 역할엔 권한 없음' : ' 인증 통과'}` : `${res.status} — 로그인했는데 막힘` });
+      // 관리자 토큰으로 401 인데 다른 로그인 입구(계약서 직원·회원)가 있으면 — 그 입구 전용 경로일 수 있다
+      const other = !passes && (ctx.roles || []).filter(x => x.sessions.length);
+      if (other && other.length) {
+        if (r.method === 'GET') {
+          let hit = null;
+          for (const role of other) { ctx.sessions.__role = role.sessions[0]; const x = await ctx.call(url, { as: '__role' }); delete ctx.sessions.__role; if (x.status !== 401) { hit = { role, x }; break; } }
+          items.push({ name: `${r.method} ${r.path} · 진짜 토큰`, ok: !!hit, detail: hit ? `${hit.x.status} — ${hit.role.loginPath} 로 들어온 토큰 전용 경로 (관리자 토큰은 401)` : `${res.status} — 관리자 토큰도, 다른 입구(${other.map(x => x.loginPath).join('·')}) 토큰도 막힌다` });
+        } else items.push({ name: `${r.method} ${r.path} · 진짜 토큰`, ok: null, detail: `${res.status} — 관리자 토큰으로는 막힌다. 다른 입구(${other.map(x => x.loginPath).join('·')}) 전용일 수 있다 (쓰기라 그 토큰으로는 보내지 않았다)` });
+      } else items.push({ name: `${r.method} ${r.path} · 진짜 토큰`, ok: passes, detail: passes ? `${res.status}${res.status === 403 ? ' 인증 통과 · 이 역할엔 권한 없음' : ' 인증 통과'}` : `${res.status} — 로그인했는데 막힘` });
     }
   }
   return items;

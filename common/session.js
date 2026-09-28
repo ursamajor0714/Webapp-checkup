@@ -35,6 +35,7 @@ async function request(baseUrl, sess, p, { method = 'GET', body, headers = {}, f
   if (sess) {
     const ck = sess.cookieHeader(); if (ck && !h.Cookie) h.Cookie = ck;
     if (sess.token && !('Authorization' in h)) h.Authorization = 'Bearer ' + sess.token;
+    if (sess.token && sess.tokenHeader && !(sess.tokenHeader in h)) h[sess.tokenHeader] = sess.token;   // x-contract-token 처럼 자기 헤더로 받는 입구
     if (UNSAFE.has(method) && sess.csrf && !h[sess.csrf.header]) {
       h[sess.csrf.header] = sess.csrf.fromCookie ? sess.cookies[sess.csrf.fromCookie] : sess.csrf.value;
       h.Referer ??= baseUrl + '/';
