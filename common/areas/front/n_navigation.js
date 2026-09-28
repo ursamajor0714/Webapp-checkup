@@ -9,6 +9,7 @@ module.exports = {
     // 앱(Expo) — router.push('/x') 대상 화면 파일이 있는가 (서버 없이)
     for (const p of ctx.clients.filter(x => x.native)) {
       const st = require('../../stacks').STACKS[p.stack];
+      if (!st.navTargets) continue;   // 화면 이동을 코드로 읽는 앱(Expo)만
       const pages = new Set(st.pages(p.absDir).map(x => x.replace(/\/$/, '') || '/'));
       const items = st.navTargets(p.absDir).map(t => { const tgt = t.ref.replace(/\/$/, '') || '/'; const ok = pages.has(tgt) || [...pages].some(pg => pg.split('/').length === tgt.split('/').length && pg.split('/').every((s, i) => s === tgt.split('/')[i] || s.startsWith(':'))); return { name: `${t.file} → ${t.ref}`, ok, detail: ok ? '화면 있음' : '이동할 화면 파일이 없다' }; });
       if (items.length) checks.push(checkItems(`${p.dir} 앱 화면 이동 대상이 있다`, items));

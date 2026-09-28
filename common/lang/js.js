@@ -64,6 +64,12 @@ function extractCalls(files, root) {
       const p = cleanPath(m[4], vars); if (!p) continue;
       out.push({ method: m[2].toUpperCase(), path: p, file: path.relative(root, f) });
     }
+    // Nuxt·ofetch: $fetch('/api/x', { method }) · useFetch('/api/x') · useLazyFetch · ofetch
+    for (const m of src.matchAll(/(?:\$fetch|\buseFetch|\buseLazyFetch|\bofetch)(?:<[^>]*>)?\(\s*(['"`])((?:(?!\1)[^\n])*)\1\s*(?:,\s*(\{[\s\S]{0,300}?\}))?/g)) {
+      const p = cleanPath(m[2], vars); if (!p) continue;
+      const meth = (m[3] && (m[3].match(/method\s*:\s*['"`](\w+)['"`]/) || [])[1]) || 'GET';
+      out.push({ method: meth.toUpperCase(), path: p, file: path.relative(root, f) });
+    }
     // 공통 래퍼: api('/x', { method }) · request('/x') · apiFetch('/x')
     for (const m of src.matchAll(/\b(api|apiFetch|request|http|client|callApi|apiRequest)(?:<[^>]*>)?\(\s*(['"`])((?:(?!\2)[^\n])*)\2\s*(?:,\s*(\{[\s\S]{0,300}?\}))?/g)) {
       const p = cleanPath(m[3], vars); if (!p) continue;

@@ -111,9 +111,11 @@ async function fuzzRoute(ctx, c, { as = 'owner', limit = 400 } = {}) {
       const body = uniquify({ ...b0 }, c.fields);
       if (vc.omit) delete body[field]; else body[field] = vc.value;
       // 겹치면 안 되는 칸의 '맞는 값' 은 끝을 새 값으로 바꿔 중복으로 거절되지 않게 (길이는 그대로)
-      if (vc.expect === 'valid' && UNIQUE.test(field) && typeof vc.value === 'string' && vc.value.length >= 2) {
+      if (vc.expect === 'valid' && UNIQUE.test(field) && typeof vc.value === 'string' && vc.value.length >= 2 && (!spec.format || spec.format === 'email')) {
         const t = tag(); const max = spec.max ?? 64;
-        const v = vc.value.length + t.length <= max ? vc.value + t : vc.value.slice(0, Math.max(1, vc.value.length - t.length)) + t.slice(0, Math.min(t.length, vc.value.length - 1));
+        // 이메일은 @ 앞에 끼워 넣는다 (끝에 붙이면 qa@example.comabc 처럼 형식이 깨져 '맞는 값' 이 아니게 된다)
+        const v = spec.format === 'email' && vc.value.includes('@') ? vc.value.replace('@', `+${t}@`).slice(-max)
+          : vc.value.length + t.length <= max ? vc.value + t : vc.value.slice(0, Math.max(1, vc.value.length - t.length)) + t.slice(0, Math.min(t.length, vc.value.length - 1));
         if ((!spec.pattern || spec.pattern.test(v)) && v.length <= max) body[field] = v;
       }
       if (spec.sameAs === undefined) for (const [k, s] of Object.entries(c.fields)) if (s.sameAs === field) body[k] = body[field];

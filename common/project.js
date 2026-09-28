@@ -33,7 +33,7 @@ function detectParts(root) {
       // 이미 찾은 부분의 하위 폴더면 건너뛴다 (예: Next.js 안의 app/)
       if (parts.some(p => dir.startsWith(p.absDir + path.sep) && p.stack !== 'express')) break;
       const rel = path.relative(root, dir) || '.';
-      parts.push({ id: rel === '.' ? id : rel.replace(/[\\/]/g, '-'), dir: rel, absDir: dir, stack: id, kind: s.kind, lang: s.lang, native: !!s.native });
+      parts.push({ id: rel === '.' ? id : rel.replace(/[\\/]/g, '-'), dir: rel, absDir: dir, stack: id, kind: s.kindOf ? s.kindOf(dir) : s.kind, lang: s.lang, native: s.nativeOf ? s.nativeOf(dir) : !!s.native });
       tried.add(dir);
       break;
     }
@@ -112,7 +112,7 @@ function loadProject(def) {
   p.parts = [...detected.map(d => ({ ...d, ...(listed.find(x => x.dir === d.dir) || {}) })), ...listed.filter(x => !detected.some(d => d.dir === x.dir))]
     .map(x => ({ ...x, ...(over[x.dir] || {}), absDir: path.join(p.root, x.dir || '.') }))
     .map(x => (over[x.dir] && over[x.dir].port && !over[x.dir].baseUrl ? { ...x, baseUrl: null } : x))
-    .map(x => ({ ...x, kind: x.kind || STACKS[x.stack].kind, lang: x.lang || STACKS[x.stack].lang, baseUrl: x.baseUrl || (x.port ? `http://localhost:${x.port}` : null) }));
+    .map(x => ({ ...x, kind: x.kind || (STACKS[x.stack].kindOf ? STACKS[x.stack].kindOf(x.absDir) : STACKS[x.stack].kind), lang: x.lang || STACKS[x.stack].lang, baseUrl: x.baseUrl || (x.port ? `http://localhost:${x.port}` : null) }));
   return p;
 }
 

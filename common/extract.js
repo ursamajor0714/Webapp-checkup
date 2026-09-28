@@ -96,8 +96,8 @@ function bodyFieldsFromHandler(handler) {
   for (const m of handler.matchAll(/(?:const|let|var)\s*\{([^}]+)\}\s*=\s*req\.body/g)) for (const n of m[1].split(',')) { const k = n.trim().split(/[:=\s]/)[0]; if (/^\w+$/.test(k)) fields[k] = { type: 'any', required: false }; }
   for (const m of handler.matchAll(/req\.body\.(\w+)/g)) fields[m[1]] ??= { type: 'any', required: false };
   // Next.js·Fetch API: const body = await req.json() · const { a, b } = await request.json() · parsed.body.x
-  for (const m of handler.matchAll(/(?:const|let|var)\s*\{([^}]+)\}\s*=\s*(?:await\s+\w+\.json\(\)|\w+\.body\b)/g)) for (const n of m[1].split(',')) { const k = n.trim().split(/[:=\s]/)[0]; if (/^\w+$/.test(k)) fields[k] ??= { type: 'any', required: false }; }
-  const bodyVars = ['body', ...[...handler.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+\w+\.json\(\)|\w+\.body\b)/g)].map(m => m[1])];
+  for (const m of handler.matchAll(/(?:const|let|var)\s*\{([^}]+)\}\s*=\s*(?:await\s+\w+\.json\(\)|await\s+readBody\(\s*\w+\s*\)|\w+\.body\b)/g)) for (const n of m[1].split(',')) { const k = n.trim().split(/[:=\s]/)[0]; if (/^\w+$/.test(k)) fields[k] ??= { type: 'any', required: false }; }
+  const bodyVars = ['body', ...[...handler.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(?:await\s+\w+\.json\(\)|await\s+readBody\(\s*\w+\s*\)|\w+\.body\b)/g)].map(m => m[1])];
   for (const v of new Set(bodyVars)) for (const m of handler.matchAll(new RegExp(`(?<![\\w.])(?:\\w+\\.)?${v}\\.(\\w+)`, 'g'))) if (!/^(ok|res|length|then|json)$/.test(m[1])) fields[m[1]] ??= { type: 'any', required: false };
   for (const m of handler.matchAll(/(?:request\.POST|request\.data)(?:\.get)?\(\s*['"](\w+)['"]|request\.POST\[['"](\w+)['"]\]/g)) fields[m[1] || m[2]] ??= { type: 'any', required: false };
   // if (!title || !content) 처럼 비었으면 거절하는 칸은 필수
@@ -144,6 +144,37 @@ function javaClassFields(files, name) {
     fields[key] = spec;
   }
   return { fields, source: `${name} (${path.basename(f)})`, strict: Object.values(fields).some(x => x.required || x.max !== undefined || x.format || x.pattern) };
+}
+
+// ── NestJS class-validator DTO — @IsString() @MaxLength(20) @IsEmail() @IsOptional() @IsInt() @Min(0) @IsEnum(X) @Matches(/re/)
+function nestDtoFields(files, name) {
+  const f = files.find(x => new RegExp(`class\\s+${name}\\b`).test(read(x)));
+  if (!f) return null;
+  const src = read(f);
+  const body = balanced(src, src.indexOf('{', src.search(new RegExp(`class\\s+${name}\\b`))));
+  const fields = {};
+  // 칸 선언마다 바로 앞 데코레이터 덩어리 — 'name?: string;' 앞의 @… 들
+  for (const m of body.matchAll(/((?:\s*@\w+\((?:[^()]|\([^()]*\))*\)\s*)+)\s*(?:readonly\s+)?(\w+)(\?)?\s*[!]?\s*:\s*([\w\[\]<>|' ]+);/g)) {
+    const [, ann, key, opt, type] = m;
+    const spec = { required: !opt && !/@IsOptional/.test(ann) };
+    if (/@IsInt\b/.test(ann)) Object.assign(spec, { type: 'number', integer: true });
+    else if (/@IsNumber\b|@IsPositive|@Min\(|@Max\(/.test(ann) || /^number$/.test(type.trim())) spec.type = 'number';
+    else if (/@IsBoolean/.test(ann) || /^boolean$/.test(type.trim())) spec.type = 'boolean';
+    else if (/@IsArray|\[\]/.test(ann + type)) spec.type = 'array';
+    else if (/@IsString|@IsEmail|@IsUrl|@IsUUID|@Length|@MinLength|@MaxLength|@Matches|@IsNotEmpty/.test(ann) || /^string$/.test(type.trim())) { spec.type = 'string'; spec.min = /@IsNotEmpty/.test(ann) ? 1 : 0; }
+    else spec.type = 'any';
+    const en = type.match(/'([^']+)'(?:\s*\|\s*'[^']+')+/); if (en || /@IsIn\(\s*\[/.test(ann)) { spec.type = 'enum'; spec.values = [...(en ? type : ann.match(/@IsIn\(\s*\[([^\]]*)\]/)[1]).matchAll(/['"]([^'"]+)['"]/g)].map(x => x[1]); }
+    const num = re => (ann.match(re) || [])[1];
+    if (num(/@MinLength\(\s*(\d+)/)) spec.min = +num(/@MinLength\(\s*(\d+)/); if (num(/@MaxLength\(\s*(\d+)/)) spec.max = +num(/@MaxLength\(\s*(\d+)/);
+    const len = ann.match(/@Length\(\s*(\d+)\s*(?:,\s*(\d+))?/); if (len) { spec.min = +len[1]; if (len[2]) spec.max = +len[2]; }
+    if (num(/@Min\(\s*(-?[\d.]+)/)) spec.min = +num(/@Min\(\s*(-?[\d.]+)/); if (num(/@Max\(\s*(-?[\d.]+)/)) spec.max = +num(/@Max\(\s*(-?[\d.]+)/);
+    if (/@IsPositive/.test(ann)) spec.min = 1;
+    if (/@IsEmail/.test(ann)) spec.format = 'email'; if (/@IsUrl/.test(ann)) spec.format = 'url'; if (/@IsUUID/.test(ann)) spec.format = 'uuid';
+    const re = ann.match(/@Matches\(\s*\/((?:\\\/|[^/])+)\/([gimsuy]*)/); if (re) { try { spec.pattern = new RegExp(re[1], re[2]); } catch { /* 해석 못 하는 정규식 */ } }
+    if (spec.type === 'enum' && !spec.values.length) spec.type = 'string';
+    fields[key] = spec;
+  }
+  return Object.keys(fields).length ? { fields, source: `${name} (${path.basename(f)})`, strict: true } : null;
 }
 
 // ── pydantic
@@ -216,12 +247,12 @@ function djangoForm(dir, handler) {
 function extractContracts(service, routes, stackId) {
   const dir = service.absDir;
   const out = [];
-  if (stackId === 'express' || stackId === 'nextjs') {
+  if (stackId === 'express' || stackId === 'nextjs' || stackId === 'nuxt') {
     const files = walk(dir, ['.js', '.ts', '.mjs']);
     const zod = zodSchemas(files);
     for (const r of routes) {
       if (!['POST', 'PUT', 'PATCH'].includes(r.method) || !r.handler) continue;
-      const used = Object.keys(zod).find(n => new RegExp(`\\b${n}\\.(?:safe)?[pP]arse(?:Async)?\\(|validate\\w*\\(\\s*${n}\\b`).test(r.handler));
+      const used = Object.keys(zod).find(n => new RegExp(`\\b${n}\\.(?:safe)?[pP]arse(?:Async)?\\b|validate\\w*\\(\\s*${n}\\b|readValidatedBody\\([^)]*\\b${n}\\b`).test(r.handler));
       if (used) out.push({ ...r, ...zod[used] });
       else {
         const f = bodyFieldsFromHandler(r.handler);
@@ -229,6 +260,16 @@ function extractContracts(service, routes, stackId) {
           || (/if\s*\(\s*typeof\s+\w+(?:\.\w+)*\s*!==?|if\s*\([^)]*!\s*\/[^/\n]+\/[gimsuy]*\.test\(\s*[\w.]+|if\s*\([^)]*\.length\s*[<>]=?\s*\d+/.test(r.handler) && /(?:status|fail)\(\s*4\d\d|status:\s*4\d\d/.test(r.handler) ? '형식 검사(if typeof…)' : null);
         if (Object.keys(f).length || custom) out.push({ ...r, fields: f, source: custom ? `${custom}${custom.includes('(') ? '' : '()'} — 손으로 짠 검증` : 'req.body 사용', strict: false, customValidator: custom || null });
       }
+    }
+  } else if (stackId === 'nestjs') {
+    // ValidationPipe 가 없으면 DTO 규칙이 실제로 돌지 않는다 — 그때는 '칸 이름만 앎' 으로 (틀린 값을 거절하리라 기대하지 않는다)
+    const files = walk(dir, ['.ts', '.js']);
+    const piped = files.some(f => /ValidationPipe/.test(read(f)));
+    for (const r of routes) {
+      if (!['POST', 'PUT', 'PATCH'].includes(r.method)) continue;
+      const c = r.bodyType && nestDtoFields(files, r.bodyType);
+      if (c) out.push({ ...r, ...c, strict: piped, source: piped ? c.source : `${c.source} — ValidationPipe 가 없어 규칙이 실제로 돌지 않는다`, ...(piped ? {} : { customValidator: 'class-validator (ValidationPipe 없음)' }) });
+      else if (r.handler && /@Body\(/.test(r.handler)) out.push({ ...r, fields: bodyFieldsFromHandler(r.handler), source: '@Body() 사용', strict: false });
     }
   } else if (stackId === 'spring') {
     const files = walk(dir, ['.java', '.kt']);
@@ -245,4 +286,4 @@ function extractContracts(service, routes, stackId) {
   return out.map(({ handler, ...rest }) => rest);
 }
 
-module.exports = { extractContracts, zodSchemas, javaClassFields, pydanticFields, bodyFieldsFromHandler };
+module.exports = { extractContracts, zodSchemas, javaClassFields, pydanticFields, nestDtoFields, bodyFieldsFromHandler };

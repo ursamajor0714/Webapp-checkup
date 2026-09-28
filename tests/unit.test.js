@@ -247,3 +247,65 @@ test('로그인 비밀번호 — 로그인 코드가 비교하는 환경변수�
   assert.strictEqual(a.loginPath, '/api/admin/login');
   assert.strictEqual(a.passwordEnv, 'ADMIN_PW_VALUE', '상수를 만드는 process.env 이름까지 따라간다');
 });
+
+// ── 스택: Vue · Nuxt · NestJS · Expo(웹) · Swift(iOS · Vapor) — 감지·경로·화면 호출·입력 규칙
+const stackCtx = name => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const p = loadProject({ root: path.join(__dirname, 'fixtures', 'stacks', name) });
+  return { p, ctx: makeContext(p) };
+};
+const keys = rs => rs.map(r => `${r.method} ${r.path}`);
+
+test('스택 Vue — 화면 부분으로 잡고, 라우터 화면·API 호출·v-html 을 읽는다', () => {
+  const { p, ctx } = stackCtx('vue-app');
+  assert.deepStrictEqual(p.parts.map(x => [x.stack, x.kind, x.port]), [['vue', 'client', 5173]]);
+  assert.deepStrictEqual(ctx.pages().map(x => x.path).sort(), ['/', '/about']);
+  assert.deepStrictEqual(keys(ctx.calls()).sort(), ['GET /api/items', 'POST /api/login']);
+  assert.ok(require('../common/lang/rules-js').sinks.some(([re]) => re.test('<div v-html="x">')));
+});
+
+test('스택 Nuxt — server/api 파일 경로·메서드, 화면, $fetch·useFetch, readBody 칸', () => {
+  const { p, ctx } = stackCtx('nuxt-app');
+  assert.deepStrictEqual(p.parts.map(x => [x.stack, x.kind]), [['nuxt', 'both']]);
+  assert.deepStrictEqual(keys(ctx.routes()).sort(), ['ANY /health', 'DELETE /api/items/:id', 'GET /api/items', 'POST /api/items']);
+  assert.deepStrictEqual(ctx.pages().map(x => x.path).sort(), ['/', '/about']);
+  assert.deepStrictEqual(keys(ctx.calls()).sort(), ['GET /api/items', 'POST /api/items']);
+  const { extractContracts } = require('../common/extract');
+  const c = extractContracts(ctx.services[0], ctx.routes(), 'nuxt').find(x => x.method === 'POST');
+  assert.deepStrictEqual(Object.keys(c.fields).sort(), ['price', 'title']);
+});
+
+test('스택 NestJS — @Controller 접두어 + setGlobalPrefix, class-validator 규칙, ValidationPipe 가 있으면 엄격', () => {
+  const { p, ctx } = stackCtx('nest-app');
+  assert.deepStrictEqual(p.parts.map(x => [x.stack, x.kind, x.port]), [['nestjs', 'service', 3001]]);
+  assert.deepStrictEqual(keys(ctx.routes()).sort(), ['DELETE /api/items/:id', 'GET /api/items', 'GET /api/items/:id', 'POST /api/items']);
+  const { extractContracts } = require('../common/extract');
+  const c = extractContracts(ctx.services[0], ctx.routes(), 'nestjs').find(x => x.method === 'POST');
+  assert.strictEqual(c.strict, true);
+  assert.deepStrictEqual(c.fields.name, { required: true, type: 'string', min: 0, max: 20 });
+  assert.deepStrictEqual(c.fields.qty, { required: true, type: 'number', integer: true, min: 0, max: 100 });
+  assert.strictEqual(c.fields.email.required, false);
+  assert.strictEqual(c.fields.email.format, 'email');
+});
+
+test('스택 Expo — react-native-web 이 있으면 웹으로 켜서 화면 검사를 돌린다', () => {
+  const { p, ctx } = stackCtx('expo-web');
+  assert.deepStrictEqual(p.parts.map(x => [x.stack, x.native, x.port]), [['expo', false, 8081]]);
+  assert.ok(require('../common/serve').canServe(p.parts[0]));
+  assert.deepStrictEqual(ctx.pages().map(x => x.path).sort(), ['/', '/profile']);
+});
+
+test('스택 Swift — iOS 앱은 앱 부분(켜지 않음)·API 호출·위험 코드, Vapor 는 서버 경로', () => {
+  const ios = stackCtx('swift-ios');
+  assert.deepStrictEqual(ios.p.parts.map(x => [x.stack, x.kind, x.native]), [['swift', 'client', true]]);
+  assert.deepStrictEqual(keys(ios.ctx.calls()).sort(), ['GET /api/users/:id', 'POST /api/login']);
+  const L = require('../common/lang/rules-swift');
+  const src = fs.readFileSync(path.join(__dirname, 'fixtures', 'stacks', 'swift-ios', 'App', 'Api.swift'), 'utf8');
+  assert.ok(L.weakCrypto[0][0].test(src), 'UserDefaults 에 토큰');
+  assert.ok(L.crash.test('let data = try! JSONSerialization.data(withJSONObject: [:])'), 'try!');
+  assert.ok(!L.crash.test('if a != b { }'), '!= 는 강제 언래핑이 아니다');
+  const vapor = stackCtx('vapor-app');
+  assert.deepStrictEqual(vapor.p.parts.map(x => [x.stack, x.kind, x.native, x.port]), [['swift', 'service', false, 8080]]);
+  assert.deepStrictEqual(keys(vapor.ctx.routes()).sort(), ['GET /api/users', 'GET /api/users/:id', 'GET /health', 'POST /api/users']);
+});

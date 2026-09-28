@@ -65,7 +65,11 @@ Docker 가 꺼져 있으면 켜고(맥은 Docker Desktop), 그 포트를 쓰는 
 | Django | `ROOT_URLCONF` → `include` 재귀 · `auth.urls` | Form·ModelForm·Model 필드 · `clean_<칸>` 의 길이·정규식 | migrate → runserver |
 | Spring Boot | `@RequestMapping` + 메서드 매핑 · context-path | Bean Validation (`@NotBlank`·`@Size`·`@Email`·`@Pattern`…) | gradle bootRun / mvn |
 | FastAPI | `include_router` 접두사 | pydantic 모델 | uvicorn |
-| React (Vite/CRA) · Expo · 정적 HTML · 서버 템플릿(EJS·Django) | 화면이 부르는 API (`fetch`·`axios`·래퍼·문자열 이어 붙이기) · 화면 이동 · 파일 참조 | — | vite / 정적 서버 |
+| Nuxt | `server/api/**`·`server/routes/**` 파일 경로 (`[id].get.ts` → `GET /:id`) | zod(`readValidatedBody`) · `readBody` 칸 이름 | build → `.output/server` |
+| NestJS | `@Controller` 접두어 + `@Get(':id')` · `setGlobalPrefix` | class-validator DTO (`@IsString`·`@MaxLength`·`@IsEmail`…) — **`ValidationPipe` 가 없으면 규칙이 실제로 안 돈다고 표시** | build → start:prod |
+| Vapor (Swift) | `app.get("users", ":id")` · `grouped("api")` | `content.decode(X.self)` 칸 이름 | swift build → run |
+| React (Vite/CRA) · Vue · Expo(웹 모드) · 정적 HTML · 서버 템플릿(EJS·Django) | 화면이 부르는 API (`fetch`·`axios`·래퍼·문자열 이어 붙이기) · 화면 이동 · 파일 참조 | — | vite / 정적 서버 |
+| iOS 앱 (Swift · Xcode·SwiftPM) | 앱이 부르는 API (`"\(baseURL)/api/users/\(id)"` · `httpMethod`) → 같은 레포 서버와 대조 | — | 켜지 않는다 (시뮬레이터 필요). 코드 검사: 토큰을 UserDefaults 에 저장 · ATS 해제 · `try!`·`as!`·강제 언래핑 · UIWebView · 비밀 |
 
 ## 왜 '천 개' 인가 — 하나하나 적지 않고 구조로 만든다
 

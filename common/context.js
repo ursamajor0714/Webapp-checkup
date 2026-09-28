@@ -16,7 +16,7 @@ const { STACKS } = require('./stacks');
 const { walk, read } = require('./stacks/util');
 const { Session, request } = require('./session');
 
-const LANGS = { js: require('./lang/rules-js'), python: require('./lang/rules-python'), java: require('./lang/rules-java') };
+const LANGS = { js: require('./lang/rules-js'), python: require('./lang/rules-python'), java: require('./lang/rules-java'), swift: require('./lang/rules-swift') };
 
 function makeContext(project) {
   const services = project.parts.filter(p => p.kind === 'service' || p.kind === 'both');

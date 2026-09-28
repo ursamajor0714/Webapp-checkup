@@ -34,6 +34,13 @@ module.exports = {
         const r = run(['python3', '-m', 'compileall', '-q', '-x', '(venv|\\.venv|node_modules|migrations)', '.'], p.absDir);
         cmds.push({ name: `${p.dir} 파이썬 문법 (compileall)`, ok: r.ok, detail: r.ok ? '통과' : r.out.slice(0, 200) });
       } else if (p.lang === 'java') cmds.push({ name: `${p.dir} 자바 컴파일`, ok: null, detail: 'Gradle·Maven 빌드는 무거워 여기서 돌리지 않는다 — CI 에서 확인' });
+      else if (p.lang === 'swift') {
+        // 앱이 죽는 곳 — try! · as! · fatalError · 강제 언래핑(x!.y). 빌드(xcodebuild)는 시뮬레이터·서명이 필요해 돌리지 않는다
+        const crash = [];
+        for (const f of walk(p.absDir, ['.swift']).filter(f => !/[\\/](\.build|Pods|DerivedData)[\\/]|Tests?[\\/]/.test(f))) read(f).split('\n').forEach((l, i) => { if (!/^\s*\/\//.test(l) && ctx.lang(p).crash.test(l.replace(/"[^"]*"/g, '""').replace(/!=/g, ''))) crash.push(`${ctx.rel(f)}:${i + 1}`); });
+        cmds.push({ name: `${p.dir} 앱이 죽는 코드 (try! · as! · 강제 언래핑 · fatalError)`, ok: crash.length ? null : true, detail: crash.length ? `${crash.length}곳 — 값이 없거나 형이 다르면 앱이 바로 꺼진다. if let · guard let · try? · as? 로 (예: ${crash.slice(0, 3).join(', ')})` : '없음' });
+        cmds.push({ name: `${p.dir} Swift 빌드`, ok: null, detail: 'xcodebuild·swift build 는 무겁고 iOS SDK·서명이 필요해 돌리지 않는다 — Xcode 나 CI 에서 확인' });
+      }
     }
     if (cmds.length) checks.push(checkItems('타입·린트·문법 검사', cmds));
     // 2. HTML·템플릿이 부르는 파일이 있는가 (script src · link href · img src)
