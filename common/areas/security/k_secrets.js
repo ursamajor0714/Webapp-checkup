@@ -43,7 +43,9 @@ function gitHistorySecrets(ctx) {
   try {
     const envs = execFileSync('git', ['-c', 'core.quotepath=false', 'log', '--all', '--diff-filter=A', '--name-only', '--format=@@%h', '--', '*.env', '.env', '*/.env', '.env.*', '*/.env.*'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     let c = '';
-    for (const l of envs.split('\n')) { if (l.startsWith('@@')) { c = l.slice(2); continue; } if (l && !/\.(example|sample|template|dist)$/.test(l)) found.set('env:' + l, { name: `${l} (${c})`, ok: false, detail: '.env 파일이 커밋된 적이 있다 — 지금 없어도 기록에 남아 있다. 안의 비밀번호·키를 모두 바꿔야 한다' }); }
+    for (const l of envs.split('\n')) { if (l.startsWith('@@')) { c = l.slice(2); continue; } if (l && !/\.(example|sample|template|dist)$/.test(l)) { let old = ''; try { old = execFileSync('git', ['show', `${c}:${l}`], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { /* 그 커밋에서 지운 것 */ }
+      const sample = old && sampleOnlyEnv(old);
+      found.set('env:' + l, { name: `${l} (${c})`, ok: sample ? null : false, detail: sample ? '.env 파일이 커밋된 적이 있지만 그때 내용은 견본 값뿐이다 — 진짜 키를 넣은 뒤 커밋하지 않도록 .gitignore 에' : '.env 파일이 커밋된 적이 있다 — 지금 없어도 기록에 남아 있다. 안의 비밀번호·키를 모두 바꿔야 한다' }); } }
   } catch { /* 무시 */ }
   const items = [...found.values()].filter(Boolean);
   return items.length ? items : [{ name: '깃 기록', ok: true, detail: '최근 400개 커밋의 추가된 줄에서 비밀을 찾지 못했다' }];
@@ -78,8 +80,17 @@ function workflowItems(root) {
   return items;
 }
 
+// .env 에 든 비밀이 전부 견본 값인가 (changethis·빈 값·${VAR}) — 견본용 .env 를 일부러 올리는 템플릿도 있다
+const SAMPLE = /^$|\$\{|your[_-]|example|placeholder|changeme|changethis|change[-_](me|it|this|in[-_]production)|<.*>|\*\*\*|xxx|dummy|sample|todo|^(secret|password|pass|test|dev|local|admin)$/i;
+function sampleOnlyEnv(text) {
+  const vals = String(text || '').split('\n').map(l => l.match(/^\s*(?:export\s+)?(\w*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN|DSN|DATABASE_URL)\w*)\s*=\s*['"]?([^'"\n#]*)/i)).filter(Boolean).map(m => m[2].trim());
+  // DB 주소는 비밀번호 자리가 ${VAR}·견본이면 괜찮다 (postgresql://postgres:${POSTGRES_PASSWORD}@localhost/app)
+  //   로컬 DB(@localhost·@127.0.0.1) 주소의 비밀번호는 개발용이라 운영 비밀이 아니다
+  return vals.every(v => SAMPLE.test(v) || (/^\w+(\+\w+)?:\/\//.test(v) && (!/:[^/@:]+@/.test(v) || /:\$\{[^}]+\}@|:(password|pass|secret|changethis|postgres)@|@(localhost|127\.0\.0\.1)[:/]/i.test(v))));
+}
+
 module.exports = {
-  HIST,   // 커밋 전 검사(common/staged.js)도 같은 패턴을 쓴다
+  HIST, sampleOnlyEnv,   // 커밋 전 검사(common/staged.js)도 같은 패턴을 쓴다
   id: 'K', name: '비밀·암호화', weight: 7, owasp: ['A04', 'A02'],
   async run(ctx) {
     const checks = [];
@@ -88,15 +99,21 @@ module.exports = {
     // 1. 박힌 비밀
     const hits = [];
     for (const { f, p } of all) for (const [re, what] of [...ctx.lang(p).secrets, ...GENERIC]) for (const h of scan(ctx, [f], re, what)) if (!/process\.env\.\w+\s*$|example|placeholder|your[_-]|changeme|<.*>|\*\*\*/i.test(h)) hits.push(h);
-    const placeholder = /your[_-]|example|placeholder|changeme|change[-_](me|it|in[-_]production)|<.*>|\*\*\*|xxx|dummy|sample|todo/i;
+    const placeholder = /your[_-]|example|placeholder|changeme|changethis|change[-_](me|it|this|in[-_]production)|<.*>|\*\*\*|xxx|dummy|sample|todo|\bUSER(NAME)?:PASSWORD@|:PASSWORD@|@HOST\b/i;
     for (const f of cfg.filter(x => !require('../_util').NOT_SHIPPED.test(ctx.rel(x)))) for (const [re, what] of GENERIC) hits.push(...scan(ctx, [f], re, what).filter(h => !placeholder.test(h)));
-    for (const f of cfg.filter(x => /\.(properties|ya?ml)$/.test(x))) hits.push(...scan(ctx, [f], /(?:password|secret|jwt[._-]?secret|api[._-]?key)\s*[:=]\s*(?!\$\{)[^\s#'"]{6,}/i, '설정 파일에 비밀값').filter(h => !placeholder.test(h.split(' · ').pop())));
+    const CFG_SECRET = /(?:password|secret|jwt[._-]?secret|api[._-]?key)\s*[:=]\s*(?!\$\{)[^\s#'"]{6,}/i;
+    // ${POSTGRES_PASSWORD:?Variable not set} 안의 'PASSWORD:?Variable' 에 걸리지 않게 — 치환(${…})을 지우고도 걸리는 것만
+    for (const f of cfg.filter(x => /\.(properties|ya?ml)$/.test(x))) hits.push(...scan(ctx, [f], CFG_SECRET, '설정 파일에 비밀값').filter(h => { const line = h.split(' · ').pop(); return !placeholder.test(line) && CFG_SECRET.test(line.replace(/\$\{[^}]*\}/g, '')); }));
     const files = all.length + cfg.length;
     checks.push(owasp('A04', check('코드·설정에 비밀이 박혀 있지 않다', { universe: files, scanned: files, passed: files - new Set(hits.map(h => h.split(':')[0])).size, notes: hits })));
     // 2. .env 가 깃에 올라갔는가
     let tracked = [];
     try { tracked = execFileSync('git', ['ls-files'], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(f => /(^|\/)\.env(\.|$)/.test(f) && !/\.env\.(example|sample|template)$/.test(f)); } catch { /* git 레포가 아니면 건너뛴다 */ }
-    checks.push(owasp('A02', check('.env(비밀 파일)가 깃에 올라가 있지 않다', { universe: 1, scanned: 1, passed: tracked.length ? 0 : 1, notes: tracked.map(f => `${f} 가 깃에 있다 — 지워도 기록에 남는다. 키를 바꿔야 한다`) })));
+    const sampleOnly = tracked.filter(f => sampleOnlyEnv(read(path.join(ctx.root, f))));
+    const realEnv = tracked.filter(f => !sampleOnly.includes(f));
+    checks.push(owasp('A02', check('.env(비밀 파일)가 깃에 올라가 있지 않다', { universe: 1, scanned: 1, passed: tracked.length ? 0 : 1, warned: !realEnv.length && sampleOnly.length ? 1 : 0,
+      notes: realEnv.map(f => `${f} 가 깃에 있다 — 지워도 기록에 남는다. 키를 바꿔야 한다`),
+      warnNotes: sampleOnly.map(f => `${f} 가 깃에 있지만 비밀 칸이 전부 견본·로컬 값(changethis·빈 값·\${VAR}·localhost DB)이다 — 견본으로 일부러 올렸다면 .env.example 로 이름을 바꾸고 .env 는 .gitignore 에`) })));
     // 3. 약한 암호화
     const weak = [];
     for (const { f, p } of all) for (const [re, what, tag] of ctx.lang(p).weakCrypto) for (const h of scan(ctx, [f], re, what)) weak.push({ name: h.split(' — ')[0], ok: false, detail: `${tag} · ${what}` });

@@ -57,7 +57,8 @@ module.exports = {
     }
 
     // 4) .gitignore 가 기본을 막는가
-    const gi = read(path.join(root, '.gitignore'));
+    // 루트와 각 부분 폴더의 .gitignore 를 합쳐 본다 (backend/.gitignore 에 __pycache__ 가 있으면 막혀 있는 것)
+    const gi = [root, ...ctx.parts.map(p => p.absDir)].filter((d, i, a) => a.indexOf(d) === i).map(d => read(path.join(d, '.gitignore'))).join('\n');
     const needs = [];
     if (ctx.parts.some(p => p.lang === 'js' && fs.existsSync(path.join(p.absDir, 'package.json')))) needs.push(['node_modules', /node_modules/]);
     if (ctx.parts.some(p => p.lang === 'python')) needs.push(['__pycache__', /__pycache__|\*\.py\[?c/]);
@@ -65,7 +66,13 @@ module.exports = {
     const usesEnv = files.some(f => /(^|\/)\.env(\.|$)/.test(f) && !require('../_util').NOT_SHIPPED.test(f)) || ['.env', '.env.local'].some(f => fs.existsSync(path.join(root, f))) || ctx.parts.some(p => fs.existsSync(path.join(p.absDir, '.env')) || /dotenv|python-dotenv|django-environ/.test(read(path.join(p.absDir, 'package.json')) + read(path.join(p.absDir, 'requirements.txt'))));
     if (usesEnv) needs.push(['.env', /(^|\/)\.env/m]);
     const giItems = !gi ? [{ name: '.gitignore', ok: false, detail: '없다 — 설치 폴더·비밀 파일이 통째로 올라간다' }]
-      : needs.map(([n, re]) => ({ name: n, ok: re.test(gi), detail: re.test(gi) ? '막혀 있음' : `.gitignore 에 ${n} 이 없다` }));
+      : needs.map(([n, re]) => {
+        if (re.test(gi)) return { name: n, ok: true, detail: '막혀 있음' };
+        // .env 를 견본 값만 넣어 일부러 올린 템플릿 — 문제가 아니라 확인할 곳
+        const envs = n === '.env' ? files.filter(f => /(^|\/)\.env$/.test(f)) : [];
+        const sample = envs.length && envs.every(f => require('../security/k_secrets').sampleOnlyEnv(read(path.join(root, f))));
+        return { name: n, ok: sample ? null : false, detail: sample ? `.gitignore 에 .env 가 없다 — 지금 올라간 .env 는 견본·로컬 값뿐이지만, 진짜 키를 넣는 순간 함께 올라간다` : `.gitignore 에 ${n} 이 없다` };
+      });
     checks.push(checkItems('.gitignore 가 설치 폴더·캐시·.env 를 막는다', giItems));
 
     // 5) package.json ↔ 잠금 파일
@@ -118,7 +125,7 @@ module.exports = {
     // 7) README 의 설치·실행 방법
     const readme = ['README.md', 'readme.md', 'README.MD', 'README'].map(f => path.join(root, f)).find(f => fs.existsSync(f));
     const rd = readme ? read(readme) : '';
-    const howTo = /npm (install|i|ci|run|start)|yarn|pnpm|pip install|python3? (-m )?manage\.py|uvicorn|gradlew|mvnw?|docker(-compose| compose)?|npx expo|flutter run|make /i.test(rd);
+    const howTo = /npm (install|i|ci|run|start)|yarn|pnpm|bunx? (install|i|run|dev)|pip install|pipx|poetry (install|run)|uv (sync|run|pip)|pyenv|conda (create|install)|python3? (-m )?manage\.py|uvicorn|gradlew|mvnw?|docker(-compose| compose)?|npx expo|flutter run|cargo (run|build)|go run|dotnet run|bundle (install|exec)|make /i.test(rd);
     checks.push(checkItems('README 에 설치·실행 방법이 있다', [{ name: readme ? path.basename(readme) : 'README', ok: readme ? (howTo ? true : false) : false,
       detail: !readme ? 'README 가 없다 — 새로 받은 사람이 어떻게 띄우는지 모른다' : howTo ? '설치·실행 명령이 적혀 있다' : 'README 는 있지만 설치·실행 명령(npm install · pip install · manage.py …)이 없다' }]));
     return { checks };

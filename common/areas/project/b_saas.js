@@ -140,6 +140,7 @@ function untimedCalls(ctx) {
         const line = src.slice(src.lastIndexOf('\n', m.index) + 1, src.indexOf('\n', m.index) >>> 0 || undefined);
         if (/^\s*(\/\/|#|\*)/.test(line)) continue;
         if (r.what === 'fetch' && /function\s+fetch|\.fetch\(/.test(src.slice(Math.max(0, m.index - 12), m.index + 6))) continue;
+        if (r.what === 'fetch' && /^fetch\(\s*new URL\([^)]*import\.meta\.url/.test(callText(src, m.index))) continue;   // 앱에 딸린 파일(글꼴 등)을 읽는 것 — 밖으로 나가는 요청이 아니다
         seen.calls++;
         const text = callText(src, m.index);
         if (r.ok.test(text) || (r.fileOk && r.fileOk.test(src))) continue;

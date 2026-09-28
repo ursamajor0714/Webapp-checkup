@@ -58,7 +58,7 @@ module.exports = {
   // 오류를 삼키는 꼴
   swallow: /catch\s*(?:\(\s*\w*\s*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\w*\s*\)\s*=>\s*\{\s*\}\s*\)|\.catch\(\s*\(\)\s*=>\s*(?:null|undefined|void 0)\s*\)/,
   // 전역 오류 처리기 / 요청 로그 / 보안 이벤트 로그
-  errorHandler: /app\.use\(\s*(?:async\s*)?\(\s*err\s*,|export\s+function\s+onRequestError|error\.(?:tsx|jsx|js)|@Catch\(|implements\s+ExceptionFilter|useGlobalFilters|nitroApp\.hooks\.hook\(\s*['"]error/,
+  errorHandler: /app\.use\(\s*(?:async\s*)?\(\s*(?:err|error|e)\b(?:\s*:[^,]+)?\s*,\s*req\w*\b|app\.use\(\s*(?:async\s*)?\(\s*err\s*,|export\s+function\s+onRequestError|error\.(?:tsx|jsx|js)|@Catch\(|implements\s+ExceptionFilter|useGlobalFilters|nitroApp\.hooks\.hook\(\s*['"]error/,
   requestLog: /\bmorgan\b|\bpino\b|\bwinston\b|\bbunyan\b|console\.(?:log|info)\([^)]*req\.(?:method|url|path)/,
   rateLimit: /express-rate-limit|rate-limiter|rateLimit\(|limiter|tooManyAttempts|lockedUntil|MAX_FAILURES|429|@nestjs\/throttler|ThrottlerGuard/,
   helmet: /\bhelmet\b|headers\(\)\s*\{|Content-Security-Policy/,

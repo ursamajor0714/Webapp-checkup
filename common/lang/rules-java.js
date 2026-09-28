@@ -21,7 +21,7 @@ module.exports = {
     [/Runtime\.getRuntime\(\)\.exec\(|new ProcessBuilder\(/, '서버에서 명령 실행 (명령 주입)', 'A05', 'all'],
     [/ObjectInputStream\(|readObject\(\)/, '자바 역직렬화 (신뢰 못 할 입력 실행)', 'A08', 'all'],
     [/csrf\(\)\.disable\(\)|csrf\(\s*\w+\s*->\s*\w+\.disable\(\)\s*\)|csrf\(AbstractHttpConfigurer::disable\)/, 'CSRF 보호를 껐다 (토큰 인증만 쓰는지 확인)', 'A01', 'all'],
-    [/permitAll\(\)/, 'permitAll 경로 (의도한 공개인지 확인)', 'A01', 'all'],
+    [/permitAll\(\)/, 'permitAll 경로 (의도한 공개인지 확인)', 'A01', 'all', 'warn'],
   ],
   sqlDirect: /(?:createQuery|createNativeQuery|executeQuery|executeUpdate)\(\s*"[^"]*"\s*\+\s*\w*(?:request|param|input|keyword|search|query)\w*/i,
   sqlConcat: /(?:createQuery|createNativeQuery|executeQuery|executeUpdate|prepareStatement|jdbcTemplate\.\w+)\(\s*"[^"]*\b(?:SELECT|INSERT|UPDATE|DELETE|FROM)\b[^"]*"\s*\+|@Query\([^)]*\+/i,

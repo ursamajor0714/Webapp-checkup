@@ -650,3 +650,38 @@ test('전면 점검에서 고친 오탐 — shipping 은 비밀번호가 아니�
   assert.strictEqual(rules.find(i => /firestore/.test(i.name)).ok, false, 'allow create, delete — 조건 없음');
   assert.ok(!rules.some(i => /old_stuff/.test(i.name)), '지운 표는 빼고');
 });
+
+test('오탐 사냥 (공개 레포 7개) — 남의 사이트 주소·타입 붙은 오류 처리기·health-check·${VAR}·README 견본·견본 .env·permitAll·bun·하위 .gitignore·:ro 소켓·외국 서비스 시간대·앱 파일 fetch', async () => {
+  const { cleanPath } = require('../common/lang/js');
+  assert.strictEqual(cleanPath('https://api.github.com/repos/shadcn/taxonomy'), null, '다른 사이트 주소는 이 앱 경로가 아니다');
+  assert.strictEqual(cleanPath('http://localhost:3000/api/users'), '/api/users', 'localhost 는 이 앱 경로');
+  assert.ok(require('../common/lang/rules-js').errorHandler.test('app.use(\n  (\n    err: Error | HttpException,\n    req: express.Request,'), '타입이 붙은 오류 처리기');
+  const { sampleOnlyEnv } = require('../common/areas/security/k_secrets');
+  assert.ok(sampleOnlyEnv('SECRET_KEY=changethis\nPOSTGRES_PASSWORD=changethis\nDATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432/app'));
+  assert.ok(sampleOnlyEnv('DATABASE_URL="mysql://root:s3cr3t@localhost:3306/app"'), '로컬 DB 비밀번호는 개발용');
+  assert.ok(!sampleOnlyEnv('STRIPE_SECRET_KEY=abcdef123456real'), '진짜 같은 값은 견본이 아니다');
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), {
+    'README.md': '# app\n\n```\nbun install\nbun run dev\n```\nDATABASE_URL="mysql://USER:PASSWORD@HOST:PORT/DATABASE"\n',
+    'backend/requirements.txt': 'fastapi\n', 'backend/.gitignore': '__pycache__\n',
+    'backend/app/main.py': "from fastapi import FastAPI\napp = FastAPI()\n@app.get('/api/utils/health-check/')\ndef h():\n    return True\n@app.get('/api/items')\ndef items():\n    return {'created_at': '2020'}\n",
+    'compose.yml': 'services:\n  proxy:\n    image: traefik:v3\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock:ro\n  db:\n    image: postgres:16\n    environment:\n      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Variable not set}\n',
+    '.gitignore': 'node_modules\n',
+  });
+  const ctx = makeContext(loadProject({ root }));
+  const k = await require('../common/areas/security/k_secrets').run(ctx);
+  const kNotes = k.checks.find(c => /박혀 있지/.test(c.name)).notes.join('\n');
+  assert.ok(!/compose\.yml/.test(kNotes), '${VAR} 치환은 비밀값이 아니다: ' + kNotes);
+  assert.ok(!/README/.test(kNotes), 'README 의 USER:PASSWORD@HOST 견본: ' + kNotes);
+  const l = await require('../common/areas/api/l_logging').run(ctx);
+  assert.ok(l.checks.find(c => /상태 확인/.test(c.name)).items.every(i => i.ok === true), 'health-check 경로를 알아본다');
+  const h = await require('../common/areas/project/6_repo_hygiene').run(ctx);
+  const rows = h.checks.flatMap(c => c.items || []);
+  assert.strictEqual((rows.find(i => i.name === '__pycache__') || {}).ok, true, '하위 폴더 .gitignore 도 본다');
+  assert.strictEqual((rows.find(i => /README/.test(i.name)) || {}).ok, true, 'bun install 도 설치 명령');
+  const c3 = await require('../common/areas/project/3_config').run(ctx);
+  assert.strictEqual(c3.checks.find(c => /Docker/.test(c.name)).items.find(i => /docker\.sock|도커 소켓/.test(i.detail)).ok, null, ':ro 소켓은 확인 필요');
+  const t = await require('../common/areas/api/t_time').run(ctx);
+  assert.ok(!t.checks.some(c => /Asia\/Seoul/.test(c.name)), '한글이 없는 외국 서비스엔 Asia/Seoul 을 요구하지 않는다');
+});

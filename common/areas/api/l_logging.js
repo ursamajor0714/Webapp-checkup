@@ -8,18 +8,19 @@ module.exports = {
     const checks = [];
     const src = ctx.serverSrc;
     // 1. 상태 확인 경로 — 밖에서 살았는지 알 수 있는가
-    const health = ctx.allRoutes().filter(r => r.method === 'GET' && /(^|\/)(health|healthz|ping|status|ready|live)(\/|$)/i.test(r.path));
+    const health = ctx.allRoutes().filter(r => r.method === 'GET' && /(^|\/)(health|healthz|health[-_]?check|healthcheck|ping|status|ready|live|alive)(\/|$)/i.test(r.path));
     const hItems = [];
     for (const s of ctx.services) {
       const h = health.find(r => r.service === s.id);
-      if (!h) { hItems.push({ name: `${s.id}`, ok: false, detail: '상태 확인 경로(/health·/ping) 없음 — 죽었는지 밖에서 알 방법이 없다' }); continue; }
+      // 없는 것은 제품 결함이 아니라 운영 준비 — 확인 필요 (서버리스·플랫폼이 알아서 감시하는 곳도 있다)
+      if (!h) { hItems.push({ name: `${s.id}`, ok: null, detail: '상태 확인 경로(/health·/ping) 없음 — 서버를 직접 띄운다면 죽었는지 밖에서 알 방법이 없다 (배포 플랫폼이 감시하면 괜찮다)' }); continue; }
       if (!ctx.live || (ctx.up && !ctx.up[s.id])) { hItems.push({ name: `${s.id} ${h.path}`, ok: true, detail: '경로 있음 (서버가 꺼져 있어 호출은 안 했다)' }); continue; }
       const r = await ctx.call(h.path, { service: s.id, as: 'none' });
       hItems.push({ name: `${s.id} GET ${h.path}`, ok: r.status === 200, detail: `${r.status}` });
     }
     checks.push(owasp('A09', checkItems('상태 확인 경로가 있다', hItems)));
     // 2. 전역 오류 처리기 · 요청 로그
-    const safeDefault = { nextjs: 1, fastapi: 1, spring: 1, django: 1 };
+    const safeDefault = { nextjs: 1, fastapi: 1, spring: 1, django: 1, nestjs: 1, nuxt: 1 };   // 기본 오류 응답이 스택을 내보내지 않는 프레임워크 (Nest 는 JSON 으로 답한다)
     const eh = ctx.services.map(s => { const has = ctx.lang(s).errorHandler.test(src); return { name: `${s.id} 전역 오류 처리기`, ok: has ? true : safeDefault[s.stack] ? null : false,
       detail: has ? '있음' : safeDefault[s.stack] ? '없음 — 프레임워크 기본 오류 응답을 쓴다 (스택을 숨기는지·오류를 기록하는지 확인)' : '없음 — 처리 안 된 오류가 기본 HTML 페이지(개발 모드면 스택 포함)로 나간다' }; });
     checks.push(owasp('A09', checkItems('전역 오류 처리기가 있다', eh)));
