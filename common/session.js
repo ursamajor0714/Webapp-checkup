@@ -108,7 +108,7 @@ async function login(baseUrl, auth, creds, name) {
   if (token) sess.token = token;
   const ok = r.status >= 200 && r.status < 300 && (!!token || Object.keys(sess.cookies).length > 0);
   // 토큰이 쿠키로만 오는 서비스는 cookie 방식으로 다룬다
-  return { sess, ok, status: r.status, why: ok ? '' : `로그인 실패 (${r.status}) ${String(r.text).slice(0, 80)}` };
+  return { sess, ok, status: r.status, body: r.body, why: ok ? '' : `로그인 실패 (${r.status}) ${String(r.text).slice(0, 80)}` };
 }
 
 // 검사용 계정 만들기 — 회원가입 경로가 있고 계정이 설정돼 있지 않을 때

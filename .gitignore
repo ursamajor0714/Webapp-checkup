@@ -9,3 +9,6 @@ node_modules/
 
 # QA 가 검사용으로 만든 임시 DB
 /.qa-data/
+
+# Claude Code 개인 권한 설정 — 사람마다 다르므로 올리지 않는다
+.claude/settings.local.json

@@ -46,6 +46,12 @@ function newestSource(dir) {
   const { walk } = require('./stacks/util');   // node_modules·.next·dist 등은 건너뛴다
   return walk(dir, ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.css', '.json', '.html', '.py', '.java', '.kt']).reduce((m, f) => Math.max(m, mtime(f)), 0);
 }
+// 서버를 다시 켜야 하는 코드가 바뀌었나 — 앱이 실행 중에 쓰는 데이터(json·업로드)는 빼고 코드와 package.json 만
+function newestCode(dir) {
+  const { walk } = require('./stacks/util');
+  const files = walk(dir, ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.java', '.kt', '.html', '.css', '.vue', '.svelte', '.ejs', '.pug', '.hbs', '.go', '.rb', '.php', 'package.json']);
+  return files.reduce((m, f) => Math.max(m, mtime(f)), 0);
+}
 function needsInstall(dir, plan, installedAt) {
   if (/^npm$/.test(plan.install[0])) {
     if (!fs.existsSync(path.join(dir, 'node_modules'))) return '처음 설치';
@@ -182,4 +188,4 @@ function stop(st) {
 
 const canServe = part => !!(STACKS[part.stack] && STACKS[part.stack].serve) && !part.servedBy && !part.native && !!part.baseUrl;
 
-module.exports = { pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
+module.exports = { newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };

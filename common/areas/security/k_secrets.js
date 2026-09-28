@@ -66,7 +66,7 @@ function workflowItems(root) {
     let inRun = false, runIndent = -1;
     lines.forEach((l, i) => {
       const ind = l.search(/\S/);
-      if (/^\s*(-\s*)?run:\s*/.test(l)) { inRun = true; runIndent = ind; if (UNTRUSTED.test(l)) bad.push({ name: `${rel}:${i + 1}`, ok: false, detail: `셸에 PR·이슈 값을 그대로 넣는다 — 제목에 명령을 숨겨 실행할 수 있다. env: 로 옮기고 "$TITLE" 처럼 쓴다 · ${l.trim().slice(0, 80)}` }); return; }
+      if (/^\s*(-\s*)?run:\s*/.test(l)) { inRun = /run:\s*[|>][-+]?\s*$/.test(l); runIndent = l.indexOf('run:'); if (UNTRUSTED.test(l)) bad.push({ name: `${rel}:${i + 1}`, ok: false, detail: `셸에 PR·이슈 값을 그대로 넣는다 — 제목에 명령을 숨겨 실행할 수 있다. env: 로 옮기고 "$TITLE" 처럼 쓴다 · ${l.trim().slice(0, 80)}` }); return; }
       if (inRun && ind > runIndent && ind >= 0) { if (UNTRUSTED.test(l)) bad.push({ name: `${rel}:${i + 1}`, ok: false, detail: `셸에 PR·이슈 값을 그대로 넣는다 — env: 로 옮기고 "$VAR" 로 쓴다 · ${l.trim().slice(0, 80)}` }); return; }
       if (ind >= 0 && ind <= runIndent) inRun = false;
       const u = l.match(/^\s*(?:-\s*)?uses:\s*([\w.-]+)\/([\w.\/-]+)@([\w.-]+)/);

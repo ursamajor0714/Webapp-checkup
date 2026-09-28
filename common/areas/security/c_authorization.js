@@ -77,12 +77,15 @@ async function roleChecks(ctx, routes) {
   for (const role of (ctx.roles || []).filter(r => r.sessions.length)) {
     const [A, B] = role.sessions, [a, b] = role.accounts;
     ctx.sessions.roleA = A;
-    const prefix = role.loginPath.replace(/\/[^/]*\/?$/, '') + '/';
+    const prefix0 = role.loginPath.replace(/\/[^/]*\/?$/, '') + '/';
+    // /api/login 처럼 입구 주소가 짧으면 앞부분(/api/)이 모든 경로에 걸린다 — 이때는 회원 경로를 앞부분으로 가를 수 없다
+    const prefix = /^\/((api|v\d+)\/)*$/.test(prefix0) ? null : prefix0;
+    const own = x => prefix ? x.path.startsWith(prefix) : false;
     const fill = (p, id) => p.replace(/:[A-Za-z0-9_]+/, id).replace(/:[A-Za-z0-9_]+/g, '1');
     // 1) 같은 입구의 남의 것 — /api/member/:id/... 에 B 의 id 를 넣어 A 로 부른다
     if (B && a.id && b.id) {
       const items = [];
-      for (const r of routes.filter(x => x.path.startsWith(prefix) && x.path.includes(':') && x.service === role.service && !/login|register|signup|logout/i.test(x.path) && !untouchable(ctx, x))) {
+      for (const r of routes.filter(x => own(x) && x.path.includes(':') && x.service === role.service && !/login|register|signup|logout/i.test(x.path) && !untouchable(ctx, x))) {
         const write = r.method !== 'GET';
         const mine = write ? null : await ctx.call(fill(r.path, a.id), { service: r.service, as: 'roleA' });
         const res = await ctx.call(fill(r.path, b.id), { service: r.service, as: 'roleA', method: r.method, body: write ? {} : undefined });
@@ -96,7 +99,7 @@ async function roleChecks(ctx, routes) {
     // 2) 관리자 기능 — 관리자 가드가 붙은 경로를 이 입구의 토큰으로. 읽기는 전부, 쓰기는 방금 만든 검사용 계정(B)에만
     const target = b && b.id ? b.id : null;
     const items = [];
-    for (const r of routes.filter(x => x.service === role.service && !x.path.startsWith(prefix) && (GUARD.test(guardLine(x.handler)) || ADMIN.test(x.path)) && !pub(ctx, x) && !untouchable(ctx, x) && !LOGINISH.test(x.path))) {
+    for (const r of routes.filter(x => x.service === role.service && !own(x) && (GUARD.test(guardLine(x.handler)) || ADMIN.test(x.path)) && !pub(ctx, x) && !untouchable(ctx, x) && !LOGINISH.test(x.path))) {
       if (r.method !== 'GET' && !(target && r.path.includes(':') && role.createPath && r.path.startsWith(role.createPath + '/'))) continue;
       const res = await ctx.call(fill(r.path, r.method === 'GET' ? '1' : target), { service: r.service, as: 'roleA', method: r.method, body: r.method === 'GET' ? undefined : {} });
       const blocked = blockedBy(res.status) || (res.status >= 300 && res.status < 400 && /login|signin/i.test(res.location || ''));

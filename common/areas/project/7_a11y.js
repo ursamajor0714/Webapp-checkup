@@ -45,19 +45,29 @@ module.exports = {
           if (!res.length) pagesOk.push(pg.path);
           // 디자인 기계 검사 — 실제로 그려진 결과로 본다 (CSS 글자만 보면 덮어쓴 규칙을 모른다)
           //   키보드 초점 표시(초점을 줘도 테두리·그림자가 안 생김) · 누르는 곳이 24px 보다 작음(WCAG 2.2 2.5.8, 문장 속 링크 제외) · 본문 글자 14px 미만
-          const d = await page.evaluate(() => {
-            const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
+          // 초점 표시는 실제 Tab 키로 옮겨 가며 본다 — :focus-visible(요즘 흔한 방식)은 스크립트 focus() 로는 안 뜨는 경우가 있다
+          const vis0 = await page.evaluate(() => {
+            const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 2 && r.height > 2 && cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0'; };
+            const sig = e => { const c = getComputedStyle(e), p = e.parentElement ? getComputedStyle(e.parentElement) : null; return [c.outlineStyle, c.outlineWidth, c.outlineColor, c.boxShadow, c.borderColor, c.backgroundColor, c.textDecorationLine, p && p.boxShadow, p && p.outlineStyle].join('|'); };
+            window.__qaSig = sig; window.__qaBase = new Map();
+            const els = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"]), [role=button]')].filter(vis);
+            els.forEach((e, i) => { e.setAttribute('data-qa-f', String(i)); window.__qaBase.set(String(i), sig(e)); });
+            if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+            return els.length;
+          }).catch(() => 0);
+          const noFocus = [], seenF = new Set();
+          for (let t = 0; t < Math.min(30, vis0); t++) {
+            await page.keyboard.press('Tab').catch(() => {});
+            const f = await page.evaluate(() => { const e = document.activeElement; const k = e && e.getAttribute && e.getAttribute('data-qa-f'); if (!k) return null;
+              return { k, same: window.__qaSig(e) === window.__qaBase.get(k), label: (e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.textContent.trim() ? ` "${e.textContent.trim().slice(0, 20)}"` : '')).slice(0, 60) }; }).catch(() => null);
+            if (!f || seenF.has(f.k)) { if (f) break; continue; }   // 한 바퀴 돌았으면 멈춘다
+            seenF.add(f.k); if (f.same) noFocus.push(f.label);
+          }
+          const d0 = await page.evaluate(() => {
+            const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 2 && r.height > 2 && cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0'; };   // 화면에서 숨긴 1px 입력칸(커스텀 체크박스)은 뺀다
             const els = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"]), [role=button]')].filter(vis).slice(0, 60);
-            const noFocus = [], small = [];
+            const small = [];
             const label = e => (e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.textContent.trim() ? ` "${e.textContent.trim().slice(0, 20)}"` : '')).slice(0, 60);
-            for (const e of els.slice(0, 30)) {
-              const before = getComputedStyle(e); const b = before.outlineStyle + before.outlineWidth + before.boxShadow + before.borderColor + before.backgroundColor;
-              e.focus({ preventScroll: true });
-              if (document.activeElement !== e) continue;
-              const cs = getComputedStyle(e); const a = cs.outlineStyle + cs.outlineWidth + cs.boxShadow + cs.borderColor + cs.backgroundColor;
-              if ((cs.outlineStyle === 'none' || parseFloat(cs.outlineWidth) === 0) && a === b) noFocus.push(label(e));
-              e.blur();
-            }
             for (const e of els) {
               const r = e.getBoundingClientRect();
               const inText = e.tagName === 'A' && e.closest('p, li, td, span') && getComputedStyle(e).display === 'inline';
@@ -65,8 +75,9 @@ module.exports = {
             }
             const ps = [...document.querySelectorAll('p, li, td')].filter(vis).filter(e => e.textContent.trim().length > 20).slice(0, 40);
             const sizes = ps.map(e => parseFloat(getComputedStyle(e).fontSize)).sort((x, y) => x - y);
-            return { noFocus: noFocus.slice(0, 5), noFocusN: noFocus.length, small: small.slice(0, 5), smallN: small.length, body: sizes.length ? sizes[Math.floor(sizes.length / 2)] : null };
+            return { small: small.slice(0, 5), smallN: small.length, body: sizes.length ? sizes[Math.floor(sizes.length / 2)] : null };
           }).catch(() => null);
+          const d = d0 && { ...d0, noFocus: noFocus.slice(0, 5), noFocusN: noFocus.length };
           if (d) {
             design.push({ name: `${pg.path} · 키보드 초점`, ok: d.noFocusN ? false : true, detail: d.noFocusN ? `${d.noFocusN}개가 초점을 받아도 표시가 없다 — 키보드로 쓰는 사람이 지금 어디 있는지 모른다 (outline: none 을 지웠다면 :focus-visible 에 표시를 준다) · 예: ${d.noFocus.join(', ')}` : '초점 표시가 보인다' });
             design.push({ name: `${pg.path} · 누르는 크기`, ok: d.smallN ? null : true, detail: d.smallN ? `${d.smallN}개가 24px 보다 작다 — 손가락으로 누르기 어렵다 (권장 44px) · 예: ${d.small.join(', ')}` : '모두 24px 이상' });

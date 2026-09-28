@@ -59,6 +59,10 @@ test('정적 사이트 — 심은 버그를 모두 잡는다', { timeout: 300000
   assert.strictEqual(st('7', /list\.html · 키보드 초점/), false, '초점 표시 없음');
   assert.strictEqual(st('7', /list\.html · 누르는 크기/), null, '너무 작은 버튼');
   assert.ok(items('2').some(i => /뒤로·앞으로/.test(i.check)), '뒤로·앞으로·새로고침 검사가 돈다');
+  assert.strictEqual(st('7', /focus-ok\.html · 키보드 초점/), true, ':focus-visible 로 표시하는 화면은 통과 (Tab 으로 본다)');
+  assert.strictEqual(st('7', /focus-ok\.html · 누르는 크기/), true, '숨긴 1px 입력칸은 크기 검사에서 뺀다');
+  const m2 = (rep.results.find(r => r.id === '2') || {}).metrics || {};
+  assert.ok(Object.values(m2).some(x => x.lcp !== undefined && x.js !== undefined), 'LCP 와 JS 크기를 함께 남긴다: ' + JSON.stringify(m2));
 });
 
 test('Express 서버 — 심은 버그를 모두 잡는다', { timeout: 600000 }, async t => {

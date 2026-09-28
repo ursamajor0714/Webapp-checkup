@@ -33,7 +33,8 @@ function dockerItems(ctx) {
     const at = re => { const i = lines.findIndex(l => re.test(l)); return i < 0 ? rel : `${rel}:${i + 1}`; };
     const bad = [];
     if (/Dockerfile$|\.dockerfile$/i.test(f)) {
-      const users = [...src.matchAll(/^\s*USER\s+(\S+)/gim)].map(m => m[1]);
+      const lastStage = src.slice(Math.max(0, src.search(/^\s*FROM\s[^\n]*$(?![\s\S]*^\s*FROM\s)/im)));   // 다단계 빌드는 마지막 단계가 실제로 뜬다
+      const users = [...lastStage.matchAll(/^\s*USER\s+(\S+)/gim)].map(m => m[1]);
       if (!users.length) bad.push({ name: rel, ok: null, detail: 'USER 가 없어 컨테이너가 root 로 돈다 — 뚫리면 컨테이너 전체를 쥔다. 마지막 단계에 USER node(또는 만든 사용자)' });
       else if (/^(root|0)$/.test(users[users.length - 1])) bad.push({ name: at(/^\s*USER\s+(root|0)\b/im), ok: false, detail: '마지막 USER 가 root — 일반 사용자로 바꾼다' });
       const dir = path.dirname(f), ignore = read(path.join(dir, '.dockerignore'));
