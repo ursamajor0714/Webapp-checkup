@@ -78,8 +78,17 @@ function settingsOf(id) {
       const p = loadProject(def); const g = guessAuth(def.root, p.parts, makeContext(p).routes());
       const a = { ...g, ...(def.auth || {}) };
       const envVal = a.passwordEnv && (() => { const { readEnvFile } = require('./common/deps'); const svc = p.parts.find(x => x.kind !== 'client'); return { ...readEnvFile(path.join(def.root, '.env')), ...(svc ? readEnvFile(path.join(svc.absDir, '.env')) : {}) }[a.passwordEnv]; })();
-      return a.loginPath ? { path: a.loginPath, passwordEnv: a.passwordEnv || null, envHasValue: !!envVal } : null;
+      // 저장된 비밀번호가 .env 값과 다른가 — 값은 돌려주지 않고 같은지만
+      return a.loginPath ? { path: a.loginPath, admin: /(^|\/)(admin|manage|staff|backoffice)(\/|$)/i.test(a.loginPath), passwordEnv: a.passwordEnv || null, envHasValue: !!envVal, savedDiffers: !!(envVal && mine.password && mine.password !== envVal) } : null;
     } catch { return null; } })(),
+    // 다른 로그인 입구(회원·직원) — 계정을 스스로 얻을 수 있으면 설명만, 못 얻을 때만 칸을 띄운다
+    roles: (() => { try {
+      if (!def.root || !fs.existsSync(def.root)) return [];
+      const { guessAuth } = require('./common/project'); const { makeContext } = require('./common/context'); const { findRoles } = require('./common/roles');
+      const p = loadProject(def); const routes = makeContext(p).routes();
+      const saved = mine.roles || {};
+      return findRoles(routes, { ...guessAuth(def.root, p.parts, routes), ...(def.auth || {}) }).map(r => ({ path: r.loginPath, auto: !!r.how, desc: r.desc, userField: r.fields.user || null, user: (saved[r.loginPath] || {}).user || '', set: !!(saved[r.loginPath] || {}).password }));
+    } catch { return []; } })(),
     parts: projectInfo(id).parts.filter(p => p.canServe).map(p => ({ dir: p.dir, stack: p.label, port: ((mine.parts || {})[p.dir] || {}).port || '', baseUrl: p.baseUrl })),
   };
 }
@@ -267,6 +276,15 @@ const server = http.createServer(async (req, res) => {
       for (const k of ['root', ...CRED_KEYS]) {
         if (typeof body[k] === 'string' && body[k].trim()) mine[k] = k === 'root' ? expandHome(body[k].trim()) : body[k].trim();
         if (Array.isArray(body.clear) && body.clear.includes(k)) delete mine[k];
+      }
+      if (body.roles && typeof body.roles === 'object') {
+        mine.roles = { ...(mine.roles || {}) };
+        for (const [p, v] of Object.entries(body.roles)) {
+          if (!v || typeof v !== 'object') continue;
+          const cur = mine.roles[p] || {};
+          const next = { ...cur, ...(typeof v.user === 'string' ? { user: v.user.trim() } : {}), ...(typeof v.password === 'string' && v.password ? { password: v.password } : {}) };
+          if (v.clear || (!next.user && !next.password)) delete mine.roles[p]; else mine.roles[p] = next;
+        }
       }
       if (body.parts && typeof body.parts === 'object') {
         mine.parts = { ...(mine.parts || {}) };

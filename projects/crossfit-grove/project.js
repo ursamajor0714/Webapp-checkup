@@ -1,5 +1,5 @@
 // CrossFit Grove 관리 시스템 — 코드에서 추정할 수 없는 것만 적는다 (나머지는 범용 감지)
-//   배포 뒤 점검:  node projects/crossfit-grove/check-live.js
+//   배포 뒤 점검:  node run.js crossfit-grove --live   (범용 — 아래 liveUrl 을 쓴다. 옛 전용 점검 check-live.js 도 남아 있다)
 //   커밋 직전 비밀 검사:  node projects/crossfit-grove/check-staged.js  (대상 레포에서)
 module.exports = {
   name: 'CrossFit Grove 관리 시스템',

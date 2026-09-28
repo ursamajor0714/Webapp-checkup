@@ -116,4 +116,4 @@ function loadProject(def) {
   return p;
 }
 
-module.exports = { detectParts, guessAuth, loadProject };
+module.exports = { detectParts, guessAuth, loadProject, passwordEnvOf };

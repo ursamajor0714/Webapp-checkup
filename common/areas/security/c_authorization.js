@@ -6,6 +6,12 @@ const { check, checkItems, owasp, pub } = require('../_util');
 const { fillPath } = require('../../generate');
 
 const ADMIN = /(^|\/)(admin|manage|management|staff|internal|dashboard\/admin|backoffice)(\/|$)/i;
+// 로그인 없이 부른 것과 똑같은 HTML — 누구에게나 주는 화면 틀이다 (데이터는 그 화면이 부르는 API 가 막는지로 본다)
+const shellPage = async (ctx, url, r, res) => {
+  if (res.status !== 200 || !/^\s*<(!doctype|html)/i.test(res.text || '')) return false;
+  const anon = await ctx.call(url, { service: r.service, as: 'none' });
+  return anon.status === 200 && anon.text === res.text;
+};
 const idOf = b => b && (b.id ?? b._id ?? b.pk ?? (b.data && (b.data.id ?? b.data._id)) ?? (b.result && b.result.id));
 
 // 권한 칸 — 이 이름들 중 하나라도 '관리자' 로 되돌아오면 권한 상승
@@ -60,6 +66,51 @@ async function privilegeEscalation(ctx, routes) {
   return items;
 }
 
+// 다른 로그인 입구(회원·직원) 계정으로 — 회원 A 가 회원 B 의 것을, 회원이 관리자 기능을 쓸 수 있는가
+//   계정은 roles.js 가 코드에서 찾은 길로 만든다 (사람이 넣지 않아도 된다)
+const GUARD = /require(?:Admin|Owner|Staff|Manager)\b|isAdmin|adminOnly|admin_required|staff_member_required|IsAdminUser|has(?:Role|Authority)\(\s*['"](?:ROLE_)?ADMIN|Roles\(\s*['"]admin/i;
+async function roleChecks(ctx, routes) {
+  const { untouchable } = require('../../generate');
+  const { guardLine } = require('../../roles');
+  const checks = [];
+  const blockedBy = st => st === 401 || st === 403;
+  for (const role of (ctx.roles || []).filter(r => r.sessions.length)) {
+    const [A, B] = role.sessions, [a, b] = role.accounts;
+    ctx.sessions.roleA = A;
+    const prefix = role.loginPath.replace(/\/[^/]*\/?$/, '') + '/';
+    const fill = (p, id) => p.replace(/:[A-Za-z0-9_]+/, id).replace(/:[A-Za-z0-9_]+/g, '1');
+    // 1) 같은 입구의 남의 것 — /api/member/:id/... 에 B 의 id 를 넣어 A 로 부른다
+    if (B && a.id && b.id) {
+      const items = [];
+      for (const r of routes.filter(x => x.path.startsWith(prefix) && x.path.includes(':') && x.service === role.service && !/login|register|signup|logout/i.test(x.path) && !untouchable(ctx, x))) {
+        const write = r.method !== 'GET';
+        const mine = write ? null : await ctx.call(fill(r.path, a.id), { service: r.service, as: 'roleA' });
+        const res = await ctx.call(fill(r.path, b.id), { service: r.service, as: 'roleA', method: r.method, body: write ? {} : undefined });
+        const blocked = blockedBy(res.status) || res.status === 404;
+        items.push({ name: `${r.method} ${r.path} · 다른 회원의 id`, ok: blocked ? (mine && mine.status >= 400 ? null : true) : res.status === 400 ? null : false,
+          detail: blocked ? (mine && mine.status >= 400 ? `본인 것도 ${mine.status} 라 재지 못했다` : `${res.status} 막힘 (본인 것은 ${mine ? mine.status : '안 부름'})`)
+            : res.status === 400 ? '400 — 권한보다 입력 검사가 먼저 막았다 (사람이 확인)' : `${res.status} — 로그인한 회원이 다른 회원의 ${write ? '것을 바꿨다' : '정보를 읽는다'}. id 를 주소에서 받지 말고 토큰의 주인으로 정한다` });
+      }
+      if (items.length) checks.push(owasp('A01', checkItems(`${role.loginPath} 계정끼리 남의 것을 못 본다 (IDOR)`, items)));
+    }
+    // 2) 관리자 기능 — 관리자 가드가 붙은 경로를 이 입구의 토큰으로. 읽기는 전부, 쓰기는 방금 만든 검사용 계정(B)에만
+    const target = b && b.id ? b.id : null;
+    const items = [];
+    for (const r of routes.filter(x => x.service === role.service && !x.path.startsWith(prefix) && (GUARD.test(guardLine(x.handler)) || ADMIN.test(x.path)) && !pub(ctx, x) && !untouchable(ctx, x) && !LOGINISH.test(x.path))) {
+      if (r.method !== 'GET' && !(target && r.path.includes(':') && role.createPath && r.path.startsWith(role.createPath + '/'))) continue;
+      const res = await ctx.call(fill(r.path, r.method === 'GET' ? '1' : target), { service: r.service, as: 'roleA', method: r.method, body: r.method === 'GET' ? undefined : {} });
+      const blocked = blockedBy(res.status) || (res.status >= 300 && res.status < 400 && /login|signin/i.test(res.location || ''));
+      if (!blocked && r.method === 'GET' && await shellPage(ctx, fill(r.path, '1'), r, res)) { items.push({ name: `${r.method} ${r.path} · ${role.loginPath} 토큰`, ok: true, detail: '로그인 없이도 똑같이 주는 화면 틀 — 데이터는 API 가 막는지로 본다' }); continue; }
+      items.push({ name: `${r.method} ${r.path} · ${role.loginPath} 토큰`, ok: blocked ? true : res.status === 404 || res.status === 400 ? null : false,
+        detail: blocked ? `${res.status} 막힘` : res.status === 404 || res.status === 400 ? `${res.status} — 권한 검사 전에 다른 이유로 끝났다 (사람이 확인)` : `${res.status} — ${role.loginPath} 로 들어온 사람이 관리자 기능을 쓴다` });
+    }
+    if (items.length) checks.push(owasp('A01', checkItems(`${role.loginPath} 계정이 관리자 기능을 못 쓴다`, items)));
+    delete ctx.sessions.roleA;
+  }
+  return checks;
+}
+const LOGINISH = /(^|\/)(login|logout|signin|register|signup)\/?$/i;
+
 module.exports = {
   id: 'C', name: '권한 (남의 데이터·관리자 경로)', weight: 7, owasp: ['A01'],
   async run(ctx) {
@@ -77,11 +128,12 @@ module.exports = {
         const url = r.path.replace(/:[A-Za-z0-9_]+\*?/g, '1');
         const res = await ctx.call(url, { service: r.service, as: regular, method: r.method, body: ['POST', 'PUT', 'PATCH'].includes(r.method) ? {} : undefined });
         const blocked = res.status === 401 || res.status === 403 || (res.status === 404 && r.method !== 'GET') || (res.status >= 300 && res.status < 400 && /login|signin/i.test(res.location || ''));
+        if (!blocked && r.method === 'GET' && await shellPage(ctx, url, r, res)) { items.push({ name: `${r.method} ${r.path} · 일반 계정`, ok: true, detail: '로그인 없이도 똑같이 주는 화면 틀 — 데이터는 API 가 막는지로 본다' }); continue; }
         items.push({ name: `${r.method} ${r.path} · 일반 계정`, ok: blocked ? true : res.status === 400 ? null : false,
           detail: blocked ? `${res.status} 막힘` : res.status === 400 ? '400 — 권한 검사 전에 입력 검사로 막혔는지, 권한 검사가 없는지 사람이 확인' : `${res.status} — 일반 계정이 관리자 기능에 닿는다` });
       }
       checks.push(owasp('A01', checkItems('관리자 경로를 일반 계정이 못 쓴다', items)));
-    } else if (adminRoutes.length) checks.push(owasp('A01', check('관리자 경로를 일반 계정이 못 쓴다', { universe: adminRoutes.length, scanned: 0, passed: 0, notes: ['일반 계정이 없다 — 설정에 일반 계정을 넣으면 잰다'] })));
+    } else if (adminRoutes.length && !(ctx.roles || []).some(r => r.sessions.length)) checks.push(owasp('A01', check('관리자 경로를 일반 계정이 못 쓴다', { universe: adminRoutes.length, scanned: 0, passed: 0, notes: ['일반 계정이 없다 — 설정에 일반 계정을 넣으면 잰다'] })));
 
     // 2. IDOR — owner 가 만든 것을 other 가 (만들고 읽을 수 있는 자원만)
     if (ctx.sessions.other) {
@@ -127,6 +179,7 @@ module.exports = {
     const st = await ctx.call('/..%2F..%2F..%2F..%2Fetc%2Fpasswd', { as: 'none' });
     trav.push({ name: 'GET /../../etc/passwd (정적 파일 경로)', ok: !/root:x:0:0/.test(st.text), detail: /root:x:0:0/.test(st.text) ? '서버 파일 내용이 나온다' : `${st.status}` });
     checks.push(owasp('A01', checkItems('경로 조작(../)으로 서버 파일을 못 읽는다', trav)));
+    checks.push(...await roleChecks(ctx, routes));
     // 4. 권한 상승 (고급부터) — 가입·만들기 본문에 role:'admin' 같은 칸을 끼워 넣으면 그대로 저장되는가 (대량 할당)
     if (ctx.level.atLeast('advanced')) {
       const esc = await privilegeEscalation(ctx, routes);
