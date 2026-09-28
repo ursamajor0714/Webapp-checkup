@@ -140,6 +140,10 @@ const gitHead = dir => { try { return execFileSync('git', ['rev-parse', 'HEAD'],
 function pull(dir) {
   const before = gitHead(dir);
   if (!before) return { dir, ok: false, out: 'git 레포가 아닙니다' };
+  // 원격에 없는 브랜치(방금 만든 fix/…)는 받을 것이 없다 — 실패가 아니라 지금 폴더의 코드를 그대로 검사한다
+  const branch = (() => { try { return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return '?'; } })();
+  try { execFileSync('git', ['rev-parse', '--abbrev-ref', '@{u}'], { cwd: dir, stdio: 'ignore' }); }
+  catch { return { dir, ok: true, changed: false, out: `브랜치 ${branch} 는 원격에 없어 받을 것이 없다 — 지금 폴더의 코드(${branch})를 그대로 검사한다` }; }
   try {
     const out = execFileSync('git', ['pull', '--ff-only'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     return { dir, ok: true, changed: gitHead(dir) !== before, out: out.trim() };

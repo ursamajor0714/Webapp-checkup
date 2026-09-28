@@ -81,6 +81,27 @@ function listAreas(def) {
 }
 
 // ── 준비: 부분 감지 · 로그인 방식 · 서버 살았나 · 계정 · 규칙 추출
+// 이 주소의 포트를 듣고 있는 프로세스가 언제 켜졌나 (맥·리눅스) — 모르면 null
+function processStartOf(baseUrl) {
+  if (process.platform === 'win32') return null;
+  try {
+    const { execFileSync } = require('child_process');
+    const port = new URL(baseUrl).port || '80';
+    const pid = execFileSync('lsof', ['-tiTCP:' + port, '-sTCP:LISTEN'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0];
+    if (!pid) return null;
+    const t = Date.parse(execFileSync('ps', ['-o', 'lstart=', '-p', pid], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim());
+    return Number.isFinite(t) ? t : null;
+  } catch { return null; }
+}
+// 검사한 대상 코드 — 어느 브랜치·커밋인가, 커밋 안 한 변경이 있나 (리포트만 봐서는 어떤 코드를 쟀는지 모른다)
+function codeVersion(root) {
+  try {
+    const git = a => require('child_process').execFileSync('git', ['-C', root, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return { branch: git(['rev-parse', '--abbrev-ref', 'HEAD']), commit: git(['rev-parse', '--short', 'HEAD']), dirty: git(['status', '--porcelain']).split('\n').filter(Boolean).length };
+  } catch { return null; }
+}
+const codeLabel = c => c ? `${c.branch}@${c.commit}${c.dirty ? ` (+커밋 안 한 변경 ${c.dirty}개)` : ''}` : '(깃 아님)';
+
 async function prepare(def, { only = [], singleOnly = false, log = () => {}, servers = {}, autoServe = true, level, diff = null } = {}) {
   const project = loadProject(def);
   if (!project.root || !fs.existsSync(project.root)) throw new Error(`레포 폴더가 없다: ${project.root}`);
@@ -102,7 +123,24 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   if (autoServe) {
     const targets = project.parts.filter(serve.canServe).sort((a, b) => (a.kind === 'client') - (b.kind === 'client'));
     for (const p of targets) {
-      if ((await serve.healthy(p.baseUrl)).up) continue;
+      if ((await serve.healthy(p.baseUrl)).up) {
+        // 떠 있는 서버가 지금 코드보다 먼저 켜졌으면 옛 코드를 검사하게 된다 (브랜치를 바꿨거나, 켠 뒤에 고쳤거나)
+        const own = ctx.serverStates[p.dir];
+        const started = own && own.child && own.startedAt ? own.startedAt : processStartOf(p.baseUrl);
+        const newest = serve.newestSource(p.absDir);
+        if (!started || newest <= started + 2000) continue;
+        const ago = m => `${Math.round((Date.now() - m) / 60000)}분 전`;
+        if (own && own.child && own.startedByQa) {
+          log(`${p.stack}@${p.dir}: 서버(${ago(started)} 켬)보다 코드가 새롭다(${ago(newest)} 수정) — 새 코드로 다시 켠다`);
+          serve.stop(own);
+          for (let i = 0; i < 20 && (await serve.healthy(p.baseUrl)).up; i++) await new Promise(r => setTimeout(r, 250));
+          ctx.notes.push(`${p.stack}@${p.dir}: 떠 있던 서버가 코드보다 오래돼(브랜치를 바꿨거나 켠 뒤 고침) 새 코드로 다시 켰다`);
+        } else {
+          (ctx.staleServers ||= []).push({ part: `${p.stack}@${p.dir}`, url: p.baseUrl, started, newest });
+          ctx.notes.push(`⚠ ${p.baseUrl} 에 떠 있는 서버는 ${ago(started)} 켜졌는데 코드는 ${ago(newest)}에 바뀌었다 — 옛 코드를 검사하고 있을 수 있다. 그 서버를 끄고 다시 돌리면 QA 가 지금 코드(브랜치)로 켠다`);
+          continue;
+        }
+      }
       log(`서버 켜는 중: ${p.stack}@${p.dir} → ${p.baseUrl} (설치·빌드가 필요하면 몇 분 걸린다)`);
       const st = serve.newState();
       await serve.startPart({ ...def, id: def.id || project.name }, p, st);
@@ -495,7 +533,7 @@ function perfTrend(prevResults, results) {
   return out;
 }
 
-function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
+function diffWithPrevious(dir, results, score, level = 'advanced', qa = null, code = null) {
   if (!fs.existsSync(dir)) return null;
   // 일부 영역만 돌린 검사(--only·영역 조회)는 비교 기준이 못 된다 — 전체 검사끼리만
   let prev = null, prevFile = null;
@@ -534,7 +572,10 @@ function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
   const ver = v => v ? `${v.commit}${v.dirty ? ` + 커밋 안 한 수정${typeof v.dirty === 'string' ? `(${v.dirty})` : ''}` : ''}` : '기록 없음';
   const qaNote = qaChanged ? `QA 버전이 다르다 (${ver(prevQa)} → ${ver(qa)}) — 점수 차이 일부는 대상 코드가 아니라 QA 검사 기준이 바뀐 탓일 수 있다` : null;
   const perf = perfTrend(prev.results, results);
-  return { perf, qaChanged, qaNote, areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
+  // 대상 코드가 달라졌나 — 브랜치를 바꿔 고친 뒤 견주는 것이 보통이다. 무엇과 무엇을 견줬는지 적는다
+  const prevCode = (prev.summary && prev.summary.code) || null;
+  const codeNote = code && prevCode && (prevCode.branch !== code.branch || prevCode.commit !== code.commit) ? `비교한 코드: ${codeLabel(prevCode)} → ${codeLabel(code)}` : null;
+  return { perf, codeNote, qaChanged, qaNote, areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
 }
 
 async function finish(prep, results, { save = true } = {}) {
@@ -595,12 +636,14 @@ async function finish(prep, results, { save = true } = {}) {
     saas: ((results.find(r => r.id === '11') || {}).info || {}).items || null,
     level: { id: ctx.level.id, label: ctx.level.label, desc: ctx.level.desc, strict: ctx.level.strict },
     qa: qaVersion(),
+    code: codeVersion(project.root),   // 검사한 대상 코드의 브랜치·커밋
+    ...(prep.ctx.staleServers ? { staleServers: prep.ctx.staleServers } : {}),
     coverage: { measured: measured.length, total: results.length },   // 잰 영역 / 돌린 영역 — 점수와 꼭 같이 본다
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
   summary.full = (!prep.only || !prep.only.length) && !prep.diff;   // 일부만 잰 검사는 비교 기준이 못 된다
   if (prep.ctx.diffScope) summary.diffScope = prep.ctx.diffScope;
-  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score, summary.level.id, summary.qa); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
+  if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score, summary.level.id, summary.qa, summary.code); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');   // 초까지 — 같은 분에 두 번 돌려도 앞 리포트를 덮어쓰지 않는다
   if (save) {
@@ -684,7 +727,7 @@ async function run(arg) {
   for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { stopStarted(); process.exit(130); });
   const { ctx, project } = prep;
   if (!jsonOnly) {
-    console.log(`대상: ${project.name} (${project.root})`);
+    console.log(`대상: ${project.name} (${project.root}) · 코드 ${codeLabel(codeVersion(project.root))}`);
     console.log(`검사 수준: ${ctx.level.label} — ${ctx.level.desc} · 영역 ${prep.probes.length}개 (--level=초급|중급|고급|전문가)`);
     console.log(`부분: ${project.parts.map(p => `${p.stack}@${p.dir}${p.baseUrl ? ' ' + p.baseUrl : ''}`).join(' · ')}`);
     console.log(`로그인: ${project.auth.type}${project.auth.loginPath ? ' ' + project.auth.loginPath : ''}${project.auth.guessed ? ' (코드에서 추정)' : ''} · 세션: ${Object.keys(ctx.sessions).join(', ')}`);
@@ -735,6 +778,7 @@ async function run(arg) {
   if (s.diff) {
     const d = s.diff, delta = Math.round((d.score - d.prevScore) * 10) / 10;
     console.log(`\n▲ 지난 검사(${String(d.prevAt || d.prevFile).slice(0, 16).replace('T', ' ')})와 비교: 점수 ${d.prevScore} → ${d.score} (${delta >= 0 ? '+' : ''}${delta}) · 새 문제 ${d.addedCount} · 고친 것 ${d.fixedCount}`);
+    if (d.codeNote) console.log(`   ${d.codeNote}`);
     if (d.qaNote) console.log(`   ⚠ ${d.qaNote}`);
     for (const p of (d.perf || []).slice(0, 6)) console.log(`   ${p.level === 'bad' ? '✗' : '△'} 성능: ${p.page} ${p.metric} ${p.before} → ${p.after} (+${p.pct}%)`);
     if (Math.abs(delta) >= 0.5 && (d.areaChanges || []).length) {
@@ -775,4 +819,4 @@ async function run(arg) {
   if (ciLine) console.log(ciLine);
 }
 
-module.exports = { CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, actionable, hotspots, placeOf, diffWithPrevious, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };
+module.exports = { codeVersion, processStartOf, CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, actionable, hotspots, placeOf, diffWithPrevious, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };
