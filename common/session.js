@@ -94,9 +94,10 @@ async function login(baseUrl, auth, creds, name) {
   await prepareCsrf(baseUrl, sess, auth);
   let r;
   if (auth.type === 'form') {
-    const page = await request(baseUrl, sess, auth.loginPath);
-    const hidden = (page.text.match(/name=["']csrfmiddlewaretoken["']\s+value=["']([^"']+)/) || [])[1];
-    r = await request(baseUrl, sess, auth.loginPath, { method: 'POST', form: { [auth.fields.user]: creds.user, [auth.fields.password]: creds.password, ...(hidden ? { csrfmiddlewaretoken: hidden } : {}) }, headers: { Referer: baseUrl + auth.loginPath } });
+    let page = await request(baseUrl, sess, auth.loginPath);
+    if (!Object.keys(hiddenCsrf(page.text)).length && formPageOf(auth.loginPath) !== auth.loginPath) page = await request(baseUrl, sess, formPageOf(auth.loginPath));
+    r = await request(baseUrl, sess, auth.loginPath, { method: 'POST', form: { ...(auth.fields.user ? { [auth.fields.user]: creds.user } : {}), [auth.fields.password]: creds.password, ...hiddenCsrf(page.text) }, headers: { Referer: baseUrl + auth.loginPath } });
+    // 다른 곳으로 이동(302)했고 그곳이 다시 로그인 화면이 아니면 들어간 것 (Django 는 sessionid 쿠키로도)
     const ok = (r.status === 302 || r.status === 303) && !/login/.test(r.location || '') || !!sess.cookies.sessionid;
     return { sess, ok, status: r.status, why: ok ? '' : `폼 로그인 실패 (${r.status})` };
   }
@@ -122,6 +123,17 @@ function testAccount(auth) {
   const user = auth.fields.user === 'email' ? email : username;
   return { user, password, email, username, tag };
 }
+// 폼의 CSRF 숨은 칸 — Django csrfmiddlewaretoken · CodeIgniter csrf_test_name · Laravel _token · Rails authenticity_token
+// 폼 화면 주소 — 처리 주소와 화면 주소가 다른 PHP 꼴 (login_process.php ← login.php)
+const formPageOf = p => (/_process(\.php)?$/.test(p) ? p.replace(/_process(\.php)?$/, '$1') : p);
+function hiddenCsrf(html) {
+  for (const m of String(html || '').matchAll(/<input\b[^>]*>/gi)) {
+    const tag = m[0]; if (!/type=["']?hidden/i.test(tag)) continue;
+    const name = (tag.match(/name=["']([^"']+)["']/) || [])[1], value = (tag.match(/value=["']([^"']*)["']/) || [])[1];
+    if (name && value !== undefined && /csrf|_token|authenticity|xsrf/i.test(name)) return { [name]: value };
+  }
+  return {};
+}
 async function register(baseUrl, auth, registerRoute, fields = null) {
   const acct = testAccount(auth);
   const sess = new Session('register');
@@ -141,17 +153,25 @@ async function register(baseUrl, auth, registerRoute, fields = null) {
     // 규칙을 모르면 흔한 가입 칸을 다 채워 본다 — 모르는 칸은 서버가 무시한다
     body = { email: acct.email, password: acct.password, password1: acct.password, password2: acct.password, passwordConfirm: acct.password, confirmPassword: acct.password,
       username: acct.username, name: `QA${acct.tag}`, nickname: `qa${acct.tag}`, userId: acct.username, loginId: acct.username, phone: '01000000000', agree: true, terms: true };
-    for (const f of fields || []) if (!(f in body)) body[f] = 'qa' + acct.tag;
+    for (const f of fields || []) if (!(f in body)) body[f] = /pass|pw/i.test(f) ? acct.password : /mail/i.test(f) ? acct.email : 'qa' + acct.tag;   // password_confirm 같은 확인 칸도 같은 비밀번호
   }
   let r;
   if (auth.type === 'form') {
-    const page = await request(baseUrl, sess, registerRoute.path);
-    const hidden = (page.text.match(/name=["']csrfmiddlewaretoken["']\s+value=["']([^"']+)/) || [])[1];
-    r = await request(baseUrl, sess, registerRoute.path, { method: 'POST', form: { ...body, ...(hidden ? { csrfmiddlewaretoken: hidden } : {}) }, headers: { Referer: baseUrl + registerRoute.path } });
+    let page = await request(baseUrl, sess, registerRoute.path);
+    if (!Object.keys(hiddenCsrf(page.text)).length && formPageOf(registerRoute.path) !== registerRoute.path) page = await request(baseUrl, sess, formPageOf(registerRoute.path));
+    // 가입 폼이 join.php·register.php 처럼 이름이 다른 경우 — 처리 주소의 같은 폴더에서 찾는다
+    if (!Object.keys(hiddenCsrf(page.text)).length && /(join|signup|register)_process\.php$/.test(registerRoute.path)) for (const n of ['join.php', 'register.php', 'signup.php']) { const alt = registerRoute.path.replace(/[^/]+$/, n); const pg = await request(baseUrl, sess, alt); if (Object.keys(hiddenCsrf(pg.text)).length) { page = pg; break; } }
+    // 화면의 가입 폼 칸을 그대로 채운다 — 컨트롤러가 읽지 않고 검증 규칙에만 쓰는 칸(password_confirm 등)도 있다
+    for (const t of String(page.text || '').match(/<(?:input|select|textarea)\b[^>]*>/gi) || []) {
+      const name = (t.match(/name=["']([^"'\[\]]+)["']/) || [])[1];
+      if (!name || name in body || /type=["']?(hidden|submit|button|file)/i.test(t)) continue;
+      body[name] = /pass|pw/i.test(name) ? acct.password : /mail/i.test(name) ? acct.email : /phone|tel|mobile/i.test(name) ? '01012345678' : /agree|terms|consent|privacy/i.test(name) || /type=["']?checkbox/i.test(t) ? '1' : /birth|date/i.test(name) ? '1990-01-01' : `QA${acct.tag}`;
+    }
+    r = await request(baseUrl, sess, registerRoute.path, { method: 'POST', form: { ...body, ...hiddenCsrf(page.text) }, headers: { Referer: baseUrl + registerRoute.path } });
   } else r = await request(baseUrl, sess, registerRoute.path, { method: 'POST', body });
   // 폼은 200 이면 오류와 함께 다시 그린 것 — 다른 곳으로 이동(302)해야 가입된 것
   const ok = auth.type === 'form' ? (r.status === 302 || r.status === 303) && !/register|signup|join/i.test(r.location || '') : r.status < 400;
   return { ok, acct, status: r.status, why: ok ? '' : `가입 실패 (${r.status}) ${String(r.text).slice(0, 100)}` };
 }
 
-module.exports = { Session, request, login, register, findToken, prepareCsrf, timings, hung };
+module.exports = { Session, request, login, register, findToken, prepareCsrf, timings, hung, hiddenCsrf, formPageOf };

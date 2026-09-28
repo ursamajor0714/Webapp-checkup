@@ -72,6 +72,19 @@ function guessAuth(root, parts, routes) {
     || routes.find(r => r.method === 'POST' && /login|signin/i.test(r.path) && r.service === svc.id);
   const src = walk(dir, ['.js', '.ts', '.py', '.java', '.kt']).slice(0, 400).map(read).join('\n');
   const deps = pkgDeps(dir) || {};
+  // PHP — 폼 로그인 + 세션 쿠키. 관리자 입구보다 회원 입구를 먼저 (회원은 가입으로 계정을 만들 수 있다)
+  if (svc.lang === 'php') {
+    const posts = routes.filter(r => r.method === 'POST' && r.service === svc.id);
+    const phpLogin = posts.find(r => /(^|\/)(auth\/)?(login|signin)(_process)?(\.php)?\/?$/i.test(r.path) && !/admin/i.test(r.path)) || posts.find(r => /login|signin/i.test(r.path));
+    if (!phpLogin) return { type: 'none', guessed: true, why: '로그인 경로를 찾지 못했다' };
+    const names = h => [...String(h || '').matchAll(/getPost\(\s*['"](\w+)['"]|getVar\(\s*['"](\w+)['"]|\$_POST\[\s*['"](\w+)['"]/g)].map(m => m[1] || m[2] || m[3]);
+    const ln = names(phpLogin.handler);
+    const password = ln.find(n => /pass|pw/i.test(n)) || 'password';
+    const user = ln.find(n => n !== password && /mail|user|id|login|name|phone/i.test(n)) || null;
+    // 로그인 폼이 따로 있으면(GET 경로) 그 화면에서 CSRF 숨은 칸을 읽는다 — 같은 주소일 때가 많다
+    const reg = posts.find(r => /register|signup|join/i.test(r.path) && !/admin/i.test(r.path));
+    return { type: 'form', loginPath: phpLogin.path, fields: { ...(user ? { user } : {}), password }, guessed: true, ...(reg ? { registerFields: [...new Set(names(reg.handler))] } : {}) };
+  }
   // 앱이 직접 만든 로그인 경로가 있으면 그쪽 (django.contrib.auth.urls 의 기본 경로는 템플릿이 없으면 500)
   if (svc.stack === 'django') return { type: 'form', loginPath: (routes.find(r => /\/login\/$/.test(r.path) && r.service === svc.id && !r.builtin) || routes.find(r => /\/login\/$/.test(r.path) && r.service === svc.id) || {}).path || '/accounts/login/', fields: { user: 'username', password: 'password' }, guessed: true };
   // 로그인 본문의 아이디 칸 이름 — email · username · id

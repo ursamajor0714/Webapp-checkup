@@ -162,7 +162,7 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
       st.child = null;
       if (st.phase !== 'stopping') { st.phase = 'error'; st.error = `서버가 꺼졌습니다 (code ${code}) — 로그를 보세요`; } else st.phase = 'idle';
     });
-    for (let i = 0; i < timeoutSec; i++) {
+    for (let i = 0; i < (plan.startTimeout || timeoutSec); i++) {   // Docker 로 켜는 스택은 처음에 이미지를 받느라 오래 걸린다
       await new Promise(r => setTimeout(r, 1000));
       if (!st.child) throw new Error(st.error || '서버가 켜지다가 꺼졌습니다');
       if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; st.readyAt = st.log.length; logLine(st, `켜졌습니다 — ${part.baseUrl}`); return; }

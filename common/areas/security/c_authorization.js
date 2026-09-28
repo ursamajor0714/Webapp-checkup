@@ -126,13 +126,16 @@ module.exports = {
     const routes = ctx.routes();
     // 1. 관리자 경로를 일반 계정으로 (owner 가 관리자면 other 로)
     const regular = ctx.sessions.regular ? 'regular' : ctx.ownerIsAdmin ? null : 'owner';
-    const adminRoutes = routes.filter(r => ADMIN.test(r.path) && ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method) && !pub(ctx, r));
+    // 관리자 로그인·로그아웃 화면은 관리자 기능이 아니다 (누구나 열어야 로그인할 수 있다)
+    const adminRoutes = routes.filter(r => ADMIN.test(r.path) && ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method) && !pub(ctx, r) && !LOGINISH.test(r.path));
     if (regular && adminRoutes.length) {
       const items = [];
       for (const r of adminRoutes) {
         const url = r.path.replace(/:[A-Za-z0-9_]+\*?/g, '1');
         const res = await ctx.call(url, { service: r.service, as: regular, method: r.method, body: ['POST', 'PUT', 'PATCH'].includes(r.method) ? {} : undefined });
-        const blocked = res.status === 401 || res.status === 403 || (res.status === 404 && r.method !== 'GET') || (res.status >= 300 && res.status < 400 && /login|signin/i.test(res.location || ''));
+        // 이동(3xx) — 로그인 화면이나 다른 곳(/ 등)으로 보내면 막은 것 (세션 앱은 403 대신 '관리자만' 안내와 함께 첫 화면으로 보낸다)
+        const moved = res.status >= 300 && res.status < 400 && res.location && (() => { try { return new URL(res.location, ctx.baseUrl(r.service)).pathname.replace(/\/$/, '') !== url.split('?')[0].replace(/\/$/, ''); } catch { return false; } })();
+        const blocked = res.status === 401 || res.status === 403 || (res.status === 404 && r.method !== 'GET') || (res.status >= 300 && res.status < 400 && (/login|signin/i.test(res.location || '') || moved));
         if (!blocked && r.method === 'GET' && await shellPage(ctx, url, r, res)) { items.push({ name: `${r.method} ${r.path} · 일반 계정`, ok: true, detail: '로그인 없이도 똑같이 주는 화면 틀 — 데이터는 API 가 막는지로 본다' }); continue; }
         items.push({ name: `${r.method} ${r.path} · 일반 계정`, ok: blocked ? true : res.status === 400 ? null : false,
           detail: blocked ? `${res.status} 막힘` : res.status === 400 ? '400 — 권한 검사 전에 입력 검사로 막혔는지, 권한 검사가 없는지 사람이 확인' : `${res.status} — 일반 계정이 관리자 기능에 닿는다` });

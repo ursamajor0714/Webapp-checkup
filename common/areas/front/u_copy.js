@@ -12,7 +12,7 @@ module.exports = {
     const items = [], a11y = [];
     for (const pg of ctx.livePages().slice(0, 30)) {
       const r = await ctx.call(pg.path, { service: pg.part, as });
-      if (!/text\/html/.test(r.headers.get('content-type') || '') || r.status >= 400) continue;
+      if (!/text\/html/.test(r.headers.get('content-type') || '') || r.status >= 300) continue;   // 이동(302) 응답의 빈 본문은 화면이 아니다
       const text = r.text.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
       const found = BAD.filter(([re]) => re.test(text)).map(([, n]) => n);
       items.push({ name: pg.path, ok: !found.length, detail: found.length ? `보이는 글에 ${found.join('·')}` : '이상 없음' });

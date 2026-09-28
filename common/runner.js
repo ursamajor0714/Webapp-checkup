@@ -240,7 +240,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     ctx.accountFlow = [];
     const regContract = reg && ctx.contracts.find(c => c.path === reg.path && c.method === 'POST');
     while (accounts.length < 2 && reg && def.autoAccounts !== false) {
-      const r = await register(base, auth, reg, regContract ? regContract.fields : []);
+      const r = await register(base, auth, reg, regContract ? regContract.fields : (auth.registerFields || []));
       ctx.accountFlow.push({ name: `가입 ${reg.path}`, ok: r.ok, detail: r.ok ? `검사용 계정 ${r.acct.user} (${r.status})` : r.why });
       if (!r.ok) break;
       accounts.push({ user: auth.fields.user === 'email' ? r.acct.email : r.acct.username, password: r.acct.password, from: '자동 가입' });
@@ -292,7 +292,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       const t = Date.now().toString(36);
       const body = { email: `qa+weak${t}@example.com`, username: `qaweak${t}`.slice(0, 13), name: `QA${t}`, nickname: `qa${t}`, password: pw, password1: pw, password2: pw, passwordConfirm: pw, confirmPassword: pw };
       const r = auth.type === 'form' ? await ctx.call(route.path, { service: ctx.authService, as: 'anon', method: 'POST', form: body }) : await ctx.call(route.path, { service: ctx.authService, as: 'none', method: 'POST', body });
-      return { ok: auth.type === 'form' ? (r.status === 302 && !/register|signup/.test(r.location || '')) : r.status < 300, status: r.status };
+      // 폼 가입은 다른 곳으로 이동해야 된 것 — 가입 화면(join·register·signup)으로 되돌아가면 거절이다
+      return { ok: auth.type === 'form' ? ((r.status === 302 || r.status === 303) && !/register|signup|join/i.test(r.location || '')) : r.status < 300, status: r.status };
     };
     if (!ctx.accountFlow.length) delete ctx.accountFlow;
   }

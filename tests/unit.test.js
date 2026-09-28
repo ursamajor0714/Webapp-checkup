@@ -722,3 +722,48 @@ test('다른 사람 레포에서 찾은 것 — UTF-16 requirements.txt 를 읽�
   assert.ok(re.test('"host": os.environ["db.example.com"]') && re.test('os.getenv("pa55word99")'));
   assert.ok(!re.test('os.environ["DB_PASSWORD"]') && !re.test('os.getenv("lambda_stock_db")'));
 });
+
+test('PHP 폼 로그인 — CSRF 숨은 칸(프레임워크마다 이름이 다르다) · 가입 폼 칸을 그대로 채운다 · 처리 주소와 폼 주소가 다르다', async () => {
+  const s = require('../common/session');
+  assert.deepStrictEqual(s.hiddenCsrf('<input type="hidden" name="csrf_test_name" value="abc">'), { csrf_test_name: 'abc' });
+  assert.deepStrictEqual(s.hiddenCsrf('<input type="hidden" name="_token" value="t1">'), { _token: 't1' });
+  assert.deepStrictEqual(s.hiddenCsrf('<input type="hidden" name="page" value="2">'), {});
+  const http = require('http');
+  let posted = null;
+  const users = new Map();
+  const srv = http.createServer((req, res) => {
+    const page = f => `<html><form method="post" action="/${f}_process.php"><input type="hidden" name="csrf_token" value="tok">${f === 'join' ? '<input name="email"><input type="password" name="password"><input type="password" name="password_confirm"><input name="nickname"><input type="checkbox" name="agree">' : '<input name="email"><input type="password" name="password">'}</form></html>`;
+    if (req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(req.url.startsWith('/join') ? page('join') : page('login')); }
+    let b = ''; req.on('data', d => (b += d)); req.on('end', () => {
+      const f = Object.fromEntries(new URLSearchParams(b)); posted = f;
+      if (f.csrf_token !== 'tok') { res.writeHead(403); return res.end('csrf'); }
+      if (req.url === '/join_process.php') { if (f.password !== f.password_confirm || !f.agree) { res.writeHead(200); return res.end('오류'); } users.set(f.email, f.password); res.writeHead(302, { Location: '/login.php' }); return res.end(); }
+      if (req.url === '/login_process.php') { if (users.get(f.email) !== f.password) { res.writeHead(302, { Location: '/login.php?e=1' }); return res.end(); } res.writeHead(302, { Location: '/index.php', 'Set-Cookie': 'PHPSESSID=x' }); return res.end(); }
+      res.writeHead(404); res.end();
+    });
+  });
+  await new Promise(r => srv.listen(0, r));
+  try {
+    const base = `http://localhost:${srv.address().port}`;
+    const auth = { type: 'form', loginPath: '/login_process.php', fields: { user: 'email', password: 'password' } };
+    const g = await s.register(base, auth, { path: '/join_process.php' }, ['email', 'password']);
+    assert.ok(g.ok, '가입 — join.php 폼의 CSRF·확인 비밀번호·동의 칸까지: ' + g.why + ' ' + JSON.stringify(posted));
+    const l = await s.login(base, auth, { user: g.acct.email, password: g.acct.password }, 'o');
+    assert.ok(l.ok, '로그인 — login.php 폼의 CSRF 로: ' + l.why);
+  } finally { srv.close(); }
+  const { guessAuth, loadProject } = require('../common/project');
+  const { makeContext } = require('../common/context');
+  const p = loadProject({ root: path.join(__dirname, 'fixtures/stacks/php-plain') });
+  assert.strictEqual(guessAuth(p.root, p.parts, makeContext(p).routes()).type, 'none', '로그인 처리 경로가 없는 시험 앱은 로그인 없음');
+});
+
+test('DB 표를 만드는 방법이 레포에 있다 — 코드가 쓰는 표와 레포가 만드는 표를 대조한다 (마이그레이션·ORM 이 있으면 대조하지 않는다)', async () => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const run = async root => { const ctx = makeContext(loadProject({ root })); ctx.level = { atLeast: () => true, n: x => x, strict: false }; const o = await require('../common/areas/project/6_repo_hygiene').run(ctx); const c = (o.checks || []).find(x => /표를 만드는/.test(x.name)); return c && c.items[0]; };
+  const bad = await run(path.join(__dirname, 'fixtures/stacks/php-plain'));   // SELECT * FROM posts — 만드는 곳이 없다
+  assert.strictEqual(bad.ok, false); assert.match(bad.detail, /posts/);
+  const good = await run(write(tmp(), { 'index.php': '<?php mysqli_query($c, "SELECT * FROM posts"); echo 1;', 'schema.sql': 'CREATE TABLE posts (id int);' }));
+  assert.strictEqual(good.ok, true);
+  assert.strictEqual(await run(write(tmp(), { 'index.php': '<?php mysqli_query($c, "SELECT * FROM posts"); echo 1;', 'app/Database/Migrations/2026_CreatePosts.php': '<?php // forge' })), undefined, '마이그레이션 폴더가 있으면 대조하지 않는다');
+});

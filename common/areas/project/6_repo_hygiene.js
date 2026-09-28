@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
-const { checkItems } = require('../_util');
+const { checkItems, sources } = require('../_util');
 const { walk, read, readJson } = require('../../stacks/util');
 
 const git = (root, args) => { try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }); } catch { return null; } };
@@ -121,6 +121,21 @@ module.exports = {
       migItems.push({ name: `${p.dir} prisma validate`, ok: r.status === 0, detail: r.status === 0 ? '스키마 문법 통과' : out.split('\n').filter(l => /error/i.test(l)).slice(0, 3).join(' / ').slice(0, 220) });
     }
     if (migItems.length) checks.push(checkItems('DB 스키마·마이그레이션이 코드와 맞는다', migItems));
+    // 6-1) 표를 만드는 방법이 레포에 있는가 — SQL 로 표를 쓰는데 CREATE TABLE·마이그레이션·ORM 모델이 하나도 없으면
+    //      표가 원격(공용) DB 에만 있다. 새로 받은 사람은 DB 를 만들 수 없고, 시험 환경도 못 만든다
+    {
+      const srcs = ctx.parts.flatMap(p => sources(ctx, p)).map(read).join('\n');
+      // 코드가 쓰는 표 — SQL 문자열의 FROM·INTO·UPDATE·JOIN 뒤 이름
+      const used = new Set([...srcs.matchAll(/["'`][^"'`]*?\b(?:FROM|INTO|UPDATE|JOIN)\s+[`"]?([a-z_][a-z0-9_]*)[`"]?/gi)].map(m => m[1].toLowerCase()).filter(t => !/^(select|set|where|the|dual|information_schema|values|information|a|b|c)$/.test(t)));
+      const sqlFiles = walk(root, ['.sql']).map(read).join('\n');
+      const created = new Set([...(sqlFiles + srcs).matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(?:\w+\.)?([a-z_][a-z0-9_]*)/gi)].map(m => m[1].toLowerCase()));
+      // 마이그레이션 폴더·ORM 모델이 있으면 표 이름을 대조할 수 없다 — 있다고 본다
+      const managed = [/(^|\/)migrations?\//i, /(^|\/)alembic\//, /(^|\/)db\/migrate\//, /Database\/Migrations\//, /schema\.prisma$/, /schema\.rb$/, /(^|\/)flyway|liquibase/i].some(re => files.some(f => re.test(f)))
+        || /models\.Model|@Entity|sequelize\.define|new\s+Schema\(|declarative_base|DeclarativeBase|SQLModel|createTable\(|Schema::create|__tablename__/.test(srcs);
+      const missing = [...used].filter(t => !created.has(t));
+      if (used.size && !managed) checks.push(checkItems('DB 표를 만드는 방법(스키마·마이그레이션)이 레포에 있다', [{ name: 'DB 스키마', ok: !missing.length,
+        detail: !missing.length ? `쓰는 표 ${used.size}개를 모두 레포에서 만든다` : `코드가 쓰는 표 ${used.size}개 중 ${missing.length}개(${missing.slice(0, 6).join('·')}${missing.length > 6 ? ' …' : ''})를 만드는 SQL·마이그레이션이 레포에 없다 — 표가 원격(공용) DB 에만 있다. 새로 받은 사람도, 시험 환경도 DB 를 만들 수 없다 (mysqldump --no-data 로 schema.sql 을 뽑아 올린다)` }]));
+    }
 
     // 7) README 의 설치·실행 방법
     const readme = ['README.md', 'readme.md', 'README.MD', 'README'].map(f => path.join(root, f)).find(f => fs.existsSync(f));
