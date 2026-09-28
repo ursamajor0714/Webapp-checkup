@@ -387,6 +387,33 @@ test('다른 로그인 입구 — 계정 얻는 길: 가입 · 관리자가 만�
   assert.strictEqual(tokenHeaderOf(root, '/api/member/login'), null);
 });
 
+test('Supabase·Firebase — 화면의 관리자 키, RLS 꺼진 표, 누구나 쓰는 정책, 테스트 모드 규칙을 잡는다', async () => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ name: 'x', dependencies: { react: '^18', 'react-dom': '^18', vite: '^5', '@supabase/supabase-js': '^2' } }),
+    'index.html': '<div id="root"></div>',
+    'src/db.js': "import { createClient } from '@supabase/supabase-js';\nexport const db = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY);\n",
+    '.env.example': 'VITE_SUPABASE_URL=\nVITE_SUPABASE_SERVICE_ROLE_KEY=\n',
+    'supabase/migrations/001_init.sql': 'create table public.posts (id bigint);\ncreate table notes (id bigint);\nalter table notes enable row level security;\ncreate policy "anyone writes" on notes for insert with check (true);\ncreate policy "anyone reads" on notes for select using (true);\n',
+    'firestore.rules': "rules_version = '2';\nservice cloud.firestore { match /databases/{db}/documents { match /{doc=**} { allow read, write: if request.time < timestamp.date(2030, 1, 1); } } }\n",
+    'database.rules.json': '{ "rules": { ".read": true, ".write": "auth != null" } }',
+  });
+  const ctx = makeContext(loadProject({ root }));
+  const out = await require('../common/areas/project/b_saas').run(ctx);
+  const c = (out.checks || []).find(x => /Supabase·Firebase/.test(x.name));
+  assert.ok(c, '규칙 검사가 돈다: ' + JSON.stringify(out.skip || (out.checks || []).map(x => x.name)));
+  const st = re => (c.items.find(i => re.test(`${i.name} ${i.detail}`)) || {}).ok;
+  assert.strictEqual(st(/VITE_SUPABASE_SERVICE_ROLE_KEY/), false, '관리자 키에 화면 공개 접두사');
+  assert.strictEqual(st(/src\/db\.js/), false, '화면 코드가 관리자 키를 쓴다');
+  assert.strictEqual(st(/표 posts/), false, 'RLS 꺼진 표');
+  assert.strictEqual(st(/표 notes/), true, 'RLS 켠 표');
+  assert.strictEqual(st(/anyone writes/), false, '누구나 쓰는 정책');
+  assert.strictEqual(st(/anyone reads/), null, '누구나 읽는 정책은 확인 필요');
+  assert.strictEqual(st(/firestore\.rules/), false, '테스트 모드 규칙');
+  assert.strictEqual(st(/database\.rules\.json/), null, '누구나 읽기(쓰기는 로그인)는 확인 필요');
+});
+
 test('배포 주소 검사 — 읽기만 하고, 헤더·민감 파일·오류 화면·CORS·가드 빠진 API·옛 파일을 잡는다', async () => {
   const http = require('http');
   const { runLive } = require('../common/live');

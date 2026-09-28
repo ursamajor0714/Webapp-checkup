@@ -1,0 +1,3 @@
+# Windows 실행 파일은 CRLF 로 받는다 — LF 면 cmd 가 goto·call 의 라벨을 가끔 못 찾는다
+*.bat text eol=crlf
+*.cmd text eol=crlf
