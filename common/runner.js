@@ -232,10 +232,11 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     const svc = ctx.parts.find(p => p.id === ctx.authService);
     const envPw = auth.passwordEnv && svc && (() => { const { readEnvFile } = require('./deps'); const v = { ...readEnvFile(path.join(project.root, '.env')), ...readEnvFile(path.join(svc.absDir, '.env')), ...readEnvFile(path.join(svc.absDir, '.env.local')) }; return v[auth.passwordEnv] || process.env[auth.passwordEnv] || null; })();
     if (envPw && !auth.password) { auth.password = envPw; ctx.notes.push(`로그인 비밀번호는 레포 .env 의 ${auth.passwordEnv} 를 썼다 (${auth.loginPath} 가 이 값과 비교한다 — ⚙ 설정에 넣지 않아도 된다)`); }
-    else if (envPw && auth.password !== envPw) { ctx.notes.push(`⚙ 설정의 비밀번호가 레포 .env 의 ${auth.passwordEnv} 와 다르다 — ${auth.loginPath} 는 ${auth.passwordEnv} 와 비교한다. 설정 값으로 안 되면 .env 값으로 다시 해 본다`); ctx.envPassword = envPw; }
+    // 설정 값이 .env 와 다르면 .env 값부터 — 코드가 비교하는 것은 .env 값이다. 틀린 값으로 먼저 시도하면 잠금 횟수만 쌓인다
+    else if (envPw && auth.password !== envPw) { auth.password = envPw; ctx.envFirst = true; ctx.notes.push(`⚙ 설정의 비밀번호가 레포 .env 의 ${auth.passwordEnv} 와 달라 .env 값으로 로그인했다 (${auth.loginPath} 는 ${auth.passwordEnv} 와 비교한다 — 틀린 값으로 먼저 시도하면 로그인 잠금 횟수가 쌓인다). ⚙ 설정의 저장된 값을 지우면 이 안내가 사라진다`); }
     const accounts = [];
-    if (auth.password && (auth.user || !auth.fields.user)) accounts.push({ user: auth.user, password: auth.password, from: '설정' });
-    if (auth.user2 && auth.password2) accounts.push({ user: auth.user2, password: auth.password2, from: '설정' });
+    if (auth.password && (auth.user || !auth.fields.user)) accounts.push({ user: auth.user, password: auth.password, from: ctx.envFirst ? `레포 .env 의 ${auth.passwordEnv}` : '설정', config: true });
+    if (auth.user2 && auth.password2) accounts.push({ user: auth.user2, password: auth.password2, from: '설정', config: true });
     ctx.accountFlow = [];
     const regContract = reg && ctx.contracts.find(c => c.path === reg.path && c.method === 'POST');
     while (accounts.length < 2 && reg && def.autoAccounts !== false) {
@@ -251,8 +252,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       let a = accounts[i]; if (!a) break;
       let l = await login(base, auth, a, name);
       // 설정 비밀번호가 틀렸는데 레포 .env 에 비교 대상 값이 있으면 그것으로 한 번 더
-      if (!l.ok && a.from === '설정' && ctx.envPassword && i === 0) { const b = { ...a, password: ctx.envPassword, from: `레포 .env 의 ${auth.passwordEnv}` }; const l2 = await login(base, auth, b, name); if (l2.ok) { a = accounts[0] = b; l = l2; ctx.notes.push(`설정 비밀번호로는 실패해서 레포 .env 의 ${auth.passwordEnv} 로 로그인했다 — ⚙ 설정의 비밀번호를 지우거나 고치면 이 안내가 사라진다`); } }
-      if (!l.ok && a.from === '설정') {
+      if (!l.ok && a.config && ctx.envPassword && i === 0) { const b = { ...a, password: ctx.envPassword, from: `레포 .env 의 ${auth.passwordEnv}` }; const l2 = await login(base, auth, b, name); if (l2.ok) { a = accounts[0] = b; l = l2; ctx.notes.push(`설정 비밀번호로는 실패해서 레포 .env 의 ${auth.passwordEnv} 로 로그인했다 — ⚙ 설정의 비밀번호를 지우거나 고치면 이 안내가 사라진다`); } }
+      if (!l.ok && a.config) {
         const locked = /\b(429|423)\b|잠김|잠겼|locked|too many/i.test(l.why || '');
         setupFail.push(`⚙ 설정의 ${name === 'owner' ? '첫' : '두'} 번째 계정(${a.user || '비밀번호만'})으로 로그인하지 못했다: ${l.why}${locked ? ' — 계정이 잠겨 있다 (직전 검사의 무차별 대입 검사로 잠겼을 수 있다). 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ' — 아이디·비밀번호를 확인한다'}`);
         // 가입 경로가 있으면 검사용 계정을 만들어 이어 간다
@@ -325,6 +326,14 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
 const LOGIN_ONLY = new Set(['W', 'X', 'Y', 'M', 'R', 'S', 'E', 'F', 'J', 'O', 'Z', 'C']);
 async function runProbe(ctx, probe) {
   const t0 = Date.now();
+  // 검사 도중 서버가 꺼졌나 — 꺼진 서버에 보낸 요청(응답 0)을 결함으로 세지 않도록, 영역마다 들어가기 전에 확인한다
+  if (ctx.live && !ctx.serverDown) {
+    const alive = await Promise.all(ctx.services.filter(s => (ctx.up || {})[s.id]).map(s => require('./serve').healthy(ctx.baseUrl(s.id)).then(h => h.up).catch(() => false)));
+    if (alive.length && !alive.some(Boolean)) {
+      ctx.serverDown = probe.id; ctx.live = false;
+      ctx.notes.push(`⚠ 검사 도중(${probe.id} 영역 앞) 서버가 꺼졌다 — 이후 서버가 필요한 검사는 '서버가 꺼져 있다'로 건너뛴다. 결함이 아니라 검사 환경 문제다 (누가 서버를 멈췄거나 서버가 죽었다 — 4 영역의 서버 로그 확인)`);
+    }
+  }
   if (ctx.setupBlocked && LOGIN_ONLY.has(probe.id)) {
     return { id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file, owasp: probe.owasp || [], composite: COMPOSITE.includes(probe.id),
       skip: `설정 오류로 못 잼 (제품 결함 아님) — ${ctx.setupBlocked}`, setup: true, skipped: [], partial: null, universe: 0, scanned: 0, passed: 0, warned: 0, failed: 0, scanRate: 0, passRate: 1, ms: 0, checks: [], error: null, info: null };
