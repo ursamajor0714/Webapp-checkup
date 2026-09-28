@@ -160,3 +160,13 @@ test('다른 로그인 입구 — 관리자가 만든 회원 계정으로 회원
   const xff = rep.results.find(r => r.id === 'B').checks.find(c => /X-Forwarded-For/.test(c.name));
   assert.ok(xff && xff.warned === 1 && xff.failed === 0, 'X-Forwarded-For: ' + JSON.stringify(xff && { w: xff.warned, f: xff.failed, n: xff.notes }));
 });
+
+test('다른 로그인 입구 — 입구 주소가 짧아도(/api/login) 회원 경로를 가드로 찾아 IDOR·관리자 기능을 잡는다', { timeout: 300000 }, async () => {
+  const rep = await qa('member-roles-short', { auth: { password: 'qa-admin-pw' } }, { only: ['C'], log: () => {} });
+  assert.ok(rep.summary.live, '서버를 켜서 잰다: ' + rep.summary.notes.join(' / '));
+  caught(rep, 'C', /GET \/api\/member\/:id\/info · 다른 회원의 id/);   // 앞부분(/api/)으로 못 갈라도 로그인 가드만 붙은 경로로 찾는다
+  caught(rep, 'C', /GET \/api\/admin\/stats · \/api\/login 토큰/);
+  const items = rep.results.find(r => r.id === 'C').checks.flatMap(c => c.items || []);
+  assert.ok(!items.some(i => /GET \/api\/members\/:id · 다른 회원의 id/.test(i.name)), '관리자 가드가 붙은 경로는 회원 경로로 보지 않는다');
+  assert.strictEqual((items.find(i => i.name.startsWith('GET /api/members · /api/login 토큰')) || {}).ok, true, '관리자 경로는 회원 토큰을 막는다');
+});

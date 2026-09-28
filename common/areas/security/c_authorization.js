@@ -80,7 +80,9 @@ async function roleChecks(ctx, routes) {
     const prefix0 = role.loginPath.replace(/\/[^/]*\/?$/, '') + '/';
     // /api/login 처럼 입구 주소가 짧으면 앞부분(/api/)이 모든 경로에 걸린다 — 이때는 회원 경로를 앞부분으로 가를 수 없다
     const prefix = /^\/((api|v\d+)\/)*$/.test(prefix0) ? null : prefix0;
-    const own = x => prefix ? x.path.startsWith(prefix) : false;
+    // 앞부분으로 못 가르면 — 관리자 가드는 없고 로그인·본인 가드만 붙은, 주소에 값이 든 경로를 회원 경로로 본다
+    const LOGIN_GUARD = /require\w*|auth\w*|login\w*|self\w*|protect\w*|verify\w*/i;
+    const own = x => prefix ? x.path.startsWith(prefix) : (x.path.includes(':') && !GUARD.test(guardLine(x.handler)) && !ADMIN.test(x.path) && LOGIN_GUARD.test(guardLine(x.handler)));
     const fill = (p, id) => p.replace(/:[A-Za-z0-9_]+/, id).replace(/:[A-Za-z0-9_]+/g, '1');
     // 1) 같은 입구의 남의 것 — /api/member/:id/... 에 B 의 id 를 넣어 A 로 부른다
     if (B && a.id && b.id) {
