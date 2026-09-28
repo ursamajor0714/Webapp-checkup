@@ -54,7 +54,7 @@ function dockerItems(ctx) {
         const m = l.match(/^\s*-\s*["']?(?:(\d+\.\d+\.\d+\.\d+):)?(\d+):(\d+)["']?\s*$/);
         if (m && DB_PORTS.test(m[3]) && m[1] !== '127.0.0.1') bad.push({ name: `${rel}:${i + 1}`, ok: null, detail: `DB 포트 ${m[3]} 가 모든 주소(0.0.0.0)로 열린다 — 서버에서 이대로 띄우면 인터넷에서 DB 에 닿는다. "127.0.0.1:${m[2]}:${m[3]}" 로` });
       }
-      if (/\/var\/run\/docker\.sock/.test(src)) bad.push({ name: at(/\/var\/run\/docker\.sock/), ok: false, detail: '도커 소켓을 컨테이너에 연결한다 — 컨테이너가 호스트의 도커를 마음대로 쓴다 (사실상 root)' });
+      if (/\/var\/run\/docker\.sock/.test(src)) { const ro = /\/var\/run\/docker\.sock:[^\s"']*:ro\b/.test(src); bad.push({ name: at(/\/var\/run\/docker\.sock/), ok: ro ? null : false, detail: ro ? '도커 소켓을 읽기 전용(:ro)으로 연결한다 — traefik 처럼 라벨만 읽는 용도면 흔하지만, 읽기만으로도 다른 컨테이너의 설정·환경변수가 보인다 (그 컨테이너가 뚫리면)' : '도커 소켓을 컨테이너에 연결한다 — 컨테이너가 호스트의 도커를 마음대로 쓴다 (사실상 root)' }); }
     }
     items.push(...(bad.length ? bad : [{ name: rel, ok: true, detail: '걸린 것 없음' }]));
   }

@@ -6,7 +6,7 @@ const { execFileSync } = require('child_process');
 const { HIST } = require('./areas/security/k_secrets');
 
 const ENV_LINE = /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN|DSN))\s*=\s*['"]?([^'"\s#]{8,})/;   // .env 꼴 한 줄
-const FAKE = /example|change|your|dummy|test|xxx|wrong|fake|invalid|bogus|placeholder|<|\$\{|\*\*\*|qa-/i;
+const FAKE = /example|change|your|dummy|test|xxx|wrong|fake|invalid|bogus|placeholder|<|\$\{|\*\*\*|qa-|\bUSER(NAME)?:PASSWORD@|:PASSWORD@|@HOST\b/i;   // 문서의 mysql://USER:PASSWORD@HOST 견본 (K 영역과 같은 기준)
 
 function stagedCheck(root) {
   const git = (...a) => execFileSync('git', ['-c', 'core.quotepath=false', ...a], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });

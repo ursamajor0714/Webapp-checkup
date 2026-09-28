@@ -9,7 +9,10 @@ function cleanPath(raw, vars = {}) {
   const lead = p.match(/^\$\{\s*(\w+)\s*\}/);
   if (lead && vars[lead[1]] !== undefined) p = vars[lead[1]] + p.slice(lead[0].length);
   p = p.replace(/^\$\{[^}]+\}/, '');                    // 앞의 ${BASE} 는 주소
-  p = p.replace(/^https?:\/\/[^/]+/, '');               // 절대 주소면 경로만
+  // 절대 주소 — localhost·127.0.0.1 이면 경로만 쓰고, 다른 사이트(api.github.com 등)면 이 앱의 경로가 아니다
+  const abs = p.match(/^https?:\/\/([^/:]+)/);
+  if (abs && !/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/.test(abs[1])) return null;
+  p = p.replace(/^https?:\/\/[^/]+/, '');
   if (!p.startsWith('/')) return null;
   p = p.split('?')[0].split('#')[0];
   p = p.replace(/\$\{([^}]+)\}/g, (_, e) => ':' + (e.match(/(\w+)\s*\)?\s*$/) || [, 'p'])[1]);
