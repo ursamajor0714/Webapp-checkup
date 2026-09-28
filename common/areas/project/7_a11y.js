@@ -34,6 +34,7 @@ module.exports = {
         const page = await context.newPage();
         try {
           await page.goto(new URL(pg.path, ctx.baseUrl(pg.part)).href, { waitUntil: 'load', timeout: 20000 });
+          if (new URL(page.url()).origin !== new URL(ctx.baseUrl(pg.part)).origin) { skipped.push(`${pg.path} — 다른 사이트(${new URL(page.url()).host})로 넘어가 재지 않았다 (소셜 로그인 등)`); await page.close(); continue; }
           await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
           await page.waitForTimeout(800);
           await page.addScriptTag({ content: axe.src });

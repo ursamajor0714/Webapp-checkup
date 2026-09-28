@@ -21,7 +21,8 @@ module.exports = {
     [new RegExp(String.raw`(?<![\w>$])unserialize\s*\(\s*(?:base64_decode\s*\(\s*)?` + REQ), '요청 값을 unserialize (객체 주입)', 'A08', 'all'],
     [new RegExp(String.raw`(?:include|require)(?:_once)?\s*\(?\s*[^;]*` + REQ), '요청 값으로 파일을 include (파일 포함 공격)', 'A05', 'all'],
     // 화면 출력 — 요청 값을 escape 없이 바로 찍는다 (반사형 XSS)
-    [new RegExp(String.raw`(?:echo|print|<\?=)\s*[^;]*` + REQ + String.raw`(?![^;]*(?:htmlspecialchars|htmlentities|esc)\s*\()`), '요청 값을 거르지 않고 화면에 바로 찍는다 (반사형 XSS) — htmlspecialchars()·esc() 를 거친다', 'A05', 'all'],
+    // echo 와 요청 값 사이에 escape·숫자 변환이 없을 때만 — <?= htmlspecialchars($_GET['x']) ?> 는 안전하다
+    [new RegExp(String.raw`(?:echo|print|<\?=)\s*(?![^;?]*?(?:htmlspecialchars|htmlentities|esc|intval|number_format|json_encode|urlencode|\(int\)|\(float\))\s*\(?)[^;?]*?` + REQ), '요청 값을 거르지 않고 화면에 바로 찍는다 (반사형 XSS) — htmlspecialchars()·esc() 를 거친다', 'A05', 'all'],
     // <?= $x ?> — 뷰에서 escape 없이 변수를 찍는다. 믿을 수 있는 값일 수 있어 사람이 확인
     [/<\?=\s*\$(?![^?]*(?:esc|htmlspecialchars|htmlentities|number_format|count|date|json_encode|intval|\(int\))\s*\()[\w\->\[\]'"]+\s*;?\s*\?>/, "뷰가 값을 escape 없이 찍는다 (<?= $값 ?>) — esc()·htmlspecialchars() 를 거치는지 확인", 'A05', 'all', 'warn'],
   ],

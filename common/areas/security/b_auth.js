@@ -100,15 +100,18 @@ module.exports = {
     const fakeIp = () => `198.51.100.${1 + Math.floor(Math.random() * 250)}`;
     const ipA = fakeIp();
     const body = () => ({ ...(auth.fields.user ? { [auth.fields.user]: auth.fields.user === 'email' ? 'qa-nobody@example.com' : 'qa_nobody' } : {}), [auth.fields.password]: 'wrong-' + Math.random() });
-    const attempt = ip => auth.type === 'form'
-      ? ctx.call(auth.loginPath, { as: 'anon', method: 'POST', form: body(), service: ctx.authService, headers: { 'X-Forwarded-For': ip } })
+    const { hiddenCsrf, formPageOf } = require('../../session');
+    // 폼 로그인은 CSRF 토큰을 실어야 로그인 코드까지 간다 — 매번 폼을 다시 읽는다 (토큰이 바뀌는 앱도 있다)
+    const csrfOf = async () => { let pg = await ctx.call(auth.loginPath, { as: 'anon', service: ctx.authService }); if (!Object.keys(hiddenCsrf(pg.text)).length && formPageOf(auth.loginPath) !== auth.loginPath) pg = await ctx.call(formPageOf(auth.loginPath), { as: 'anon', service: ctx.authService }); return hiddenCsrf(pg.text); };
+    const attempt = async ip => auth.type === 'form'
+      ? ctx.call(auth.loginPath, { as: 'anon', method: 'POST', form: { ...body(), ...(await csrfOf()) }, service: ctx.authService, headers: { 'X-Forwarded-For': ip } })
       : ctx.call(auth.loginPath, { as: 'anon', method: 'POST', body: body(), service: ctx.authService, headers: { 'X-Forwarded-For': ip } });
     for (let i = 0; i < 12; i++) { const r = await attempt(ipA); tries.push(r.status); if (r.status === 429 || r.status === 423) break; }
     const limited = tries.some(s => s === 429 || s === 423);
-    const noAnswer = !limited && tries.every(s => !s);   // 응답이 하나도 없다 — 서버가 꺼졌다. 횟수 제한이 없다는 증거가 아니다
+    const noAnswer = !limited && (tries.every(s => !s) || (auth.type === 'form' && tries.every(s => s === 403)));   // 응답이 없거나(서버 꺼짐) 전부 403(CSRF 로 막힘) — 횟수 제한이 없다는 증거가 아니다
     checks.push(owasp('A07', check('로그인 무차별 대입이 막힌다 (12번 연속 오답)', { universe: 1, scanned: 1, passed: limited ? 1 : 0, warned: noAnswer ? 1 : 0,
       notes: limited ? [`${tries.length}번째에 ${tries[tries.length - 1]}`] : noAnswer ? [] : [`12번 연속 오답이 전부 ${[...new Set(tries)].join('/')} — 횟수 제한(429)이 없다`],
-      warnNotes: noAnswer ? ['로그인 경로가 응답하지 않아 재지 못했다 (서버가 꺼졌거나 멈췄다)'] : [] })));
+      warnNotes: noAnswer ? [tries.every(s => !s) ? '로그인 경로가 응답하지 않아 재지 못했다 (서버가 꺼졌거나 멈췄다)' : '오답 로그인이 전부 403 — CSRF 등으로 로그인 코드까지 가지 못해 재지 못했다'] : [] })));
     if (limited) {
       const r = await attempt(fakeIp());
       const bypass = r.status !== 429 && r.status !== 423;

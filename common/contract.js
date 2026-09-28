@@ -348,7 +348,11 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
     const mine = real && r.method === 'GET' ? await ctx.call(url, { method: 'GET', as: realAs }) : null;
     for (const [label, header] of variants) {
       const res = await ctx.call(url, { method: r.method, as: 'anon', headers: header ? { Authorization: header } : {}, body });
-      const blocked = res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400 && /login|signin/i.test(res.location || ''));
+      // 이동(3xx) — 로그인 화면이나 다른 곳(/ 등)으로 보내면 막은 것 (폼·세션 앱은 401 대신 이렇게 막는다)
+      const to = res.status >= 300 && res.status < 400 && res.location ? (() => { try { return new URL(res.location, ctx.baseUrl(r.service)); } catch { return null; } })() : null;
+      const offsite = to && to.origin !== new URL(ctx.baseUrl(r.service)).origin;
+      if (offsite && r.method === 'GET') { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: true, detail: `${res.status} — 다른 사이트(${to.host})로 보낸다 (소셜 로그인 시작 등 공개 경로)` }); continue; }
+      const blocked = res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400 && (/login|signin/i.test(res.location || '') || (to && to.pathname.replace(/\/$/, '') !== url.split('?')[0].replace(/\/$/, ''))));
       let ok = blocked, detail = blocked ? `${res.status} 차단` : res.status >= 500 ? `${res.status} — 로그인 확인 전에 서버가 죽는다 (로그인 안 한 요청을 401 로 막지 않는다)` : `${res.status} — 인증 없이 통과`;
       // 로그인이 아예 없는 앱 — 서버 오류는 인증과 무관하다 (같은 500 을 E·4 영역이 센다)
       if (res.status >= 500 && !(ctx.config && ctx.config.auth && ctx.config.auth.type && ctx.config.auth.type !== 'none')) { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: null, detail: `${res.status} — 로그인이 없는 앱이라 인증 문제가 아니다 (서버 오류 자체는 E 영역이 센다)` }); continue; }

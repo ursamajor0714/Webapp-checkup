@@ -43,7 +43,9 @@ module.exports = {
       const one = routes.find(r => r.service === s.id && r.method === 'GET' && !r.path.includes(':'));
       if (one && !routes.some(r => r.path === one.path && r.method === 'PATCH')) {
         const m = await ctx.call(one.path, { service: s.id, as, method: 'PATCH', body: {} });
-        misc.push({ name: `${s.id} · ${one.path} 에 안 되는 메서드(PATCH)`, ok: m.status >= 400 && m.status < 500, detail: `${m.status}` });
+        // 로그인 화면으로 보내는 것(302 → login)도 괜찮다 — 파일 하나가 모든 메서드를 받는 PHP 는 인증부터 본다
+        const toLogin = m.status >= 300 && m.status < 400 && /login|signin/i.test(m.location || '');
+        misc.push({ name: `${s.id} · ${one.path} 에 안 되는 메서드(PATCH)`, ok: (m.status >= 400 && m.status < 500) || toLogin, detail: toLogin ? `${m.status} — 로그인 화면으로 보낸다` : `${m.status}` });
       }
     }
     checks.push(checkItems('없는 경로·안 되는 메서드에 4xx', misc));

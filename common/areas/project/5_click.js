@@ -60,7 +60,7 @@ module.exports = {
           requests++;
           return route.continue();
         });
-        try { await page.goto(url, { waitUntil: 'load', timeout: 20000 }); await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {}); await page.waitForTimeout(1200); }
+        try { await page.goto(url, { waitUntil: 'load', timeout: 20000 }); await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {}); await page.waitForTimeout(1200); if (new URL(page.url()).origin !== origin) { skipped.push(`${pg.path} — 다른 사이트로 넘어가 누르지 않았다`); await page.close(); continue; } }
         catch (e) { items.push({ name: pg.path, ok: null, detail: `열지 못함: ${String(e.message).split('\n')[0].slice(0, 120)}` }); await page.close(); continue; }
         // 누를 것 목록 — 보이고, 켜져 있고, 위험해 보이지 않는 것. 같은 글자는 한 번만
         const mark = () => page.evaluate(({ dangerSrc, max }) => {

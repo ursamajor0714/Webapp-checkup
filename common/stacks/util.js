@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'out', '.expo', 'venv', '.venv', '__pycache__', 'target', '.gradle', 'coverage', 'reports', 'staticfiles']);
+const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'out', '.expo', 'venv', '.venv', '__pycache__', 'target', '.gradle', 'coverage', 'reports', 'staticfiles', 'vendor', 'writable']);   // vendor: composer·bundler 가 깐 남의 코드 · writable: CodeIgniter 가 실행 중에 쓰는 폴더
 
 function walk(dir, exts, out = [], depth = 0) {
   if (depth > 12) return out;

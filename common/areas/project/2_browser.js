@@ -68,6 +68,7 @@ module.exports = {
         let status = 0;
         try {
           const res = await page.goto(url, { waitUntil: 'load', timeout: 20000 });
+          if (new URL(page.url()).origin !== new URL(url).origin) { skipped.push(`${where} — 다른 사이트(${new URL(page.url()).host})로 넘어가 재지 않았다 (소셜 로그인 등)`); await page.close(); continue; }
           status = res ? res.status() : 0;
           await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
           await page.waitForTimeout(800);

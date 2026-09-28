@@ -66,6 +66,26 @@ function patternFilters(dir) {
   return out;
 }
 
+// 화면이 부르는 주소 — 폼 action (<?= site_url('x') ?>·/x·상대 경로 x.php) 과 화면 속 fetch·axios
+function phpCalls(dir, plain) {
+  const js = require('../lang/js');
+  const files = walk(dir, ['.php', '.js', '.html']).filter(f => !/[\\/](vendor|writable|tests?|node_modules)[\\/]/.test(f));
+  const out = [];
+  for (const f of files) {
+    const rel = path.relative(dir, f).split(path.sep).join('/');
+    const src = read(f).replace(/<\?=\s*(?:site_url|base_url|url_to|route_to)\(\s*['"]([^'"]*)['"]\s*\)\s*;?\s*\?>/g, (_, p) => '/' + p.replace(/^\//, ''));
+    for (const m of src.matchAll(/<form\b[^>]*>/gi)) {
+      let action = (m[0].match(/action\s*=\s*["']([^"'<]*)["']/i) || [])[1];
+      const method = ((m[0].match(/method\s*=\s*["']?(\w+)/i) || [])[1] || 'GET').toUpperCase();
+      if (action === undefined || /^https?:|^#|^javascript:/i.test(action)) continue;
+      if (action === '') action = plain ? '/' + rel : null;   // action 이 비면 자기 자신에게 보낸다
+      else if (!action.startsWith('/') && plain) action = path.posix.join('/', path.posix.dirname(rel), action);
+      if (action && action.startsWith('/')) out.push({ method, path: action.split('?')[0], file: rel, kind: 'form' });
+    }
+  }
+  return [...out, ...js.extractCalls(files, dir)];
+}
+
 const codeigniter = {
   id: 'codeigniter', label: 'CodeIgniter 4', kind: 'both', lang: 'php',
   detect: dir => exists(path.join(dir, 'app', 'Config', 'Routes.php')) && (exists(path.join(dir, 'spark')) || /codeigniter4\/(framework|appstarter)/.test(read(path.join(dir, 'composer.json')))),
@@ -103,6 +123,9 @@ const codeigniter = {
   },
   // 화면 — 값 없는 GET 경로 중 뷰를 그리는 것
   pages(dir) { return this.routes(dir).filter(r => r.method === 'GET' && !r.path.includes(':') && /\bview\s*\(|->render\(|redirect\(/.test(r.handler)).map(r => r.path); },
+  calls: dir => phpCalls(dir, false),
+  // Docker 로 켠다 (php-run.js) — 처음엔 이미지를 만들고 MySQL 을 받아 오래 걸린다
+  serve(dir) { return { install: null, start: ['node', path.join(__dirname, 'php-run.js'), dir, '{PORT}', 'codeigniter'], startTimeout: 900 }; },
 };
 
 // 순수 PHP — 웹에서 부를 수 있는 .php 파일이 곧 주소다 (설정·함수 모음·크론은 뺀다)
@@ -132,6 +155,8 @@ const php = {
     return out;
   },
   pages(dir) { return this.routes(dir).filter(r => r.method === 'GET' && /<html|<body|<\?=|include[^;]*header/i.test(r.handler)).map(r => r.path); },
+  calls: dir => phpCalls(dir, true),
+  serve(dir) { return { install: null, start: ['node', path.join(__dirname, 'php-run.js'), dir, '{PORT}', 'php'], startTimeout: 900 }; },
 };
 
 module.exports = { codeigniter, php };

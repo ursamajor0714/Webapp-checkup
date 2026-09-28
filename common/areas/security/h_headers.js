@@ -104,7 +104,8 @@ module.exports = {
     const mis = [];
     for (const p of ctx.services.filter(s => ctx.up[s.id])) {
       const L = ctx.lang(p);
-      for (const [re, what, tag] of L.misconfig || []) for (const f of require('../_util').sources(ctx, p).concat(require('../_util').walk(p.absDir, ['.properties', '.yml', '.yaml']))) {
+      // 개발·시험 전용 설정(CodeIgniter Config/Boot/development.php 등)의 오류 표시는 의도된 것이다
+      for (const [re, what, tag] of L.misconfig || []) for (const f of require('../_util').sources(ctx, p).concat(require('../_util').walk(p.absDir, ['.properties', '.yml', '.yaml'])).filter(f => !/[\\/]Boot[\\/](development|testing)\.php$|[\\/]settings[\\/](dev|local|test)\w*\.py$|application-(dev|local|test)\.(properties|ya?ml)$/.test(f))) {
         const src = require('../_util').read(f); if (re.test(src)) mis.push({ name: `${ctx.rel(f)} · ${what}`, ok: false, detail: `${tag} — ${what}` });
       }
     }
