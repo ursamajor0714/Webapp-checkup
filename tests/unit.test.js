@@ -453,3 +453,18 @@ test('배포 주소 검사 — 읽기만 하고, 헤더·민감 파일·오류 �
     assert.ok(!items.some(i => /GET \/api\/notices/.test(i.name)), '가드 없는 공개 경로는 안 본다');
   } finally { srv.close(); delete process.env.QA_LIVE_GAP_MS; }
 });
+
+test('실사용 오탐 — 지금 시각만 UTC 날짜로 잡고, 결제 수단은 금액이 아니고, 같은 입력의 5xx 는 한 원인', () => {
+  const re = require('../common/lang/rules-js').utcDisplay || require('../common/lang/rules-js').rules.utcDisplay;
+  assert.ok(re.test("const today = new Date().toISOString().split('T')[0];"), '지금 시각을 UTC 로 자른다');
+  assert.ok(!re.test("return new Date(Date.now() + 9*60*60*1000).toISOString().split('T')[0];"), '9시간을 더한 것은 맞다');
+  assert.ok(!re.test("end.toISOString().split('T')[0]"), '날짜 문자열에서 만든 Date 는 UTC 끼리');
+  const src = require('fs').readFileSync(require.resolve('../common/areas/api/m_money'), 'utf8');
+  assert.ok(/NOT_MONEY/.test(src));
+  const { hotspots } = require('../common/runner');
+  const items = [];
+  for (let i = 0; i < 12; i++) for (const k of ['본문 null', '본문 깨진 JSON']) items.push({ name: `POST /api/x${i} · ${k}`, ok: false, detail: '서버 오류 500' });
+  const h = hotspots([{ id: 'E', checks: [{ name: '이상한 본문', items }] }]);
+  assert.strictEqual(h[0].count, 24);
+  assert.match(h[0].path, /본문 null.*본문 깨진 JSON/);
+});

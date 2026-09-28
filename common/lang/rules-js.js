@@ -51,7 +51,9 @@ module.exports = {
   ssrf: /(?:fetch|axios(?:\.\w+)?|got|request|http\.get|https\.get)\(\s*(?:req\.(?:body|query|params)|`[^`]*\$\{\s*req\.(?:body|query|params))/,
   // 화면에 UTC 를 잘라 보여 주는 꼴
   // 화면에 보이는 날짜를 UTC 로 자르는 꼴 — 화면 코드에서만 본다
-  utcDisplay: /toISOString\(\)\s*\.\s*(?:substring|slice|split)\(|toISOString\(\)\.replace\(/,
+  // 지금 시각(new Date()·Date.now())을 UTC 로 잘라 날짜로 쓰는 것만 — 9시간을 더했거나('+ 9*60*60*1000') 'YYYY-MM-DD' 에서 만든 Date 는 UTC 끼리라 맞다
+  // ponytail: 변수에 담은 뒤 자르는 것(const now = new Date(); now.toISOString()…)은 못 본다 — 흐름 추적이 필요하다
+  utcDisplay: /new Date\(\s*(?:Date\.now\(\)\s*)?\)\s*\.toISOString\(\)\s*\.\s*(?:substring|slice|split|replace)\(/,
   tzAware: /Asia\/Seoul|timeZone\s*:|dayjs\.tz|moment-timezone|date-fns-tz|luxon/,
   // 오류를 삼키는 꼴
   swallow: /catch\s*(?:\(\s*\w*\s*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\w*\s*\)\s*=>\s*\{\s*\}\s*\)|\.catch\(\s*\(\)\s*=>\s*(?:null|undefined|void 0)\s*\)/,

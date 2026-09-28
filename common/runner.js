@@ -407,9 +407,25 @@ function hotspots(results, n = 8) {
     if (h.examples.length < 3) h.examples.push({ area: r.id, check: c.name, item: i.name, detail: String(i.detail).slice(0, 120) });
     msgs.set(k, h);
   }
+  // 같은 이상한 입력(깨진 JSON 등)에 여러 경로가 똑같이 5xx — 경로마다가 아니라 공통 처리(오류 처리기·본문 해석) 한 곳의 문제다
+  const inputs = new Map();
+  for (const r of results) if (!r.skip) for (const c of r.checks || []) for (const i of (c.items || []).filter(i => i.ok === false && /\b5\d\d\b|서버 오류/.test(i.detail || ''))) {
+    const m = String(i.name).match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\S+)\s+·\s+(.+)$/); if (!m) continue;
+    const k = `${r.id}|${m[3]}`;
+    const h = inputs.get(k) || { path: `같은 입력 "${m[3]}" 에 여러 경로가 서버 오류`, methods: [], areas: new Set(), count: 0, s500: 0, examples: [], routes: new Set() };
+    h.areas.add(r.id); h.count++; h.s500++; h.routes.add(`${m[1]} ${m[2]}`);
+    if (h.examples.length < 3) h.examples.push({ area: r.id, check: c.name, item: i.name, detail: String(i.detail).slice(0, 120) });
+    inputs.set(k, h);
+  }
+  // 같은 경로 묶음에서 입력만 다른 것(문자열·null·깨진 JSON)은 한 원인으로 합친다
+  const bySet = new Map();
+  for (const [k, h] of inputs) { if (h.routes.size < 10) continue; const sig = [...h.routes].sort().join(','); const g = bySet.get(sig); const label = k.split('|')[1];
+    if (!g) bySet.set(sig, { ...h, labels: [label] }); else { g.labels.push(label); g.count += h.count; g.s500 += h.s500; for (const a of h.areas) g.areas.add(a); } }
+  const sameInput = [...bySet.values()].map(h => ({ ...h, path: `같은 입력 ${h.labels.map(l => `"${l}"`).join('·')} 에 여러 경로가 서버 오류` })).sort((a, b) => b.count - a.count)
+    .map(({ routes, labels, ...h }) => ({ ...h, areas: [...h.areas], hint: `경로 ${routes.size}개가 같은 입력에 똑같이 서버 오류를 낸다 — 경로마다 고치지 말고 공통 처리(오류 처리기가 400 을 500 으로 바꾸는지, 본문 해석 실패를 어떻게 넘기는지)부터 본다` }));
   const same = [...msgs.values()].filter(h => h.count >= 5).sort((a, b) => b.count - a.count)
     .map(h => ({ ...h, areas: [...h.areas], hint: `같은 예외가 ${h.count}곳에서 났다 — 화면마다 고치지 말고 공통 원인(번들 설정·공용 모듈)부터 본다` }));
-  return [...same, ...paths].slice(0, n);
+  return [...sameInput, ...same, ...paths].slice(0, n);
 }
 
 // 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)

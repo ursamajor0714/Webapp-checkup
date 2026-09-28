@@ -92,7 +92,9 @@ module.exports = {
   },
   // res.render('x') 로 그리는 화면 경로 (EJS·Pug 등) — GET 이고 파라미터 없는 것
   pages(dir) {
-    return this.routes(dir).filter(r => r.method === 'GET' && !r.path.includes(':') && !r.path.startsWith('/api') && !/\*$/.test(r.path)).map(r => r.path);
+    // res.send('pong')·res.json 만 하는 경로(상태 확인 등)는 화면이 아니다 — 제목·접근성 검사에 넣으면 오탐
+    const notPage = h => /res\.(json|sendStatus)\(|res(?:\.status\(\d+\))?\.send\(\s*['"`][^<'"`]*['"`]\s*\)/.test(h || '') && !/res\.(render|sendFile)\(/.test(h || '');
+    return this.routes(dir).filter(r => r.method === 'GET' && !r.path.includes(':') && !r.path.startsWith('/api') && !/\*$/.test(r.path) && !notPage(r.handler)).map(r => r.path);
   },
   serve(dir) {
     const pkg = readJson(path.join(dir, 'package.json')) || {};

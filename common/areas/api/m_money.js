@@ -2,7 +2,9 @@
 const { checkItems } = require('../_util');
 const { baseline, fillPath } = require('../../generate');
 
-const MONEY = /price|amount|fee|cost|total|balance|payment|point|charge|salary|wage|refund|deposit|금액|가격/i;
+const MONEY_WORD = /price|amount|fee|cost|total|balance|payment|point|charge|salary|wage|refund|deposit|금액|가격/i;
+const NOT_MONEY = /method|type|status|date|_at$|At$|_id$|Id$|name|memo|note|key|currency|provider/i;   // payment_method·refund_date 는 금액이 아니다
+const MONEY = { test: k => MONEY_WORD.test(k) && !NOT_MONEY.test(k) };
 
 module.exports = {
   id: 'M', name: '금액', weight: 8,
