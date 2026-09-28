@@ -1,4 +1,4 @@
-// H. HTTP 보안 헤더·설정 — OWASP A05(보안 설정 오류) · A02(전송 암호화)
+// H. HTTP 보안 헤더·설정 — OWASP A02(보안 설정 오류) · A04(전송 암호화)
 const { check, checkItems, owasp } = require('../_util');
 
 const REQUIRED = [
@@ -46,7 +46,7 @@ function hstsConfig(ctx) {
 }
 
 module.exports = {
-  id: 'H', name: 'HTTP 보안 헤더·설정', weight: 4, owasp: ['A05', 'A02'],
+  id: 'H', name: 'HTTP 보안 헤더·설정', weight: 4, owasp: ['A02', 'A04'],
   async run(ctx) {
     if (!ctx.live && !ctx.pagesLive) return { skip: '서버가 꺼져 있다' };
     const checks = [];
@@ -74,8 +74,8 @@ module.exports = {
       }
       for (const h of ['x-powered-by', 'server']) { const v = r.headers.get(h); if (v && /express|next|php|django|werkzeug|uvicorn|apache|nginx\/\d|tomcat|jetty/i.test(v)) leaks.push(`${t.path}: ${h}: ${v}`); }
     }
-    checks.push(owasp('A05', checkItems('보안 헤더가 붙는다', items)));
-    checks.push(owasp('A05', check('서버 종류·버전을 헤더로 알리지 않는다', { universe: targets.length, scanned: targets.length, passed: targets.length - new Set(leaks.map(l => l.split(':')[0])).size, notes: leaks })));
+    checks.push(owasp('A02', checkItems('보안 헤더가 붙는다', items)));
+    checks.push(owasp('A02', check('서버 종류·버전을 헤더로 알리지 않는다', { universe: targets.length, scanned: targets.length, passed: targets.length - new Set(leaks.map(l => l.split(':')[0])).size, notes: leaks })));
     // CORS — 다른 사이트에서 상태를 바꾸는 요청을 허용하는가
     const corsItems = [];
     for (const s of ctx.services.filter(s => ctx.up[s.id])) {
@@ -86,7 +86,7 @@ module.exports = {
       const bad = acao === '*' || acao === 'https://evil.example';
       corsItems.push({ name: `${s.id} · 모르는 출처(evil.example)`, ok: !bad, detail: bad ? `Access-Control-Allow-Origin: ${acao}${cred ? ' + 쿠키 허용 — 다른 사이트가 로그인한 사용자 대신 요청을 보낼 수 있다' : ' — 모든 사이트가 이 API 를 부를 수 있다'}` : `${acao || '허용 안 함'}` });
     }
-    checks.push(owasp('A05', checkItems('모르는 출처에 API 를 열지 않는다 (CORS)', corsItems)));
+    checks.push(owasp('A02', checkItems('모르는 출처에 API 를 열지 않는다 (CORS)', corsItems)));
     // 로그인 쿠키 플래그
     if (ctx.loginResponse && ctx.loginResponse.cookies && ctx.loginResponse.cookies.length) {
       const ci = ctx.loginResponse.cookies.map(c => {
@@ -94,7 +94,7 @@ module.exports = {
         const miss = [['HttpOnly', /httponly/i], ['SameSite', /samesite=(lax|strict)/i]].filter(([, re]) => !re.test(c)).map(([n]) => n);
         return { name: `쿠키 ${name}`, ok: !miss.length, detail: miss.length ? `${miss.join('·')} 없음 — 스크립트가 쿠키를 읽거나 다른 사이트 요청에 실린다` : 'HttpOnly·SameSite' };
       });
-      checks.push(owasp('A02', checkItems('로그인 쿠키에 보호 설정이 붙는다', ci)));
+      checks.push(owasp('A04', checkItems('로그인 쿠키에 보호 설정이 붙는다', ci)));
     }
     // 코드의 설정 실수 (DEBUG=True, CORS 전체 허용 등)
     const mis = [];
@@ -104,11 +104,11 @@ module.exports = {
         const src = require('../_util').read(f); if (re.test(src)) mis.push({ name: `${ctx.rel(f)} · ${what}`, ok: false, detail: `${tag} — ${what}` });
       }
     }
-    checks.push(owasp('A05', checkItems('코드에 운영 설정 실수가 없다 (DEBUG·CORS·스택트레이스)', mis.length ? mis : [{ name: '설정 파일 검사', ok: true, detail: '걸린 것 없음' }])));
+    checks.push(owasp('A02', checkItems('코드에 운영 설정 실수가 없다 (DEBUG·CORS·스택트레이스)', mis.length ? mis : [{ name: '설정 파일 검사', ok: true, detail: '걸린 것 없음' }])));
     // 고급부터 — 다른 사이트에서 로그인한 사용자 대신 저장 요청을 보내면 받아 주는가 (쿠키 로그인일 때만 뜻이 있다)
     if (ctx.level.atLeast('advanced')) { const c = await csrfLive(ctx); if (c.length) checks.push(owasp('A01', checkItems('다른 사이트에서 보낸 저장 요청을 막는다 (CSRF)', c))); }
     // 전문가 — HSTS 를 코드·배포 설정에서 붙이는가 (로컬 http 에선 응답으로 알 수 없어 설정을 본다)
-    if (ctx.level.atLeast('expert') && ctx.services.length) checks.push(owasp('A02', checkItems('HTTPS 강제(HSTS)를 코드·배포 설정에서 붙인다', hstsConfig(ctx))));
+    if (ctx.level.atLeast('expert') && ctx.services.length) checks.push(owasp('A04', checkItems('HTTPS 강제(HSTS)를 코드·배포 설정에서 붙인다', hstsConfig(ctx))));
     return { checks };
   },
 };

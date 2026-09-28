@@ -1,10 +1,10 @@
-// V. 의존성·무결성 — OWASP A06(취약하고 오래된 구성요소) · A08(소프트웨어·데이터 무결성)
+// V. 의존성·무결성 — OWASP A03(취약하고 오래된 구성요소) · A08(소프트웨어·데이터 무결성)
 const { execFileSync } = require('child_process');
 const path = require('path');
 const { check, checkItems, owasp, sources } = require('../_util');
 
 module.exports = {
-  id: 'V', name: '의존성·무결성', weight: 3, owasp: ['A06', 'A08'],
+  id: 'V', name: '의존성·무결성', weight: 3, owasp: ['A03', 'A08'],
   async run(ctx) {
     const checks = [];
     const manifests = [];
@@ -29,7 +29,7 @@ module.exports = {
         else if (Array.isArray(j.dependencies)) { const n = j.dependencies.filter(d => (d.vulns || []).length).length; aud.push({ name: `${p.dir} (${m.file})`, ok: n === 0, detail: `취약한 패키지 ${n}개` }); }
       } catch { aud.push({ name: `${p.dir}`, ok: null, detail: '감사 결과를 읽지 못했다' }); }
     }
-    checks.push(owasp('A06', checkItems('알려진 심각한 취약점이 없다', aud)));
+    checks.push(owasp('A03', checkItems('알려진 심각한 취약점이 없다', aud)));
     // 3. 선언하지 않은 패키지를 쓰는가 (클린 설치 후 빌드 실패) · 깔아 놓고 안 쓰는가
     const undeclared = [], unused = [], transitive = [];
     for (const { p, m } of manifests) {

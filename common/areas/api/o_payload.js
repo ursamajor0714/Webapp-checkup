@@ -27,12 +27,12 @@ function uploadLimits(ctx) {
 }
 
 module.exports = {
-  id: 'O', name: '응답 크기·속도', weight: 5, owasp: ['A04'],
+  id: 'O', name: '응답 크기·속도', weight: 5, owasp: ['A06'],
   async run(ctx) {
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
     const checks = [];
     // 전문가 — 파일 업로드에 종류·크기 제한이 있는가 (코드로 본다 — 실제로 올리면 파일이 남는다)
-    if (ctx.level.atLeast('expert')) { const up = uploadLimits(ctx); if (up.length) checks.push(owasp('A04', checkItems('파일 업로드에 종류·크기 제한이 있다', up))); }
+    if (ctx.level.atLeast('expert')) { const up = uploadLimits(ctx); if (up.length) checks.push(owasp('A06', checkItems('파일 업로드에 종류·크기 제한이 있다', up))); }
     if (!ctx.live) return checks.length ? { checks, partial: '서버가 꺼져 있어 요청 크기·목록 검사는 건너뛰었다' } : { skip: '서버가 꺼져 있다' };
     const as = ctx.sessions.owner ? 'owner' : 'anon';
     // 1. 본문 크기 상한 — 5MB 를 받아 주면 서버 메모리를 쉽게 채운다
@@ -44,7 +44,7 @@ module.exports = {
       const capped = res.status === 413 || res.status === 400 || res.status === 0;
       big.push({ name: `${r.method} ${r.path} · 5MB 본문`, ok: res.status >= 500 ? false : capped ? true : null, detail: res.status >= 500 ? `서버 오류 ${res.status}` : capped ? `${res.status || '연결 끊음'} — 상한 있음` : `${res.status} — 5MB 를 읽었다. 상한이 너무 크지 않은지 확인` });
     }
-    if (big.length) checks.push(owasp('A04', checkItems('요청 본문 크기에 상한이 있다', big)));
+    if (big.length) checks.push(owasp('A06', checkItems('요청 본문 크기에 상한이 있다', big)));
     // 2. 목록 응답 크기·시간
     const lists = [];
     for (const r of ctx.routes().filter(x => x.method === 'GET' && !x.path.includes(':')).slice(0, 30)) {

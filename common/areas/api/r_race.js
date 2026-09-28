@@ -37,12 +37,12 @@ async function lostUpdate(ctx) {
 }
 
 module.exports = {
-  id: 'R', name: '동시성', weight: 6, owasp: ['A04'],
+  id: 'R', name: '동시성', weight: 6, owasp: ['A06'],
   async run(ctx) {
     if (!ctx.live) return { skip: '서버가 꺼져 있다' };
     const checks = [];
     // 고급부터 — 두 사람이 같은 것을 동시에 고칠 때 한쪽 수정이 사라지는가 (lost update)
-    if (ctx.level.atLeast('advanced')) { const lu = await lostUpdate(ctx); if (lu.length) checks.push(owasp('A04', checkItems('동시에 고쳐도 한쪽 수정이 사라지지 않는다 (lost update)', lu))); }
+    if (ctx.level.atLeast('advanced')) { const lu = await lostUpdate(ctx); if (lu.length) checks.push(owasp('A06', checkItems('동시에 고쳐도 한쪽 수정이 사라지지 않는다 (lost update)', lu))); }
     const uniq = ctx.contracts.filter(c => c.method === 'POST' && Object.keys(c.fields).some(k => /email|username|user_?id|login_?id|nickname|phone/i.test(k)) && !/login|signin/i.test(c.path));
     if (!uniq.length) return checks.length ? { checks } : { skip: '고유값(이메일·아이디)을 받는 만들기 경로가 없다 — 설정에 자원을 적으면 잰다' };
     const items = [];
@@ -57,7 +57,7 @@ module.exports = {
       if (rs.some(r => r.status === 401 || r.status === 403)) continue;
       items.push({ name: `${c.method} ${c.path} · 같은 값으로 동시에 5번`, ok: rs.some(r => r.status >= 500) ? false : wins <= 1, detail: `성공 ${wins}번 · ${rs.map(r => r.status).join('/')}${wins > 1 ? ' — 같은 것이 여러 개 생겼다 (DB 고유 제약·잠금이 없다)' : ''}` });
     }
-    checks.push(owasp('A04', checkItems('같은 값으로 동시에 만들면 하나만 생긴다', items.length ? items : [{ name: '해당 없음', ok: null, detail: '권한 밖이라 재지 못했다' }])));
+    checks.push(owasp('A06', checkItems('같은 값으로 동시에 만들면 하나만 생긴다', items.length ? items : [{ name: '해당 없음', ok: null, detail: '권한 밖이라 재지 못했다' }])));
     return { checks };
   },
 };

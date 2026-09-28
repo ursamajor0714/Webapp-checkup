@@ -468,3 +468,46 @@ test('실사용 오탐 — 지금 시각만 UTC 날짜로 잡고, 결제 수단�
   assert.strictEqual(h[0].count, 24);
   assert.match(h[0].path, /본문 null.*본문 깨진 JSON/);
 });
+
+test('깃허브 워크플로 — PR 코드 실행·셸 주입·태그 액션·write-all 을 잡고, 공식 액션·env 로 옮긴 값은 넘긴다', async () => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ name: 'x', dependencies: { express: '^4' } }),
+    'server.js': "const app = require('express')(); app.get('/', (q, s) => s.send('hi')); app.listen(3000);",
+    '.github/workflows/bad.yml': [
+      'on: pull_request_target', 'permissions: write-all', 'jobs:', '  t:', '    runs-on: ubuntu-latest', '    steps:',
+      '      - uses: actions/checkout@v4', '        with:', '          ref: ${{ github.event.pull_request.head.sha }}',
+      '      - uses: some-org/deploy-action@v2',
+      '      - run: |', '          echo "${{ github.event.pull_request.title }}"', ''].join('\n'),
+    '.github/workflows/good.yml': [
+      'on: pull_request', 'permissions:', '  contents: read', 'jobs:', '  t:', '    runs-on: ubuntu-latest', '    steps:',
+      '      - uses: actions/checkout@v4', '      - uses: some-org/x@0123456789abcdef0123456789abcdef01234567',
+      '      - env:', '          TITLE: ${{ github.event.pull_request.title }}', '        run: echo "$TITLE"', ''].join('\n'),
+  });
+  const out = await require('../common/areas/security/k_secrets').run(makeContext(loadProject({ root })));
+  const c = out.checks.find(x => /워크플로/.test(x.name));
+  assert.ok(c, '워크플로 검사가 돈다');
+  const bad = c.items.filter(i => i.ok !== true).map(i => `${i.name} ${i.detail}`).join('\n');
+  assert.match(bad, /pull_request_target/);
+  assert.match(bad, /write-all/);
+  assert.match(bad, /some-org\/deploy-action@v2/);
+  assert.match(bad, /bad\.yml:12 .*셸에 PR/);
+  assert.ok(c.items.some(i => i.name === '.github/workflows/good.yml' && i.ok === true), 'good.yml 은 깨끗하다: ' + bad);
+});
+
+test('성능 추세 · OWASP 2025 — 지난번보다 무거워진 화면을 잡고, 번호가 2025 판이다', () => {
+  const r = require('../common/runner');
+  const prev = [{ id: '2', metrics: { '/': { js: 400000, total: 1000000, n: 20, load: 1000, lcp: 900 } } }];
+  const now = [{ id: '2', metrics: { '/': { js: 600000, total: 1080000, n: 21, load: 1100, lcp: 2000 } } }];
+  const fs2 = require('fs'), os2 = require('os'), path2 = require('path');
+  const dir = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'qa-perf-'));
+  fs2.writeFileSync(path2.join(dir, '2026-01-01-00-00-00.json'), JSON.stringify({ summary: { full: true, score: 80 }, results: prev }));
+  const d = r.diffWithPrevious(dir, now, 80);
+  const js = d.perf.find(p => p.metric === 'JS'), lcp = d.perf.find(p => p.metric === 'LCP');
+  assert.strictEqual(js.level, 'bad'); assert.strictEqual(js.pct, 50);
+  assert.strictEqual(lcp.level, 'bad');
+  assert.ok(!d.perf.some(p => p.metric === '전체 크기'), '8% 는 괜찮다');
+  assert.strictEqual(r.OWASP.A10, '예외 상황 처리 실패');
+  assert.strictEqual(r.OWASP.A05, '주입');
+});

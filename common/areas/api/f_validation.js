@@ -1,11 +1,11 @@
 // F. 입력 검증 — 코드에서 뽑은 규칙(zod·Bean Validation·pydantic·Django 폼)으로 자동 생성한 케이스
-//   OWASP A04(안전하지 않은 설계: 서버가 검증하지 않음) · A03(주입 문자열도 값 유형에 들어 있다)
+//   OWASP A06(안전하지 않은 설계: 서버가 검증하지 않음) · A05(주입 문자열도 값 유형에 들어 있다)
 const { check, checkItems, owasp } = require('../_util');
 const { fuzzRoute } = require('../../generate');
 const { runEntity } = require('../../contract');
 
 module.exports = {
-  id: 'F', name: '입력 검증 (자동 생성)', weight: 6, owasp: ['A04', 'A03'],
+  id: 'F', name: '입력 검증 (자동 생성)', weight: 6, owasp: ['A06', 'A05'],
   async run(ctx) {
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
     const strict = ctx.contracts.filter(c => c.strict);
@@ -19,13 +19,13 @@ module.exports = {
       if (!ctx.sessions.owner && ctx.project.auth && ctx.project.auth.type !== 'none') { skipped.push(`${e.name} — 로그인이 안 돼 잴 수 없다`); continue; }
       let r;
       try { r = await runEntity(ctx, e); } catch (err) { skipped.push(`${e.name} — 실행 오류: ${err.message}`); continue; }
-      for (const [k, label] of [['create', '등록'], ['update', '수정'], ['combos', '조합'], ['shapes', '본문 모양']]) if (r[k].length) checks.push(owasp('A04', checkItems(`${e.name} ${label} — 규칙: 프로젝트 설정`, r[k])));
+      for (const [k, label] of [['create', '등록'], ['update', '수정'], ['combos', '조합'], ['shapes', '본문 모양']]) if (r[k].length) checks.push(owasp('A06', checkItems(`${e.name} ${label} — 규칙: 프로젝트 설정`, r[k])));
     }
     // 2. 코드에서 뽑은 검증 스키마 — 틀린 값은 4xx, 맞는 값은 저장
     for (const c of strict) {
       const res = await fuzzRoute(ctx, c, { as: /register|signup|join/i.test(c.path) ? 'anon' : as, limit: ctx.level.n(400) });   // 수준만큼 넓게 (초급 200 · 고급 400 · 전문가 800)
       if (res.skipped) { skipped.push(res.skipped); continue; }
-      checks.push(owasp('A04', checkItems(`${c.method} ${c.path} — 규칙: ${c.source}`, res.items)));
+      checks.push(owasp('A06', checkItems(`${c.method} ${c.path} — 규칙: ${c.source}`, res.items)));
     }
     // 3. 스키마 없이 받는 칸 — 무엇이 맞는지 모르니 '어떤 값에도 5xx 가 나지 않는다' 만 본다
     const covered = new Set(entities.flatMap(e => e.routes || []));
@@ -34,13 +34,13 @@ module.exports = {
     for (const c of loose.filter(c => !covered.has(`${c.method} ${c.path}`) && c.path !== loginPath && !/login|signin|auth\/token/i.test(c.path))) {
       const res = await fuzzRoute(ctx, c, { as: /register|signup|join/i.test(c.path) ? 'anon' : as });
       if (res.skipped) { skipped.push(res.skipped); continue; }
-      checks.push(owasp('A04', checkItems(`${c.method} ${c.path} — 칸 이름만 앎 (${c.source}) · 서버 오류가 안 나는지만`, res.items)));
+      checks.push(owasp('A06', checkItems(`${c.method} ${c.path} — 칸 이름만 앎 (${c.source}) · 서버 오류가 안 나는지만`, res.items)));
     }
     // 4. 쓰기 경로가 검증을 거치는가 — 스키마 ○, 손으로 짠 검증 함수 △, 아무것도 없음 ✗
     const writes = ctx.routes().filter(r => ['POST', 'PUT', 'PATCH'].includes(r.method) && !(ctx.project.publicRoutes || []).some(p => p.method === r.method && p.path === r.path));
     const byKey = new Map(ctx.contracts.map(c => [`${c.method} ${c.path}`, c]));
     const entityRoutes = new Set(entities.flatMap(e => e.routes || []));
-    checks.push(owasp('A04', checkItems('본문을 받는 경로가 검증을 거친다', writes.map(r => {
+    checks.push(owasp('A06', checkItems('본문을 받는 경로가 검증을 거친다', writes.map(r => {
       const k = `${r.method} ${r.path}`; const c = byKey.get(k);
       if (c && c.strict) return { name: k, ok: true, detail: `스키마: ${c.source}` };
       if (r.builtin) return { name: k, ok: true, detail: '프레임워크 기본 화면 (로그인·비밀번호 폼은 프레임워크가 검증한다)' };

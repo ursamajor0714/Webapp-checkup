@@ -2,7 +2,7 @@
 const { check, checkItems, owasp, sources, scan } = require('../_util');
 
 module.exports = {
-  id: 'L', name: '로깅·관측성', weight: 3, owasp: ['A09'],
+  id: 'L', name: '로깅·관측성', weight: 3, owasp: ['A09', 'A10'],
   async run(ctx) {
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
     const checks = [];
@@ -27,7 +27,7 @@ module.exports = {
     const sw = [];
     for (const p of ctx.parts) sw.push(...scan(ctx, sources(ctx, p), ctx.lang(p).swallow, '오류를 삼킨다 (아무것도 안 함)'));
     const n = ctx.parts.reduce((a, p) => a + sources(ctx, p).length, 0);
-    checks.push(check('오류를 조용히 삼키지 않는다', { universe: n, scanned: n, passed: n - new Set(sw.map(h => h.split(':')[0])).size, notes: sw.slice(0, 40) }));
+    checks.push(owasp('A10', check('오류를 조용히 삼키지 않는다', { universe: n, scanned: n, passed: n - new Set(sw.map(h => h.split(':')[0])).size, notes: sw.slice(0, 40) })));
     // 4. 보안 이벤트 기록 — 로그인 실패·권한 거부를 남기는가 (A09 의 핵심)
     const login = ctx.routes().find(r => r.method === 'POST' && /login|signin/i.test(r.path));
     if (login && login.handler) {

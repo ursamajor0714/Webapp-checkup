@@ -1,4 +1,4 @@
-// JavaScript / TypeScript 정적 규칙 — 각 규칙에 OWASP Top 10(2021) 카테고리를 단다
+// JavaScript / TypeScript 정적 규칙 — 각 규칙에 OWASP Top 10(2025) 카테고리를 단다
 const path = require('path');
 const { read, readJson, exists, walk } = require('../stacks/util');
 
@@ -24,21 +24,21 @@ module.exports = {
   audit: dir => ['npm', 'audit', '--json', '--omit=dev'],
   // 위험한 코드 — [정규식, 설명, OWASP, 어디서 (server|client|all)]
   sinks: [
-    [/dangerouslySetInnerHTML/, 'dangerouslySetInnerHTML 로 HTML 을 직접 꽂는다', 'A03', 'client'],
-    [/\bv-html\s*=/, 'Vue v-html 로 HTML 을 직접 꽂는다 (escape 여부 확인)', 'A03', 'client'],
-    [/\.innerHTML\s*=(?!\s*['"`]\s*['"`])(?!\s*['"`][^'"`$]*['"`]\s*;)/, 'innerHTML 에 값을 넣는다 (escape 여부 확인)', 'A03', 'client'],
-    [/document\.write\(/, 'document.write', 'A03', 'client'],
-    [/(?<![\w.$])eval\(|new Function\(/, 'eval / new Function', 'A03', 'all'],
-    [/<%-\s*(?!include)/, 'EJS <%- %> 는 escape 하지 않는다', 'A03', 'all'],
-    [/\bexec(?:Sync)?\(\s*`[^`]*\$\{|\bexec(?:Sync)?\([^)]*\+\s*\w|\bspawn\([^)]*shell\s*:\s*true/, '셸 명령에 값을 이어 붙여 실행 (명령 주입)', 'A03', 'server'],
+    [/dangerouslySetInnerHTML/, 'dangerouslySetInnerHTML 로 HTML 을 직접 꽂는다', 'A05', 'client'],
+    [/\bv-html\s*=/, 'Vue v-html 로 HTML 을 직접 꽂는다 (escape 여부 확인)', 'A05', 'client'],
+    [/\.innerHTML\s*=(?!\s*['"`]\s*['"`])(?!\s*['"`][^'"`$]*['"`]\s*;)/, 'innerHTML 에 값을 넣는다 (escape 여부 확인)', 'A05', 'client'],
+    [/document\.write\(/, 'document.write', 'A05', 'client'],
+    [/(?<![\w.$])eval\(|new Function\(/, 'eval / new Function', 'A05', 'all'],
+    [/<%-\s*(?!include)/, 'EJS <%- %> 는 escape 하지 않는다', 'A05', 'all'],
+    [/\bexec(?:Sync)?\(\s*`[^`]*\$\{|\bexec(?:Sync)?\([^)]*\+\s*\w|\bspawn\([^)]*shell\s*:\s*true/, '셸 명령에 값을 이어 붙여 실행 (명령 주입)', 'A05', 'server'],
   ],
   // SQL 을 문자열로 이어 붙이는 꼴 (값 자리에 ${…} 또는 + 변수)
   sqlDirect: /(?:query|execute|all|get|run|prepare|raw|\$queryRawUnsafe|\$executeRawUnsafe)\(\s*`[^`]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^`]*\$\{\s*req\.|(?:query|execute)\(\s*['"][^'"]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^'"]*['"]\s*\+\s*req\./i,
   sqlConcat: /(?:query|execute|all|get|run|prepare|raw|\$queryRawUnsafe|\$executeRawUnsafe)\(\s*`[^`]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^`]*\$\{(?![^}]*\?)|(?:query|execute)\(\s*['"][^'"]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^'"]*['"]\s*\+/i,
   weakCrypto: [
-    [/createHash\(\s*['"](md5|sha1)['"]\s*\)[^;\n]{0,80}(password|pw|pass)/i, '비밀번호를 MD5/SHA1 로 해시', 'A02'],
-    [/Math\.random\(\)[^;\n]{0,60}(token|secret|session|otp|code|password)/i, '토큰·코드를 Math.random 으로 만든다 (예측 가능)', 'A02'],
-    [/algorithms?\s*:\s*\[?\s*['"]none['"]/i, 'JWT alg none 허용', 'A02'],
+    [/createHash\(\s*['"](md5|sha1)['"]\s*\)[^;\n]{0,80}(password|pw|pass)/i, '비밀번호를 MD5/SHA1 로 해시', 'A04'],
+    [/Math\.random\(\)[^;\n]{0,60}(token|secret|session|otp|code|password)/i, '토큰·코드를 Math.random 으로 만든다 (예측 가능)', 'A04'],
+    [/algorithms?\s*:\s*\[?\s*['"]none['"]/i, 'JWT alg none 허용', 'A04'],
   ],
   // 코드에 박힌 비밀 — 환경변수 기본값으로 박아 둔 꼴까지
   secrets: [

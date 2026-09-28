@@ -1,4 +1,4 @@
-// P. 개인정보 — OWASP A01(접근 통제) · A02(민감정보 노출)
+// P. 개인정보 — OWASP A01(접근 통제) · A04(민감정보 노출)
 //   로그인 없이 개인정보(이메일·전화·주민번호·주소·생년월일)가 나가는가, 목록 응답이 필요 이상을 싣는가,
 //   URL(쿼리)에 민감정보를 싣는가, 화면 번들에 민감한 값이 박혀 있는가
 const { check, checkItems, owasp, pub, LIKELY_PUBLIC } = require('../_util');
@@ -10,7 +10,7 @@ const PII = [
 ];
 
 module.exports = {
-  id: 'P', name: '개인정보', weight: 6, owasp: ['A01', 'A02'],
+  id: 'P', name: '개인정보', weight: 6, owasp: ['A01', 'A04'],
   async run(ctx) {
     const checks = [];
     if (ctx.live && ctx.services.length) {
@@ -41,14 +41,14 @@ module.exports = {
     const qHits = ctx.calls().filter(c => /[?&](password|pw|token|access_token|ssn|jumin)=/i.test(c.path));
     const srcHits = require('../_util').scan(ctx, ctx.clients.flatMap(c => require('../_util').sources(ctx, c)), /[?&](password|pw|token|access_token)=\$\{|[?&](password|pw|token)='\s*\+/i, 'URL 에 비밀값을 싣는다');
     const n = ctx.calls().length || 1;
-    checks.push(owasp('A02', check('URL(쿼리)에 비밀번호·토큰을 싣지 않는다', { universe: n, scanned: n, passed: n - qHits.length - srcHits.length, notes: [...qHits.map(c => `${c.file}: ${c.path}`), ...srcHits] })));
+    checks.push(owasp('A04', check('URL(쿼리)에 비밀번호·토큰을 싣지 않는다', { universe: n, scanned: n, passed: n - qHits.length - srcHits.length, notes: [...qHits.map(c => `${c.file}: ${c.path}`), ...srcHits] })));
     // 4. 화면 코드에 주민번호·카드번호처럼 보이는 값이 박혀 있는가
     const bundleHits = [];
     for (const c of ctx.clients) for (const f of require('../_util').sources(ctx, c)) {
       const src = require('../_util').read(f);
       if (/\b\d{6}-[1-4]\d{6}\b/.test(src)) bundleHits.push(`${ctx.rel(f)}: 주민등록번호로 보이는 값`);
     }
-    checks.push(owasp('A02', check('화면 코드에 실제 개인정보가 박혀 있지 않다', { universe: ctx.clients.length || 1, scanned: ctx.clients.length || 1, passed: (ctx.clients.length || 1) - new Set(bundleHits.map(h => h.split(':')[0])).size, notes: bundleHits })));
+    checks.push(owasp('A04', check('화면 코드에 실제 개인정보가 박혀 있지 않다', { universe: ctx.clients.length || 1, scanned: ctx.clients.length || 1, passed: (ctx.clients.length || 1) - new Set(bundleHits.map(h => h.split(':')[0])).size, notes: bundleHits })));
     return { checks };
   },
 };
