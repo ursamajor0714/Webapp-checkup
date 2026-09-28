@@ -17,7 +17,14 @@ function walk(dir, exts, out = [], depth = 0) {
   }
   return out;
 }
-const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+// 파일 읽기 — 윈도에서 만든 UTF-16 파일(requirements.txt 를 PowerShell 로 저장하면 흔하다)과 BOM 붙은 UTF-8 도 글자로 읽는다
+function decode(buf) {
+  if (buf[0] === 0xFF && buf[1] === 0xFE) return buf.slice(2).toString('utf16le');
+  if (buf[0] === 0xFE && buf[1] === 0xFF) { const b = Buffer.from(buf.slice(2, 2 + ((buf.length - 2) & ~1))); b.swap16(); return b.toString('utf16le'); }
+  if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return buf.slice(3).toString('utf8');
+  return buf.toString('utf8');
+}
+const read = f => { try { return decode(fs.readFileSync(f)); } catch { return ''; } };
 const exists = f => fs.existsSync(f);
 const readJson = f => { try { return JSON.parse(read(f)); } catch { return null; } };
 

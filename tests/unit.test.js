@@ -685,3 +685,40 @@ test('오탐 사냥 (공개 레포 7개) — 남의 사이트 주소·타입 붙
   const t = await require('../common/areas/api/t_time').run(ctx);
   assert.ok(!t.checks.some(c => /Asia\/Seoul/.test(c.name)), '한글이 없는 외국 서비스엔 Asia/Seoul 을 요구하지 않는다');
 });
+
+test('PHP — CodeIgniter 경로·그룹·필터·가드, 순수 PHP 파일 주소, 요청 값 SQL·화면 출력, CSRF 필터 주석, 비밀 아닌 것', async () => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const guard = r => (String(r.handler).split('\n')[0].match(/require(Admin|Login)/) || ['없음'])[0];
+  const ci = makeContext(loadProject({ root: path.join(__dirname, 'fixtures/stacks/ci-app') }));
+  assert.deepStrictEqual(ci.project.parts.map(p => p.stack), ['codeigniter']);
+  const rs = Object.fromEntries(ci.routes().map(r => [`${r.method} ${r.path}`, r]));
+  assert.ok(rs['GET /admin/users/:num'] && guard(rs['GET /admin/users/:num']) === 'requireAdmin', '그룹 접두어 + filter adminAuth → 관리자 가드');
+  assert.strictEqual(guard(rs['GET /admin/login']), '없음', '같은 그룹의 로그인 화면엔 필터가 없다');
+  assert.strictEqual(guard(rs['GET /links']), 'requireLogin', 'if (! session()->get(...)) redirect → 로그인 가드');
+  assert.strictEqual(guard(rs['POST /auth/register']), '없음', '가입 뒤 로그인 화면으로 보내는 것은 가드가 아니다');
+  assert.ok(/function show/.test(rs['GET /admin/users/:num'].handler), '그룹 namespace 로 컨트롤러 메서드를 찾는다');
+  const plain = makeContext(loadProject({ root: path.join(__dirname, 'fixtures/stacks/php-plain') }));
+  const pr = Object.fromEntries(plain.routes().map(r => [`${r.method} ${r.path}`, r]));
+  assert.strictEqual(guard(pr['GET /admin/index.php']), 'requireAdmin', 'if (!isAdminLoggedIn()) → 관리자 가드');
+  assert.strictEqual(guard(pr['GET /admin/login.php']), '없음', "'이미 로그인했으면 넘긴다' 는 가드가 아니다");
+  assert.ok(!pr['GET /admin/func.php'] && !pr['GET /config/db.php'], '함수·설정 파일은 주소가 아니다');
+  const inj = await require('../common/areas/security/i_injection').run(plain);
+  assert.ok(inj.checks.find(c => /SQL/.test(c.name)).items.some(i => i.ok === false && /index\.php/.test(i.name)), '요청 값을 SQL 에 그대로');
+  assert.ok(inj.checks.find(c => /싱크/.test(c.name)).items.some(i => i.ok === false && /index\.php/.test(i.name)), '요청 값을 escape 없이 echo');
+  const k = await require('../common/areas/security/k_secrets').run(plain);
+  assert.ok(!k.checks.find(c => /박혀 있지/.test(c.name)).notes.some(n => /tokenName/.test(n)), 'CSRF 필드 이름은 비밀이 아니다');
+  const kci = await require('../common/areas/security/k_secrets').run(ci);
+  assert.ok(!kci.checks.find(c => /박혀 있지/.test(c.name)).notes.some(n => /min_length/.test(n)), '검증 규칙은 비밀이 아니다');
+  assert.ok(require('../common/lang/rules-php').misconfig.some(([re]) => re.test(require('fs').readFileSync(path.join(__dirname, 'fixtures/stacks/ci-app/app/Config/Filters.php'), 'utf8'))), 'CSRF 필터 주석');
+});
+
+test('다른 사람 레포에서 찾은 것 — UTF-16 requirements.txt 를 읽는다 · 환경변수 이름 자리의 실제 값을 잡는다', () => {
+  const { read } = require('../common/stacks/util');
+  const root = tmp();
+  fs.writeFileSync(path.join(root, 'requirements.txt'), Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('fastapi==0.1\nuvicorn\n', 'utf16le')]));
+  assert.strictEqual(read(path.join(root, 'requirements.txt')).split('\n')[0], 'fastapi==0.1');
+  const re = require('../common/lang/rules-python').secrets.find(x => /이름 자리/.test(x[1]))[0];
+  assert.ok(re.test('"host": os.environ["db.example.com"]') && re.test('os.getenv("pa55word99")'));
+  assert.ok(!re.test('os.environ["DB_PASSWORD"]') && !re.test('os.getenv("lambda_stock_db")'));
+});

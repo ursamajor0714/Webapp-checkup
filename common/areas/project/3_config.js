@@ -91,7 +91,8 @@ module.exports = {
     const hard = [];
     for (const p of ctx.clients.length ? ctx.clients : ctx.parts.filter(x => x.kind === 'both')) for (const f of sources(ctx, p)) {
       const rel = ctx.rel(f);
-      if (NOT_SHIPPED.test(rel) || /config\.|proxy|setupProxy|\.env/i.test(path.basename(rel))) continue;
+      // CodeIgniter 의 app/Config/App.php 기본값(baseURL = localhost)은 배포 때 .env(app.baseURL)가 덮는다
+      if (NOT_SHIPPED.test(rel) || /config\.|proxy|setupProxy|\.env/i.test(path.basename(rel)) || /(^|\/)app\/Config\//.test(rel)) continue;
       read(f).split('\n').forEach((line, i) => {
         if (/https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?/.test(line) && !/process\.env|import\.meta\.env|\?\?|\|\||^\s*\/\/|^\s*\*|console\./.test(line))
           hard.push({ name: `${rel}:${i + 1}`, ok: false, detail: `${line.trim().slice(0, 140)} — 배포하면 사용자의 컴퓨터(localhost)를 부른다. 환경변수나 상대 경로로` });

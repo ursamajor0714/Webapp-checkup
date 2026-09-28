@@ -12,7 +12,7 @@ module.exports = {
     // 1. 저장소 — DB·파일에 쓰는가 (모듈 변수뿐이면 재시작 때 사라진다)
     const src = ctx.serverSrc;
     if (ctx.services.length) {
-      const db = /prisma|mongoose|sequelize|typeorm|knex|\bpg\b|mysql2?|better-sqlite3|sqlite3|writeFile|JpaRepository|CrudRepository|@Entity|models\.Model|SQLAlchemy|sqlmodel|redis/i.test(src) || ctx.services.some(s => s.stack === 'django');
+      const db = /prisma|mongoose|sequelize|typeorm|knex|\bpg\b|mysql2?|better-sqlite3|sqlite3|writeFile|JpaRepository|CrudRepository|@Entity|models\.Model|SQLAlchemy|sqlmodel|redis|extends\s+Model\b|mysqli_query|new\s+PDO\(|->insert\(|file_put_contents/i.test(src) || ctx.services.some(s => s.stack === 'django');
       checks.push(check('데이터를 DB·파일에 저장한다 (재시작해도 남는다)', { universe: 1, scanned: 1, passed: db ? 1 : 0, notes: db ? [] : ['DB·파일 저장 코드를 찾지 못했다 — 메모리에만 두면 재시작·재배포 때 사라진다'] }));
     }
     if (!ctx.live || !ctx.contracts.length) return { checks, partial: !ctx.live ? '서버가 꺼져 있어 저장 검사는 건너뛰었다' : '만드는 경로의 규칙을 찾지 못했다' };

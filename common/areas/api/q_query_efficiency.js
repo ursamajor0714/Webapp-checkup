@@ -7,7 +7,7 @@ module.exports = {
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
     const checks = [];
     const hits = []; let n = 0;
-    for (const s of ctx.services) { const f = sources(ctx, s); n += f.length; const src = f.map(x => ({ x, t: require('../_util').read(x) })); for (const { x, t } of src) if (ctx.lang(s).loopQuery.test(t)) hits.push(`${ctx.rel(x)} — 반복문 안에서 DB 를 부른다 (N+1)`); }
+    for (const s of ctx.services) { const f = sources(ctx, s); n += f.length; const src = f.map(x => ({ x, t: require('../_util').read(x) })); for (const { x, t } of src) if (!/(^|[\\/])(cron|scripts?|migrations?|bin|seeds?|jobs?)[\\/]/.test(ctx.rel(x)) && ctx.lang(s).loopQuery.test(t)) hits.push(`${ctx.rel(x)} — 반복문 안에서 DB 를 부른다 (N+1)`); }
     checks.push(check('반복문 안에서 DB 를 부르지 않는다 (N+1)', { universe: n, scanned: n, passed: n - hits.length, warned: 0, notes: hits }));
     if (ctx.live) {
       const as = ctx.sessions.owner ? 'owner' : 'anon';

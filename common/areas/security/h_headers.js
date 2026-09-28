@@ -68,6 +68,8 @@ module.exports = {
       if (!r) continue;
       for (const [h, re, why, alt] of REQUIRED) {
         if (t.kind === 'API' && h === 'content-security-policy') continue;   // JSON 응답엔 CSP 가 없어도 된다
+        // 액자 끼우기·referrer 는 화면(HTML)의 문제다 — JSON 응답만 주는 API 엔 없어도 결함이 아니다
+        if (t.kind === 'API' && /json/.test(r.headers.get('content-type') || '') && (h === 'x-frame-options' || h === 'referrer-policy') && !(r.headers.get(h))) { items.push({ name: `${t.kind} ${t.path} · ${h}`, ok: null, detail: 'JSON 응답 — 화면이 아니라 급하지 않다 (화면을 주는 쪽에서 붙이는지 확인)' }); continue; }
         const v = r.headers.get(h);
         const ok = (v && re.test(v)) || (alt && alt(r.headers));
         items.push({ name: `${t.kind} ${t.path} · ${h}`, ok: ok ? true : (h === 'strict-transport-security' ? null : false), detail: ok ? String(v || 'CSP frame-ancestors').slice(0, 60) : h === 'strict-transport-security' ? '없음 — 로컬(http)에선 흔하다. 배포 환경에서 붙는지 확인' : `없음 — ${why}` });
@@ -75,7 +77,9 @@ module.exports = {
       for (const h of ['x-powered-by', 'server']) { const v = r.headers.get(h); if (v && /express|next|php|django|werkzeug|uvicorn|apache|nginx\/\d|tomcat|jetty/i.test(v)) leaks.push(`${t.path}: ${h}: ${v}`); }
     }
     checks.push(owasp('A02', checkItems('보안 헤더가 붙는다', items)));
-    checks.push(owasp('A02', check('서버 종류·버전을 헤더로 알리지 않는다', { universe: targets.length, scanned: targets.length, passed: targets.length - new Set(leaks.map(l => l.split(':')[0])).size, notes: leaks })));
+    // 버전까지 알리면(nginx/1.18) 결함, 이름만(uvicorn)이면 확인 필요
+    const withVer = leaks.filter(l => /\/\d|\d+\.\d+/.test(l.split(': ').slice(2).join(': ')) || /x-powered-by/i.test(l)), nameOnly = leaks.filter(l => !withVer.includes(l));
+    checks.push(owasp('A02', check('서버 종류·버전을 헤더로 알리지 않는다', { universe: targets.length, scanned: targets.length, passed: targets.length - new Set(leaks.map(l => l.split(':')[0])).size, warned: new Set(nameOnly.map(l => l.split(':')[0])).size, notes: withVer, warnNotes: nameOnly.map(l => `${l} — 버전은 없지만 서버 종류가 보인다`) })));
     // CORS — 다른 사이트에서 상태를 바꾸는 요청을 허용하는가
     const corsItems = [];
     for (const s of ctx.services.filter(s => ctx.up[s.id])) {
