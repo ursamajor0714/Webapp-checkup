@@ -587,3 +587,28 @@ test('document.write — 값을 HTML 로 꽂는 곳이라 확신할 수 없다 (
   const it = out.checks.find(c => /싱크/.test(c.name)).items.find(i => /print\.js/.test(i.name));
   assert.strictEqual(it.ok, null, JSON.stringify(it));
 });
+
+test('검사한 코드 — 브랜치·커밋을 남기고, 지난 검사와 코드가 다르면 무엇과 견줬는지 적는다 · 떠 있는 서버가 언제 켜졌는지 안다', async () => {
+  const { execFileSync, spawn } = require('child_process');
+  const r = require('../common/runner');
+  const root = write(tmp(), { 'a.txt': '1\n' });
+  const g = (...a) => execFileSync('git', ['-c', 'user.email=qa@example.com', '-c', 'user.name=qa', ...a], { cwd: root });
+  g('init', '-q', '-b', 'main'); g('add', '-A'); g('commit', '-qm', 'x', '--no-verify');
+  const c1 = r.codeVersion(root);
+  assert.strictEqual(c1.branch, 'main'); assert.strictEqual(c1.dirty, 0);
+  g('switch', '-q', '-c', 'fix/qa'); fs.writeFileSync(path.join(root, 'a.txt'), '2\n');
+  const c2 = r.codeVersion(root);
+  assert.strictEqual(c2.branch, 'fix/qa'); assert.strictEqual(c2.dirty, 1);
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, '2026-01-01-00-00-00.json'), JSON.stringify({ summary: { full: true, score: 80, code: c1 }, results: [] }));
+  const d = r.diffWithPrevious(dir, [], 85, 'advanced', null, c2);
+  assert.match(d.codeNote, /main@\w+ → fix\/qa@\w+ \(\+커밋 안 한 변경 1개\)/);
+  if (process.platform !== 'win32') {
+    const child = spawn(process.execPath, ['-e', "require('http').createServer((q,s)=>s.end('ok')).listen(0,function(){console.log(this.address().port)})"]);
+    const port = await new Promise(res => child.stdout.once('data', b => res(String(b).trim())));
+    try {
+      const t = r.processStartOf(`http://localhost:${port}`);
+      assert.ok(t && Math.abs(Date.now() - t) < 60000, `켜진 시각: ${t}`);
+    } finally { child.kill(); }
+  }
+});

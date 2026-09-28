@@ -147,7 +147,7 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     const cmd = sub(plan.start);
     logLine(st, `$ ${cmd.join(' ')}  (PORT=${port})`);
     const child = spawn(cmd[0], cmd.slice(1), { cwd: part.absDir, env, shell: process.platform === 'win32', detached: process.platform !== 'win32' });
-    st.child = child; st.startedByQa = true;
+    st.child = child; st.startedByQa = true; st.startedAt = Date.now();   // 코드가 이보다 새로우면 옛 코드를 띄운 것
     child.stdout.on('data', d => logLine(st, d));
     child.stderr.on('data', d => logLine(st, d));
     child.on('error', e => { st.error = e.message; });
