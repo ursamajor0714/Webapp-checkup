@@ -384,9 +384,22 @@ function hotspots(results, n = 8) {
       by.set(p, h);
     }
   }
-  return [...by.values()].filter(h => h.areas.size >= 2).sort((a, b) => b.areas.size - a.areas.size || b.count - a.count).slice(0, n)
+  const paths = [...by.values()].filter(h => h.areas.size >= 2).sort((a, b) => b.areas.size - a.areas.size || b.count - a.count)
     .map(h => ({ path: h.path, methods: [...h.methods], areas: [...h.areas], count: h.count, s500: h.s500, examples: h.examples,
       hint: h.s500 >= h.count / 2 ? '이 경로가 여러 검사에서 서버 오류(5xx)를 낸다 — 처리 코드 한 곳의 예외일 가능성이 크다. 서버 로그 영역의 스택부터 본다' : '이 경로 하나가 여러 영역에 걸렸다 — 한 번에 고칠 수 있는지 먼저 본다' }));
+  // 같은 예외 메시지가 여러 화면·버튼에서 — 번들·설정 한 곳의 문제일 때가 많다 (예: Expo 웹의 import.meta 69건)
+  const msgs = new Map();
+  for (const r of results) if (!r.skip) for (const c of r.checks || []) for (const i of (c.items || []).filter(i => i.ok === false)) {
+    const m = String(i.detail || '').match(/예외:\s*(.{8,160})/); if (!m) continue;
+    const k = m[1].replace(/\d+/g, 'N').trim();
+    const h = msgs.get(k) || { path: `같은 예외 "${m[1].trim().slice(0, 80)}"`, methods: [], areas: new Set(), count: 0, s500: 0, examples: [] };
+    h.areas.add(r.id); h.count++;
+    if (h.examples.length < 3) h.examples.push({ area: r.id, check: c.name, item: i.name, detail: String(i.detail).slice(0, 120) });
+    msgs.set(k, h);
+  }
+  const same = [...msgs.values()].filter(h => h.count >= 5).sort((a, b) => b.count - a.count)
+    .map(h => ({ ...h, areas: [...h.areas], hint: `같은 예외가 ${h.count}곳에서 났다 — 화면마다 고치지 말고 공통 원인(번들 설정·공용 모듈)부터 본다` }));
+  return [...same, ...paths].slice(0, n);
 }
 
 // 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)

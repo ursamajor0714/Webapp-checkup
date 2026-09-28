@@ -342,3 +342,13 @@ test('커밋 직전 비밀 검사 — 올리려는 키·.env 는 잡고 견본·
   execFileSync('git', ['reset', '-q', 'a.js', '.env'], { cwd: root });
   assert.strictEqual(stagedCheck(root).hits.length, 0);
 });
+
+test('한 원인 묶기 — 같은 예외 메시지가 여러 화면에서 나면 하나로 모은다', () => {
+  const { hotspots } = require('../common/runner');
+  const bad = (n, pre) => Array.from({ length: n }, (_, i) => ({ name: `/p${i}${pre}`, ok: false, detail: "예외: Cannot use 'import.meta' outside a module" }));
+  const h = hotspots([{ id: '2', checks: [{ name: '화면', items: bad(3, '') }] }, { id: '5', checks: [{ name: '버튼', items: bad(3, ' · 홈') }] }]);
+  assert.strictEqual(h.length, 1);
+  assert.strictEqual(h[0].count, 6);
+  assert.deepStrictEqual(h[0].areas, ['2', '5']);
+  assert.strictEqual(hotspots([{ id: '2', checks: [{ name: '화면', items: bad(4, '') }] }]).length, 0);   // 4건 이하는 묶지 않는다
+});
