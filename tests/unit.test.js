@@ -767,3 +767,13 @@ test('DB 표를 만드는 방법이 레포에 있다 — 코드가 쓰는 표와
   assert.strictEqual(good.ok, true);
   assert.strictEqual(await run(write(tmp(), { 'index.php': '<?php mysqli_query($c, "SELECT * FROM posts"); echo 1;', 'app/Database/Migrations/2026_CreatePosts.php': '<?php // forge' })), undefined, '마이그레이션 폴더가 있으면 대조하지 않는다');
 });
+
+test('JS 패키지 관리자 — 잠금 파일(위 폴더까지)로 고르고 npm 명령을 바꾼다 (pnpm 워크스페이스를 npm 으로 깔면 멈춘다)', () => {
+  const { nodePm, withPm } = require('../common/serve');
+  const root = write(tmp(), { 'pnpm-lock.yaml': '', 'apps/web/package.json': '{}', 'b/yarn.lock': '', 'b/package.json': '{}', 'c/package.json': JSON.stringify({ packageManager: 'bun@1.1.0' }) });
+  assert.strictEqual(nodePm(path.join(root, 'apps/web'), root), 'pnpm', '모노레포 — 위 폴더의 잠금 파일');
+  assert.strictEqual(nodePm(path.join(root, 'b'), path.join(root, 'b')), 'yarn');
+  assert.strictEqual(nodePm(path.join(root, 'c'), path.join(root, 'c')), 'bun');
+  const p = withPm({ install: ['npm', 'install'], build: ['npm', 'run', 'build'], start: ['npx', 'next', 'start'] }, 'pnpm');
+  if (p.pm) { assert.deepStrictEqual(p.install.slice(-1), ['install']); assert.notStrictEqual(p.install[0], 'npm'); assert.deepStrictEqual(p.start, ['npx', 'next', 'start'], 'npx 는 그대로'); }
+});

@@ -275,6 +275,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (!known(body.project)) return send(res, 400, { error: '없는 프로젝트' });
       if (body.otp && !/^\d{4,8}$/.test(body.otp)) return send(res, 400, { error: 'OTP 는 숫자입니다' });
+      // 전용 설정(projects/<이름>/project.js)이 있는 프로젝트에 다른 레포를 넣으면, 그 레포를 이 프로젝트의 설정(로그인·공개 경로…)으로 잰다 — 막는다
+      if (typeof body.root === 'string' && body.root.trim()) {
+        const d = defOf(body.project), next = path.resolve(expandHome(body.root.trim())), cur = d.root ? path.resolve(expandHome(d.root)) : null;
+        const remote = dir => { try { return execFileSync('git', ['-C', dir, 'remote', 'get-url', 'origin'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().replace(/\.git$/, '').toLowerCase(); } catch { return null; } };
+        if (d.dir && cur && next !== cur && fs.existsSync(cur) && remote(cur) && remote(next) !== remote(cur))
+          return send(res, 400, { error: `이 프로젝트(${body.project})는 전용 설정이 있는 다른 레포다 — 새 레포는 왼쪽 위 [+ 추가] 로 따로 넣어 주세요` });
+      }
       const local = readLocal();
       const mine = { ...(local.projects[body.project] || {}) };
       for (const k of ['root', ...CRED_KEYS]) {
