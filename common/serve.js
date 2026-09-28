@@ -52,10 +52,31 @@ function newestCode(dir) {
   const files = walk(dir, ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.java', '.kt', '.html', '.css', '.vue', '.svelte', '.ejs', '.pug', '.hbs', '.go', '.rb', '.php', 'package.json']);
   return files.reduce((m, f) => Math.max(m, mtime(f)), 0);
 }
+// 이 레포의 JS 패키지 관리자 — 잠금 파일(그 폴더부터 위로)·package.json 의 packageManager 로. npm 으로 pnpm 워크스페이스를 깔면 'workspace:*' 에서 멈춘다
+function nodePm(dir, stop) {
+  for (let d = dir; ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, 'pnpm-lock.yaml')) || fs.existsSync(path.join(d, 'pnpm-workspace.yaml'))) return 'pnpm';
+    if (fs.existsSync(path.join(d, 'yarn.lock'))) return 'yarn';
+    if (fs.existsSync(path.join(d, 'bun.lock')) || fs.existsSync(path.join(d, 'bun.lockb'))) return 'bun';
+    if (fs.existsSync(path.join(d, 'package-lock.json'))) return 'npm';
+    const pm = ((() => { try { return JSON.parse(fs.readFileSync(path.join(d, 'package.json'), 'utf8')); } catch { return {}; } })().packageManager || '').split('@')[0];
+    if (pm) return pm;
+    if (!stop || d === stop || path.dirname(d) === d) return 'npm';
+  }
+}
+const onPath = bin => { try { execFileSync(process.platform === 'win32' ? 'where' : 'which', [bin], { stdio: 'ignore' }); return true; } catch { return false; } };
+// npm 명령을 그 관리자 명령으로 — 도구가 없으면 corepack 으로 (Node 에 들어 있다)
+function withPm(plan, pm) {
+  if (!plan || pm === 'npm') return plan;
+  const bin = onPath(pm) ? [pm] : ['pnpm', 'yarn'].includes(pm) && onPath('corepack') ? ['corepack', pm] : null;
+  if (!bin) return plan;
+  const tr = a => (Array.isArray(a) && a[0] === 'npm' ? [...bin, ...a.slice(1)] : a);
+  return { ...plan, install: tr(plan.install), build: tr(plan.build), start: tr(plan.start), pm };
+}
 function needsInstall(dir, plan, installedAt) {
-  if (/^npm$/.test(plan.install[0])) {
+  if (/^(npm|pnpm|yarn|bun|corepack)$/.test(plan.install[0])) {
     if (!fs.existsSync(path.join(dir, 'node_modules'))) return '처음 설치';
-    const lock = path.join(dir, 'node_modules', '.package-lock.json');
+    const lock = ['.package-lock.json', '.modules.yaml', '.yarn-integrity'].map(f => path.join(dir, 'node_modules', f)).find(f => fs.existsSync(f)) || path.join(dir, 'node_modules', '.package-lock.json');
     return mtime(path.join(dir, 'package.json')) > (mtime(lock) || mtime(path.join(dir, 'node_modules'))) ? 'package.json 이 설치 뒤에 바뀌었다' : null;
   }
   const req = path.join(dir, 'requirements.txt');
@@ -112,8 +133,10 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
   st.log = []; st.error = null;
   const key = `${def.id}:${part.dir}`;
   try {
-    const plan = STACKS[part.stack] && STACKS[part.stack].serve && STACKS[part.stack].serve(part.absDir);
-    if (!plan) throw new Error(`${part.stack} 는 켜는 방법을 모릅니다`);
+    const plan0 = STACKS[part.stack] && STACKS[part.stack].serve && STACKS[part.stack].serve(part.absDir);
+    if (!plan0) throw new Error(`${part.stack} 는 켜는 방법을 모릅니다`);
+    const plan = part.lang === 'js' ? withPm(plan0, nodePm(part.absDir, def.root)) : plan0;
+    if (plan.pm) logLine(st, `패키지 관리자: ${plan.pm} (잠금 파일을 보고 골랐다)`);
     if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; logLine(st, '이미 켜져 있습니다'); return; }
     const port = new URL(part.baseUrl).port || '80';
     const { env, missing } = envFor(def, port);
@@ -188,4 +211,4 @@ function stop(st) {
 
 const canServe = part => !!(STACKS[part.stack] && STACKS[part.stack].serve) && !part.servedBy && !part.native && !!part.baseUrl;
 
-module.exports = { newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
+module.exports = { nodePm, withPm, newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
