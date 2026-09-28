@@ -511,3 +511,70 @@ test('성능 추세 · OWASP 2025 — 지난번보다 무거워진 화면을 잡
   assert.strictEqual(r.OWASP.A10, '예외 상황 처리 실패');
   assert.strictEqual(r.OWASP.A05, '주입');
 });
+
+test('Docker·웹훅·AI 호출 — root 컨테이너·.env 복사·열린 DB 포트, 서명 없는 웹훅, 로그인·제한 없는 AI 경로와 화면 공개 키', async () => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ name: 'x', dependencies: { express: '^4', openai: '^4', stripe: '^14' } }),
+    'server.js': [
+      "const express = require('express'); const OpenAI = require('openai'); const app = express(); const openai = new OpenAI();",
+      "app.post('/api/ask', async (req, res) => { const r = await openai.chat.completions.create({ model: 'gpt-4o', messages: [{ role: 'user', content: req.body.q }] }); res.json(r); });",
+      "app.post('/api/stripe/webhook', (req, res) => { const ev = req.body; if (ev.type === 'paid') markPaid(ev.id); res.json({ ok: true }); });",
+      "app.post('/api/github/webhook', (req, res) => { const sig = req.headers['x-hub-signature-256']; verifySignature(sig, req.body); res.json({}); });",
+      'app.listen(3000);'].join('\n'),
+    '.env.example': 'VITE_OPENAI_API_KEY=\n',
+    '.env': 'X=1\n',
+    'Dockerfile': 'FROM node\nWORKDIR /app\nCOPY . .\nENV JWT_SECRET=supersecretvalue\nCMD ["node","server.js"]\n',
+    'docker-compose.yml': 'services:\n  db:\n    image: postgres:16\n    ports:\n      - "5432:5432"\n    privileged: true\n',
+  });
+  const ctx = makeContext(loadProject({ root }));
+  const cfg = await require('../common/areas/project/3_config').run(ctx);
+  const dk = cfg.checks.find(c => /Docker/.test(c.name));
+  const dtext = dk.items.filter(i => i.ok !== true).map(i => `${i.name} ${i.detail}`).join('\n');
+  for (const re of [/root 로 돈다/, /\.dockerignore/, /JWT_SECRET/, /FROM node — 버전/, /5432/, /privileged/]) assert.match(dtext, re);
+  const saas = await require('../common/areas/project/b_saas').run(ctx);
+  const hook = saas.checks.find(c => /웹훅/.test(c.name)).items;
+  assert.strictEqual(hook.find(i => /stripe/.test(i.name)).ok, false, '서명 없는 결제 웹훅');
+  assert.strictEqual(hook.find(i => /github/.test(i.name)).ok, true, '서명을 확인하는 웹훅');
+  const ai = saas.checks.find(c => /AI 호출/.test(c.name)).items.map(i => `${i.ok} ${i.name} ${i.detail}`).join('\n');
+  assert.match(ai, /false 환경변수 VITE_OPENAI_API_KEY/);
+  assert.match(ai, /false POST \/api\/ask · AI 호출 로그인 없이, 횟수 제한 없이/);
+  assert.match(ai, /max_tokens/);
+});
+
+test('배포 직후 지켜보기 — 열리던 화면이 500 이 되면 잡는다 (읽기만)', async () => {
+  const http = require('http');
+  const { watchLive, snapshotPages } = require('../common/live');
+  let broken = false; const methods = new Set();
+  const srv = http.createServer((q, s) => { methods.add(q.method); if (broken) { s.writeHead(500, { 'Content-Type': 'text/plain' }); return s.end('Error\n    at Layer.handle (/srv/node_modules/express/lib/x.js:1:1)'); } s.writeHead(200, { 'Content-Type': 'text/html' }); s.end('<!doctype html><title>홈</title>' + 'x'.repeat(500)); });
+  await new Promise(r => srv.listen(0, r));
+  process.env.QA_LIVE_GAP_MS = '0';
+  try {
+    const url = `http://localhost:${srv.address().port}/`;
+    const baseline = await snapshotPages(url, null);
+    broken = true;
+    const rep = await watchLive(url, null, { minutes: 0.02, baseline, intervalMs: 300, log: () => {} });
+    assert.ok(rep.bad >= 1, JSON.stringify(rep.rounds));
+    assert.match(JSON.stringify(rep.rounds), /200 → 500/);
+    assert.deepStrictEqual([...methods], ['GET']);
+  } finally { srv.close(); delete process.env.QA_LIVE_GAP_MS; }
+});
+
+test('바뀐 부분만 (--diff) — 바뀐 서버 파일의 경로만 남긴다', async () => {
+  const { execFileSync } = require('child_process');
+  const runner = require('../common/runner');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ name: 'x', dependencies: { express: '^4' } }),
+    'server.js': "const app = require('express')(); app.use(require('./a')); app.use(require('./b')); app.listen(3999);",
+    'a.js': "const r = require('express').Router(); r.get('/api/a', (q, s) => s.json([])); module.exports = r;",
+    'b.js': "const r = require('express').Router(); r.get('/api/b', (q, s) => s.json([])); module.exports = r;",
+  });
+  const g = (...a) => execFileSync('git', ['-c', 'user.email=qa@example.com', '-c', 'user.name=qa', ...a], { cwd: root });
+  g('init', '-q', '-b', 'main'); g('add', '-A'); g('commit', '-qm', 'x', '--no-verify');
+  g('switch', '-q', '-c', 'feat');
+  fs.appendFileSync(path.join(root, 'b.js'), '\n// 바꿈\n'); g('commit', '-qam', 'y', '--no-verify');
+  const prep = await runner.prepare({ id: 'diff-test', root }, { diff: true, autoServe: false, only: ['A'] });
+  assert.deepStrictEqual(prep.ctx.routes().map(r => r.path), ['/api/b']);
+  assert.strictEqual(prep.ctx.diffScope.base, 'main');
+});

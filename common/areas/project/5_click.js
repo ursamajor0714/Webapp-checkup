@@ -2,11 +2,13 @@
 //   화면마다 버튼·탭·접기 메뉴를 차례로 눌러 보고: 잡히지 않은 예외, 오류 알림창, 눌러도 아무 반응 없는 버튼(죽은 버튼)
 //   안전장치: 서버로 가는 쓰기 요청(POST·PUT·PATCH·DELETE)은 브라우저 안에서 전부 막고 가짜 응답을 준다 → 데이터는 바뀌지 않는다
 //            삭제·로그아웃·결제·저장·제출처럼 보이는 버튼은 아예 누르지 않는다. 다른 사이트로 나가는 링크도 막는다
+//   지우기 확인: 삭제·탈퇴 버튼은 따로 누른다 — 이때는 GET 까지 모든 요청을 막고, 확인창(confirm·모달)이 먼저 뜨는지만 본다 (창은 '취소')
 //   저장 실패: 쓰기 요청을 보낸 버튼은 한 번 더 누르며 서버가 거절(500)한 것처럼 답한다 → 화면이 실패를 알리는가·예외로 죽는가
 const { checkItems } = require('../_util');
 const { openBrowser, startPages, newContext } = require('../../browser');
 
 const MAX_PAGES = 10, MAX_CLICKS = 40;
+const DESTROY = /삭제|지우기|지우|탈퇴|해지|\b(?:delete|remove|destroy|unsubscribe|deactivate)\b/i;
 const DANGER = /삭제|지우|탈퇴|로그아웃|결제|구매|주문|저장|제출|전송|보내기|등록|확정|승인|해제|초기화|리셋|발송|신청|취소|\b(?:delete|remove|destroy|logout|log ?out|sign ?out|pay|purchase|checkout|order|save|submit|send|confirm|approve|revoke|reset|clear|drop|upload)\b/i;
 
 // 화면 상태 한 줄 — 주소 + 화면 구조(클래스 포함) + 입력칸 값 + 스크롤. 누르기 전후가 같으면 '아무 일도 없었다'
@@ -24,7 +26,7 @@ module.exports = {
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
-    const items = [], dead = [], failItems = [], skipped = [];
+    const items = [], dead = [], failItems = [], skipped = [], confirmItems = [];
     let blockedTotal = 0, missed = 0;
     try {
       const { context, note } = await newContext(ctx, b.browser, ctx.baseUrl(start[0].part));
@@ -34,14 +36,19 @@ module.exports = {
         const origin = new URL(url).origin;
         const page = await context.newPage();
         const events = [];   // 이 화면에서 일어난 일 (클릭마다 잘라 본다)
-        let blocked = 0, requests = 0, failMode = false;
+        let blocked = 0, requests = 0, failMode = false, destroyMode = false;
         page.on('pageerror', e => events.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
         page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR_|favicon|DevTools|\[HMR\]/i.test(m.text())) events.push({ kind: '콘솔 오류', text: m.text().split('\n')[0] }); });
-        page.on('dialog', async d => { events.push({ kind: '알림창', text: d.message() }); await d.dismiss().catch(() => {}); });
+        page.on('dialog', async d => { events.push({ kind: '알림창', type: d.type(), text: d.message() }); await d.dismiss().catch(() => {}); });   // confirm 은 '취소'
         await page.route('**/*', async route => {
           const req = route.request();
           const u = new URL(req.url());
           if (req.isNavigationRequest() && u.origin !== origin) return route.abort();   // 밖으로 나가는 이동 막기
+          // 지우기 확인 중에는 데이터 요청을 GET 까지 전부 막는다 (GET /delete?id= 로 지우는 앱도 있다)
+          if (destroyMode && (['xhr', 'fetch'].includes(req.resourceType()) || (req.isNavigationRequest() && DESTROY.test(u.pathname + u.search)) || !['GET', 'HEAD', 'OPTIONS'].includes(req.method()))) {
+            blocked++; blockedTotal++; events.push({ kind: '막은 쓰기', text: `${req.method()} ${u.pathname}` });
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, ok: true, data: {}, message: 'QA: 요청은 막았다' }) });
+          }
           if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method())) {
             blocked++; blockedTotal++;
             events.push({ kind: '막은 쓰기', text: `${req.method()} ${u.pathname}` });
@@ -123,6 +130,35 @@ module.exports = {
           // 다른 화면으로 넘어갔으면 돌아온다
           if (after.split('|')[0] !== url && !after.startsWith(url + '#')) { await page.goto(url, { waitUntil: 'load', timeout: 20000 }).catch(() => {}); await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {}); await mark(); }
         }
+        // 지우기 전에 확인을 묻는가 — 화면의 삭제·탈퇴 버튼 (최대 5개)
+        await page.goto(url, { waitUntil: 'load', timeout: 20000 }).catch(() => {}); await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+        const destroyers = await page.evaluate(src => {
+          const re = new RegExp(src, 'i'), out = [];
+          [...document.querySelectorAll('button, [role=button], a[href], input[type=button], input[type=submit]')].forEach((el, i) => {
+            const r = el.getBoundingClientRect(), label = (el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().replace(/\s+/g, ' ').slice(0, 30);
+            if (!r.width || !r.height || el.disabled || !re.test(label) || /로그아웃|logout/i.test(label)) return;
+            el.setAttribute('data-qa-destroy', String(i)); out.push({ sel: `[data-qa-destroy="${i}"]`, label });
+          });
+          return out.slice(0, 5);
+        }, DESTROY.source).catch(() => []);
+        destroyMode = true;
+        for (const t of destroyers) {
+          const e0 = events.length;
+          const modal0 = await page.evaluate(() => document.querySelectorAll('[role=dialog], [role=alertdialog], dialog[open], .modal.show, .modal[style*="block"]').length).catch(() => 0);
+          try { await page.click(t.sel, { timeout: 800 }); } catch { await page.evaluate(sel => { const el = document.querySelector(sel); if (el) el.click(); }, t.sel).catch(() => {}); }
+          await page.waitForTimeout(600);
+          const ev = events.slice(e0);
+          const asked = ev.some(e => e.kind === '알림창' && (e.type === 'confirm' || /정말|확인|삭제하시|지우시|되돌릴 수|sure|confirm/i.test(e.text)));
+          const modal = await page.evaluate(() => [...document.querySelectorAll('[role=dialog], [role=alertdialog], dialog[open], .modal.show, .modal[style*="block"]')].filter(e => e.getBoundingClientRect().height > 0).length).catch(() => 0);
+          const sent = ev.filter(e => e.kind === '막은 쓰기');
+          const name = `${pg.path} · "${t.label}"`;
+          confirmItems.push(asked || modal > modal0 ? { name, ok: true, detail: `먼저 확인을 묻는다${sent.length ? '' : ''}` }
+            : sent.length ? { name, ok: false, detail: `확인 없이 바로 지우는 요청을 보낸다 (${sent.map(e => e.text).join(', ').slice(0, 80)} — 막았다). 실수 한 번에 데이터가 사라진다 — confirm 이나 확인 창을 먼저` }
+            : { name, ok: null, detail: '눌러도 확인창도, 요청도 없었다 — 다른 단계가 있는지 확인' });
+          await page.keyboard.press('Escape').catch(() => {});
+          if (!page.url().startsWith(url)) await page.goto(url, { waitUntil: 'load', timeout: 20000 }).catch(() => {});
+        }
+        destroyMode = false;
         await page.close();
       }
     } finally { await b.browser.close().catch(() => {}); }
@@ -132,6 +168,7 @@ module.exports = {
       checkItems('버튼을 눌러도 예외·오류 알림이 나지 않는다', items.length ? items : [{ name: '클릭', ok: null, detail: '누른 것이 없다' }]),
       ...(dead.length ? [checkItems('누르면 무언가 일어난다 (죽은 버튼)', dead)] : []),
       ...(failItems.length ? [checkItems('저장이 실패하면 사용자에게 알린다 (서버 거절 흉내)', failItems)] : []),
+      ...(confirmItems.length ? [checkItems('지우기 전에 확인을 묻는다', confirmItems)] : []),
     ], skipped };
   },
 };

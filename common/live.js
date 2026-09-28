@@ -174,6 +174,43 @@ async function runLive(url, def = null, { log = console.log } = {}) {
   return { url: base.origin + base.pathname, at: new Date().toISOString(), requests: sent(), maxRequests: MAX_REQUESTS, checks };
 }
 
+// 배포 직후 지켜보기 — node run.js [레포] --live=주소 --watch=10m   (gstack /canary)
+//   배포 전에 --baseline 으로 한 번 찍어 두면 그것과, 없으면 첫 바퀴와 견준다. 1분마다 같은 화면들을 읽기만 한다 (GET, 화면 10개까지)
+//   잡는 것: 열리던 화면이 오류(4xx·5xx)로 · 응답이 전보다 크게 느려짐 · 내용 크기가 크게 달라짐(빈 화면·오류 화면) · 오류 화면에 스택
+async function pagesOf(base, def) {
+  const list = [base.pathname || '/'];
+  if (def) { const { loadProject } = require('./project'); const { makeContext } = require('./context'); for (const pg of makeContext(loadProject(def)).pages()) if (!/[:[{<*]/.test(pg.path) && !list.includes(pg.path)) list.push(pg.path); }
+  return list.slice(0, 10);
+}
+async function snapshotPages(url, def) {
+  const base = new URL(url), pages = await pagesOf(base, def), { get } = client(base.origin), out = {};
+  for (const p of pages) { const r = await get(p, { redirect: 'follow' }); const title = ((r.text || '').match(/<title[^>]*>([^<]*)/i) || [])[1] || ''; out[p] = { status: r.status, ms: r.ms, len: (r.text || '').length, title: title.trim().slice(0, 80), stack: STACK.test(r.text || '') }; }
+  return out;
+}
+async function watchLive(url, def, { minutes = 10, baseline = null, log = console.log, intervalMs = 60000 } = {}) {
+  const ref = baseline || await snapshotPages(url, def);
+  log(`기준: ${baseline ? '배포 전에 찍어 둔 것' : '첫 바퀴 (배포 전 기준이 없다 — 다음엔 배포 전에 --baseline)'} · 화면 ${Object.keys(ref).length}개 · ${minutes}분 동안 1분마다`);
+  const rounds = [], deadline = Date.now() + minutes * 60000;
+  while (Date.now() < deadline) {
+    const t0 = Date.now(), now = await snapshotPages(url, def), probs = [];
+    for (const [p, b] of Object.entries(ref)) {
+      const c = now[p]; if (!c) continue;
+      if (b.status < 400 && (c.status >= 400 || c.status <= 0)) probs.push({ page: p, bad: true, what: `${b.status} → ${c.status || '응답 없음'} — 열리던 화면이 안 열린다` });
+      else if (c.ms > Math.max(b.ms * 2, b.ms + 1000)) probs.push({ page: p, bad: false, what: `응답 ${b.ms}ms → ${c.ms}ms — 크게 느려졌다` });
+      if (b.len > 200 && Math.abs(c.len - b.len) / b.len > 0.5) probs.push({ page: p, bad: false, what: `내용 크기 ${b.len} → ${c.len} — 크게 달라졌다 (빈 화면·오류 화면인지 확인)` });
+      if (!b.stack && c.stack) probs.push({ page: p, bad: true, what: '오류 화면에 스택이 나온다 — 배포본이 예외를 낸다' });
+      if (b.title && c.title && b.title !== c.title && c.status < 400) probs.push({ page: p, bad: false, what: `제목이 바뀌었다: "${b.title}" → "${c.title}"` });
+    }
+    rounds.push({ at: new Date().toISOString(), problems: probs });
+    log(`${new Date().toLocaleTimeString('ko-KR')} ${probs.length ? probs.map(x => `${x.bad ? '✗' : '△'} ${x.page} ${x.what}`).join(' | ') : '✓ 기준과 같다'}`);
+    const wait = intervalMs - (Date.now() - t0);
+    if (Date.now() + Math.max(0, wait) >= deadline) break;
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  }
+  const bad = rounds.flatMap(r => r.problems.filter(x => x.bad));
+  return { url, baseline: ref, rounds, bad: bad.length, warn: rounds.flatMap(r => r.problems.filter(x => !x.bad)).length };
+}
+
 function printLive(rep, log = console.log) {
   if (rep.error) { log(`✗ ${rep.url} — ${rep.error}`); return 1; }
   let failed = 0, warned = 0, passed = 0;
@@ -187,4 +224,4 @@ function printLive(rep, log = console.log) {
   return failed ? 1 : 0;
 }
 
-module.exports = { runLive, printLive, client };
+module.exports = { runLive, printLive, client, snapshotPages, watchLive };

@@ -81,7 +81,7 @@ function listAreas(def) {
 }
 
 // ── 준비: 부분 감지 · 로그인 방식 · 서버 살았나 · 계정 · 규칙 추출
-async function prepare(def, { only = [], singleOnly = false, log = () => {}, servers = {}, autoServe = true, level } = {}) {
+async function prepare(def, { only = [], singleOnly = false, log = () => {}, servers = {}, autoServe = true, level, diff = null } = {}) {
   const project = loadProject(def);
   if (!project.root || !fs.existsSync(project.root)) throw new Error(`레포 폴더가 없다: ${project.root}`);
   const ctx = makeContext(project);
@@ -138,6 +138,28 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   const downSvc = new Set(ctx.services.filter(s => !up[s.id]).map(s => s.id));
   if (downSvc.size && downSvc.size < ctx.services.length) ctx.routes = () => allRoutes.filter(r => !downSvc.has(r.service));
   ctx.live = ctx.services.length > 0 && ctx.services.some(s => up[s.id]);
+  // 바뀐 부분만 (--diff) — 브랜치에서 바뀐 파일의 경로와, 바뀐 화면 파일이 부르는 경로만 두드린다 (gstack /qa diff-aware)
+  //   코드만 보는 검사(비밀·위험 코드 등)는 빠르므로 레포 전체 그대로. 결과는 비교 기준(지난 검사)으로 쓰지 않는다
+  if (diff) {
+    const git = a => require('child_process').execFileSync('git', ['-C', project.root, '-c', 'core.quotepath=false', ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    let base = diff === true ? null : diff;
+    if (!base) for (const b of ['main', 'master', 'origin/main', 'origin/master']) { try { git(['rev-parse', '--verify', '-q', b]); base = b; break; } catch { /* 없음 */ } }
+    const names = new Set();
+    for (const a of [base ? ['diff', '--name-only', `${base}...HEAD`] : null, ['diff', '--name-only', 'HEAD'], ['ls-files', '--others', '--exclude-standard']].filter(Boolean)) { try { git(a).split('\n').filter(Boolean).forEach(f => names.add(path.join(project.root, f))); } catch { /* 깃 아님 */ } }
+    // 경로·호출의 file 은 부분 폴더 기준 상대 경로다 — 절대 경로로 맞춰 견준다
+    const absOf = (partId, f) => { const p = ctx.parts.find(x => x.id === partId); return f ? path.resolve(p ? p.absDir : project.root, f) : ''; };
+    const inScope = r => names.has(absOf(r.service, r.file));
+    const baseRoutes = ctx.routes, basePages = ctx.pages;
+    const calledPaths = ctx.calls().filter(c => names.has(absOf(c.client, c.file)));
+    const matches = (r, c) => r.method === c.method && new RegExp('^' + r.path.replace(/:[A-Za-z0-9_]+\*?/g, '[^/]+') + '/?$').test(c.path.replace(/\$\{[^}]+\}/g, 'x').split('?')[0]);
+    const scoped = baseRoutes().filter(r => inScope(r) || calledPaths.some(c => matches(r, c)));
+    const clientChanged = ctx.clients.some(c => [...names].some(f => f.startsWith(c.absDir + path.sep))) || ctx.parts.some(p => p.stack === 'templates' && [...names].some(f => f.startsWith(p.absDir + path.sep)));
+    ctx.routes = () => scoped;
+    ctx.pages = () => (clientChanged ? basePages() : []);
+    ctx.diffScope = { base: base || '(작업 중인 변경만)', files: names.size, routes: scoped.length, pages: ctx.pages().length };
+    ctx.notes.push(`바뀐 부분만 검사 (기준 ${ctx.diffScope.base}): 바뀐 파일 ${names.size}개 → 서버 경로 ${scoped.length}개 · 화면 ${ctx.diffScope.pages}개. 코드만 보는 검사는 레포 전체`);
+    if (!names.size) ctx.notes.push('바뀐 파일이 없다 — 기준 브랜치와 같다');
+  }
   ctx.pagesLive = ctx.pages().some(pg => up[pg.part]);
   const downClients = ctx.clients.filter(c => up[c.id] === false);
   if (downClients.length) ctx.notes.push(`꺼진 화면 서버: ${downClients.map(c => `${c.id}(${c.baseUrl})`).join(', ')} — 화면을 여는 검사는 건너뛴다`);
@@ -257,7 +279,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     .filter(p => !singleOnly || !COMPOSITE.includes(p.id));
   // 로그인 잠금처럼 뒤 검사를 막을 수 있는 영역(last: true)은 맨 뒤에 돈다
   probes.sort((a, b) => (+a.last || 0) - (+b.last || 0));
-  return { def, project, ctx, probes, only, level: ctx.level, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
+  return { def, project, ctx, probes, only, diff, level: ctx.level, todo: all.filter(p => p.todo), toolDir: path.join(QA_ROOT, 'reports', def.id), config: project };
 }
 
 // ── 영역 하나 실행
@@ -576,7 +598,8 @@ async function finish(prep, results, { save = true } = {}) {
     coverage: { measured: measured.length, total: results.length },   // 잰 영역 / 돌린 영역 — 점수와 꼭 같이 본다
   };
   // 지난 전체 검사와 비교 — 새로 생긴 문제·고쳐진 문제·점수 변화
-  summary.full = !prep.only || !prep.only.length;
+  summary.full = (!prep.only || !prep.only.length) && !prep.diff;   // 일부만 잰 검사는 비교 기준이 못 된다
+  if (prep.ctx.diffScope) summary.diffScope = prep.ctx.diffScope;
   if (save && summary.full) { try { summary.diff = diffWithPrevious(prep.toolDir, results, score, summary.level.id, summary.qa); } catch { /* 지난 리포트를 못 읽으면 건너뛴다 */ } }
   const report = { summary, tiers: TIERS, grades: GRADES, maturity: mat, selfcheck: self, results };
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');   // 초까지 — 같은 분에 두 번 돌려도 앞 리포트를 덮어쓰지 않는다
@@ -616,17 +639,30 @@ async function run(arg) {
     const def = def0;
     if (def) def.root = String(def.root).replace(/^~/, require('os').homedir());
     console.log(`배포 주소 검사 (읽기 전용 — GET·HEAD 만): ${url}${def ? ` · 레포 ${def.root}` : ' · 레포 없이 (주소만으로 볼 수 있는 것만)'}\n`);
-    const { runLive, printLive } = require('./live');
-    const rep = await runLive(url, def);
+    const { runLive, printLive, snapshotPages, watchLive } = require('./live');
     const dir = path.join(QA_ROOT, 'reports', def ? def.id : new URL(url).hostname.replace(/[^\w.-]/g, '_'));
     fs.mkdirSync(dir, { recursive: true });
+    const baseFile = path.join(dir, 'live-baseline.json');
+    // 배포 전에 한 번 — 지켜보기의 기준을 찍어 둔다
+    if (args.includes('--baseline')) { const b = await snapshotPages(url, def); fs.writeFileSync(baseFile, JSON.stringify({ url, at: new Date().toISOString(), pages: b }, null, 2)); console.log(`기준을 찍었다 (화면 ${Object.keys(b).length}개) — 배포한 뒤 --watch=10m 으로 지켜본다\n${path.relative(QA_ROOT, baseFile)}`); return; }
+    const w = args.find(a => a.startsWith('--watch'));
+    if (w) {
+      const minutes = Math.min(30, Math.max(1, parseInt((w.split('=')[1] || '10').replace(/m$/, ''), 10) || 10));
+      let baseline = null; try { const b = JSON.parse(fs.readFileSync(baseFile, 'utf8')); if (b.url === url) baseline = b.pages; } catch { /* 없음 */ }
+      const rep = await watchLive(url, def, { minutes, baseline });
+      const file = path.join(dir, `live-watch-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.json`);
+      fs.writeFileSync(file, JSON.stringify(rep, null, 2));
+      console.log(`\n${rep.bad ? `✗ 문제 ${rep.bad}번` : '✓ 문제 없음'}${rep.warn ? ` · 확인 필요 ${rep.warn}번` : ''} · ${rep.rounds.length}바퀴\n리포트: ${path.relative(QA_ROOT, file)}`);
+      process.exitCode = rep.bad ? 1 : 0; return;
+    }
+    const rep = await runLive(url, def);
     const file = path.join(dir, `live-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.json`);
     fs.writeFileSync(file, JSON.stringify(rep, null, 2));
     process.exitCode = printLive(rep);
     console.log(`리포트: ${path.relative(QA_ROOT, file)}`);
     return;
   }
-  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60] [--staged: 커밋 직전 비밀 검사만] [--live=https://배포주소: 읽기 전용 배포 검사]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60] [--staged: 커밋 직전 비밀 검사만] [--diff[=main]: 브랜치에서 바뀐 부분만] [--live=https://배포주소: 읽기 전용 배포 검사 · --baseline 배포 전 기준 · --watch=10m 배포 직후 지켜보기]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
   // 커밋 직전 비밀 검사 — 서버·설정 없이 스테이징된 것만 (커밋 훅용)
   if (args.includes('--staged')) {
     const root = resolveProject(target).root.replace(/^~/, require('os').homedir());
@@ -640,7 +676,8 @@ async function run(arg) {
   const only = (args.find(a => a.startsWith('--only=')) || '').replace('--only=', '').split(',').filter(Boolean);
   const jsonOnly = args.includes('--json');
   const def = resolveProject(target);
-  const prep = await prepare(def, { only, singleOnly: args.includes('--single'), autoServe: !args.includes('--no-serve'), level: (args.find(a => a.startsWith('--level=')) || '').split('=')[1] || undefined, log: m => !jsonOnly && console.error(m) });
+  const diffArg = args.find(a => a === '--diff' || a.startsWith('--diff='));
+  const prep = await prepare(def, { only, diff: diffArg ? (diffArg.split('=')[1] || true) : null, singleOnly: args.includes('--single'), autoServe: !args.includes('--no-serve'), level: (args.find(a => a.startsWith('--level=')) || '').split('=')[1] || undefined, log: m => !jsonOnly && console.error(m) });
   // 검사가 켠 서버는 끝나면 끈다 (Ctrl+C 로 멈춰도)
   const stopStarted = () => { for (const st of Object.values(prep.ctx.startedServers || {})) require('./serve').stop(st); };
   process.once('exit', stopStarted);

@@ -25,6 +25,9 @@ node run.js my-app --ci --fail-under=60     # CI: 지난 검사보다 새 문제
 node run.js . --staged                      # 커밋 직전: 스테이징된 파일에 비밀(K 영역과 같은 패턴)·.env 가 있으면 끝 코드 1
 node run.js my-app --live=https://x.com     # 배포 주소 검사 — GET·HEAD 만, 한 번에 하나씩, 최대 200번 (QA_LIVE_MAX)
 node run.js --live=https://x.com            #   레포 없이도 된다 (주소만으로 볼 수 있는 것만). 설정에 liveUrl 이 있으면 --live 만 줘도 된다
+node run.js my-app --live=https://x.com --baseline      # 배포 전에 기준을 찍어 두고
+node run.js my-app --live=https://x.com --watch=10m     # 배포한 뒤 1분마다 지켜본다 (최대 30분, 읽기만)
+node run.js my-app --diff[=main]            # 브랜치에서 바뀐 파일의 경로·화면만 (코드 검사는 전체)
                                             #   훅으로 쓰려면 .git/hooks/pre-commit 에 이 한 줄을 넣는다
 node run.js my-app --level=초급              # 검사 수준 — 초급·중급·고급(기본)·전문가 (basic·standard·advanced·expert)
 ```
