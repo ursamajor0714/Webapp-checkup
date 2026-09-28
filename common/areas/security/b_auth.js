@@ -105,8 +105,10 @@ module.exports = {
       : ctx.call(auth.loginPath, { as: 'anon', method: 'POST', body: body(), service: ctx.authService, headers: { 'X-Forwarded-For': ip } });
     for (let i = 0; i < 12; i++) { const r = await attempt(ipA); tries.push(r.status); if (r.status === 429 || r.status === 423) break; }
     const limited = tries.some(s => s === 429 || s === 423);
-    checks.push(owasp('A07', check('로그인 무차별 대입이 막힌다 (12번 연속 오답)', { universe: 1, scanned: 1, passed: limited ? 1 : 0,
-      notes: limited ? [`${tries.length}번째에 ${tries[tries.length - 1]}`] : [`12번 연속 오답이 전부 ${[...new Set(tries)].join('/')} — 횟수 제한(429)이 없다`] })));
+    const noAnswer = !limited && tries.every(s => !s);   // 응답이 하나도 없다 — 서버가 꺼졌다. 횟수 제한이 없다는 증거가 아니다
+    checks.push(owasp('A07', check('로그인 무차별 대입이 막힌다 (12번 연속 오답)', { universe: 1, scanned: 1, passed: limited ? 1 : 0, warned: noAnswer ? 1 : 0,
+      notes: limited ? [`${tries.length}번째에 ${tries[tries.length - 1]}`] : noAnswer ? [] : [`12번 연속 오답이 전부 ${[...new Set(tries)].join('/')} — 횟수 제한(429)이 없다`],
+      warnNotes: noAnswer ? ['로그인 경로가 응답하지 않아 재지 못했다 (서버가 꺼졌거나 멈췄다)'] : [] })));
     if (limited) {
       const r = await attempt(fakeIp());
       const bypass = r.status !== 429 && r.status !== 423;

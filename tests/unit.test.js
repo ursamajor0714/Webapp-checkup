@@ -612,3 +612,17 @@ test('검사한 코드 — 브랜치·커밋을 남기고, 지난 검사와 코�
     } finally { child.kill(); }
   }
 });
+
+test('서버가 응답하지 않으면 결함이 아니다 — 인증 매트릭스의 응답 0 은 재지 못함, 영역 사이에 서버가 꺼지면 이후는 건너뛴다', async () => {
+  const { authMatrix } = require('../common/contract');
+  const ctx = { tokens: { owner: 't' }, sessions: {}, call: async () => ({ status: 0, text: '', headers: new Headers() }), baseUrl: () => 'http://127.0.0.1:9' };
+  const items = await authMatrix(ctx, { routes: [{ method: 'POST', path: '/api/notices', service: 's' }] });
+  const all = [].concat(items.items || items).filter(i => /토큰 없음|엉터리/.test(i.name));
+  assert.ok(all.length && all.every(i => i.ok === null && /응답 없음/.test(i.detail)), JSON.stringify(all));
+  const runner = require('../common/runner');
+  const c2 = { live: true, up: { s: true }, services: [{ id: 's' }], baseUrl: () => 'http://127.0.0.1:9', notes: [], level: { strict: false } };
+  const r = await runner.runProbe(c2, { id: 'B', name: 'x', weight: 1, run: async ctx => (ctx.live ? { checks: [] } : { skip: '서버가 꺼져 있다' }) });
+  assert.strictEqual(c2.serverDown, 'B');
+  assert.strictEqual(r.skip, '서버가 꺼져 있다');
+  assert.ok(c2.notes.some(n => /검사 도중.*서버가 꺼졌다/.test(n)));
+});
