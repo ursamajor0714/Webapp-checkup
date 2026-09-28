@@ -56,6 +56,7 @@ node run.js my-app --only=B,F,I                 # 영역 골라서
 node run.js my-app --ci --fail-under=60         # CI — 새 문제가 생기거나 점수가 기준 아래면 실패
 node run.js . --staged                          # 커밋 직전 — git add 한 것에 키·.env 가 섞였으면 멈춘다
 node run.js my-app --live=https://내사이트.com   # 배포본 점검 — 읽기만 한다 (GET·HEAD, 로그인·쓰기 없음)
+node run.js my-app --diff                       # 브랜치에서 바뀐 부분만 빠르게
 ```
 
 1. **＋ 프로젝트 추가** → 레포 폴더 경로

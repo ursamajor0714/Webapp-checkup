@@ -26,7 +26,7 @@ module.exports = {
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
     const rules = new Map();   // 규칙 id → { impact, help, url, pages: Map(page → nodes), sample }
-    const pagesOk = [], skipped = [];
+    const pagesOk = [], skipped = [], design = [];
     try {
       const { context, note } = await newContext(ctx, b.browser, ctx.baseUrl(start[0].part), { bypassCSP: true });   // 검사기 스크립트를 넣으려고 (CSP 검사는 H 가 한다)
       if (note) skipped.push(note);
@@ -43,6 +43,35 @@ module.exports = {
             return r.violations.map(v => ({ id: v.id, impact: v.impact, help: v.help, url: v.helpUrl, nodes: v.nodes.length, sample: (v.nodes[0] && (v.nodes[0].target || []).join(' ')) || '', html: v.nodes[0] ? v.nodes[0].html.slice(0, 120) : '' }));
           }, axe.locale);
           if (!res.length) pagesOk.push(pg.path);
+          // 디자인 기계 검사 — 실제로 그려진 결과로 본다 (CSS 글자만 보면 덮어쓴 규칙을 모른다)
+          //   키보드 초점 표시(초점을 줘도 테두리·그림자가 안 생김) · 누르는 곳이 24px 보다 작음(WCAG 2.2 2.5.8, 문장 속 링크 제외) · 본문 글자 14px 미만
+          const d = await page.evaluate(() => {
+            const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
+            const els = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"]), [role=button]')].filter(vis).slice(0, 60);
+            const noFocus = [], small = [];
+            const label = e => (e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.textContent.trim() ? ` "${e.textContent.trim().slice(0, 20)}"` : '')).slice(0, 60);
+            for (const e of els.slice(0, 30)) {
+              const before = getComputedStyle(e); const b = before.outlineStyle + before.outlineWidth + before.boxShadow + before.borderColor + before.backgroundColor;
+              e.focus({ preventScroll: true });
+              if (document.activeElement !== e) continue;
+              const cs = getComputedStyle(e); const a = cs.outlineStyle + cs.outlineWidth + cs.boxShadow + cs.borderColor + cs.backgroundColor;
+              if ((cs.outlineStyle === 'none' || parseFloat(cs.outlineWidth) === 0) && a === b) noFocus.push(label(e));
+              e.blur();
+            }
+            for (const e of els) {
+              const r = e.getBoundingClientRect();
+              const inText = e.tagName === 'A' && e.closest('p, li, td, span') && getComputedStyle(e).display === 'inline';
+              if (!inText && (r.width < 24 || r.height < 24)) small.push(`${label(e)} ${Math.round(r.width)}×${Math.round(r.height)}`);
+            }
+            const ps = [...document.querySelectorAll('p, li, td')].filter(vis).filter(e => e.textContent.trim().length > 20).slice(0, 40);
+            const sizes = ps.map(e => parseFloat(getComputedStyle(e).fontSize)).sort((x, y) => x - y);
+            return { noFocus: noFocus.slice(0, 5), noFocusN: noFocus.length, small: small.slice(0, 5), smallN: small.length, body: sizes.length ? sizes[Math.floor(sizes.length / 2)] : null };
+          }).catch(() => null);
+          if (d) {
+            design.push({ name: `${pg.path} · 키보드 초점`, ok: d.noFocusN ? false : true, detail: d.noFocusN ? `${d.noFocusN}개가 초점을 받아도 표시가 없다 — 키보드로 쓰는 사람이 지금 어디 있는지 모른다 (outline: none 을 지웠다면 :focus-visible 에 표시를 준다) · 예: ${d.noFocus.join(', ')}` : '초점 표시가 보인다' });
+            design.push({ name: `${pg.path} · 누르는 크기`, ok: d.smallN ? null : true, detail: d.smallN ? `${d.smallN}개가 24px 보다 작다 — 손가락으로 누르기 어렵다 (권장 44px) · 예: ${d.small.join(', ')}` : '모두 24px 이상' });
+            if (d.body) design.push({ name: `${pg.path} · 본문 글자`, ok: d.body < 12 ? false : d.body < 14 ? null : true, detail: `본문 글자 ${d.body}px${d.body < 14 ? ' — 휴대폰에서 읽기 어렵다 (16px 권장)' : ''}` });
+          }
           for (const v of res) {
             const r = rules.get(v.id) || { impact: v.impact, help: v.help, url: v.url, pages: new Map(), sample: v.sample, html: v.html };
             r.pages.set(pg.path, v.nodes); rules.set(v.id, r);
@@ -59,6 +88,6 @@ module.exports = {
     });
     for (const p of pagesOk) items.push({ name: p, ok: true, detail: 'WCAG 2.1 A·AA 위반 없음' });
     if (!items.length) return { skip: '검사한 화면이 없다', skipped };
-    return { checks: [checkItems('WCAG 2.1 A·AA 규칙을 지킨다 (axe-core)', items)], skipped };
+    return { checks: [checkItems('WCAG 2.1 A·AA 규칙을 지킨다 (axe-core)', items), ...(design.length ? [checkItems('키보드 초점·누르는 크기·글자 크기 (디자인 기계 검사)', design)] : [])], skipped };
   },
 };

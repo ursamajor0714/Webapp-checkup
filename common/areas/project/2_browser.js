@@ -19,6 +19,8 @@ module.exports = {
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
     const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [], fwItems = [], storm = [], meta = [], vitals = [], csp = [];
+    const navPairs = [];   // 뒤로·앞으로 시험용 — 시작 화면과 그 화면의 첫 내부 링크
+    const history = [];
     const metrics = {};   // 화면별 숫자 — 다음 검사와 견줘 '점점 무거워지는지' 본다
     const shots = [];      // 문제 난 화면 사진
     const shoot = async (page, where) => { if (shots.length >= 8 || shots.some(x => x.where === where)) return; try { shots.push({ where, jpg: (await page.screenshot({ type: 'jpeg', quality: 55 })).toString('base64') }); } catch { /* 닫힌 화면 */ } };
@@ -101,6 +103,7 @@ module.exports = {
         if (info.broken.length) for (const s of info.broken) imgs.push({ name, ok: false, detail: `깨진 이미지: ${s}` });
         else imgs.push({ name, ok: true, detail: '깨진 이미지 없음' });
         if (uniq.length || info.hits.length || info.broken.length || uc.length || status >= 400) await shoot(page, where);
+        if (!from && navPairs.length < 3) { const next = info.links.find(l => l.replace(/#.*$/, '') !== key && !/logout|signout|delete|remove/i.test(l)); if (next) navPairs.push({ url, next, where }); }
         for (const l of info.links) if (!/logout|signout|delete|remove/i.test(l) && !seen.has(l.replace(/#.*$/, ''))) queue.push({ url: l, from: where });
         // 가만히 10초 두었을 때의 요청 수 — 폴링이 너무 잦거나 무한 반복이면 서버·배터리를 태운다 (시작 화면만)
         if (!from && storm.length < 3) {   // 시간이 들어 앞의 3개 화면만
@@ -159,6 +162,35 @@ module.exports = {
           await mp.close();
         }
       }
+      // 뒤로·앞으로·새로고침 — 링크로 옮겨 갔다가 돌아와도 화면이 멀쩡한가 (빈 화면·예외·옛 주소)
+      for (const { url: a, next, where } of navPairs) {
+        const page = await context.newPage(); const errsN = [];
+        page.on('pageerror', e => errsN.push(String(e.message || e).split('\n')[0]));
+        const textLen = () => page.evaluate(() => (document.body ? document.body.innerText.trim().length : 0)).catch(() => 0);
+        try {
+          await page.goto(a, { waitUntil: 'load', timeout: 20000 }); await page.waitForTimeout(500);
+          const aLen = await textLen();
+          // 화면 안의 링크를 실제로 누른다 (SPA 는 goto 로는 라우터를 안 거친다)
+          const clicked = await page.evaluate(href => { const el = [...document.querySelectorAll('a[href]')].find(x => x.href === href); if (!el) return false; el.click(); return true; }, next).catch(() => false);
+          if (!clicked) await page.goto(next, { waitUntil: 'load', timeout: 20000 });
+          await page.waitForTimeout(800);
+          const bUrl = page.url().replace(/#.*$/, '');
+          await page.goBack({ waitUntil: 'load', timeout: 10000 }).catch(() => {}); await page.waitForTimeout(700);
+          const backUrl = page.url().replace(/#.*$/, ''), backLen = await textLen();
+          await page.goForward({ waitUntil: 'load', timeout: 10000 }).catch(() => {}); await page.waitForTimeout(700);
+          const fwdUrl = page.url().replace(/#.*$/, '');
+          await page.reload({ waitUntil: 'load', timeout: 20000 }).catch(() => {}); await page.waitForTimeout(700);
+          const reLen = await textLen();
+          const probs = [];
+          if (backUrl !== a.replace(/#.*$/, '')) probs.push(`뒤로 가기가 원래 화면으로 안 간다 (${new URL(backUrl).pathname})`);
+          else if (aLen > 20 && backLen < aLen * 0.3) probs.push(`뒤로 가면 화면이 거의 비었다 (글자 ${aLen} → ${backLen})`);
+          if (fwdUrl !== bUrl) probs.push('앞으로 가기가 다음 화면으로 안 간다');
+          if (reLen === 0) probs.push('새로고침하면 빈 화면이다 (주소로 바로 들어오는 길이 없다 — 서버가 SPA 경로를 index.html 로 돌려주는지)');
+          if (errsN.length) probs.push(`예외: ${errsN[0].slice(0, 120)}`);
+          history.push({ name: `${where} → ${new URL(next).pathname}`, ok: probs.length ? (errsN.length || reLen === 0 ? false : null) : true, detail: probs.length ? probs.join(' / ') : '뒤로·앞으로·새로고침 모두 멀쩡하다' });
+        } catch (e) { history.push({ name: where, ok: null, detail: `시험하지 못함: ${String(e.message).split('\n')[0].slice(0, 100)}` }); }
+        await page.close();
+      }
       if (queue.length) skipped.push(`화면이 더 있지만 ${ctx.level.n(MAX_PAGES)}개까지만 열었다`);
     } finally { await b.browser.close().catch(() => {}); }
     return { checks: [
@@ -171,6 +203,7 @@ module.exports = {
       ...(vitals.length ? [checkItems('Core Web Vitals — 화면이 밀리지 않고(CLS) 큰 내용이 빨리 뜬다(LCP)', vitals)] : []),
       checkItems('CSP 위반·http 섞인 자원이 없다', csp.length ? csp : [{ name: '화면', ok: null, detail: '열지 못함' }]),
       checkItems('프레임워크 경고가 없다 (하이드레이션 불일치·React key·무한 갱신)', fwItems),
+      ...(history.length ? [checkItems('뒤로·앞으로·새로고침해도 화면이 멀쩡하다', history)] : []),
       ...(storm.length ? [checkItems('가만히 둔 화면이 요청을 쏟아내지 않는다 (10초)', storm)] : []),
       ...(meta.length ? [checkItems('제목·설명·공유 미리보기·파비콘이 있다', meta)] : []),
     ], skipped, metrics, shots };

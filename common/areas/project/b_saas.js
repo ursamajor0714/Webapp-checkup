@@ -199,6 +199,49 @@ function backendRules(ctx) {
   return items;
 }
 
+// ── 웹훅 — 결제·깃허브 같은 외부 서비스가 부르는 경로. 서명을 확인하지 않으면 누구나 "결제 완료"를 보낼 수 있다
+const WEBHOOK_PATH = /webhook|web-hook|\/hooks?\/|callback|\/ipn\b|notify|(stripe|toss|portone|iamport|paypal|github|slack|kakaopay|naverpay)\b.*\/(events?|notify|callback)/i;
+const VERIFIES = /constructEvent|verify(Signature|Webhook|Header)?\s*\(|createHmac|hmac|timingSafeEqual|compare_digest|x-hub-signature|stripe-signature|toss-?signature|svix|webhooks?\.verify|validateWebhook|signature|WebhookSignature|verify_webhook/i;
+function webhookItems(ctx) {
+  const items = [];
+  for (const r of (ctx.allRoutes ? ctx.allRoutes() : ctx.routes()).filter(r => ['POST', 'PUT', 'ANY'].includes(r.method) && WEBHOOK_PATH.test(r.path) && !/oauth|login|auth\/callback|signin/i.test(r.path))) {
+    const src = String(r.handler || ''), file = r.file ? read(r.file) : '';
+    const ok = VERIFIES.test(src) || (VERIFIES.test(file) && /webhook/i.test(file));
+    items.push({ name: `${r.method} ${r.path}`, ok: ok ? true : false, detail: ok ? '서명을 확인한다' : `처리 코드에서 서명 확인을 찾지 못했다 — 누구나 이 주소로 가짜 이벤트(결제 완료 등)를 보낼 수 있다. 서비스가 주는 서명(예: Stripe constructEvent, HMAC + timingSafeEqual)과 시각을 확인한다${r.file ? ` · ${ctx.rel(r.file)}` : ''}` });
+  }
+  return items;
+}
+
+// ── AI 호출 — 요청 하나마다 돈이 든다. 키가 화면으로 새거나, 아무나 무제한으로 부를 수 있으면 비용 폭탄
+const AI_CALL = /\b(?:chat\.completions\.create|responses\.create|messages\.create|messages\.stream|generateContent(?:Stream)?|generateText|streamText|ChatCompletion\.create|completions\.create)\s*\(/;
+const AI_KEY_ENV = /(OPENAI|ANTHROPIC|CLAUDE|GEMINI|GOOGLE_AI|GROQ|MISTRAL|COHERE|DEEPSEEK|XAI)\w*(KEY|TOKEN|SECRET)/;
+const LIMITER = /rate-?limit|rateLimit|limiter|throttl|slowapi|express-slow-down|bottleneck|@upstash\/ratelimit|RateLimiter|Throttle\(|django_ratelimit|bucket4j/i;
+function aiItems(ctx) {
+  const items = [];
+  const { names } = envNames(ctx);
+  for (const [n, from] of names) if (PUBLIC_ENV.test(n) && AI_KEY_ENV.test(n)) items.push({ name: `환경변수 ${n} (${from})`, ok: false, detail: 'AI 키에 화면 공개 접두사가 붙었다 — 빌드된 화면에 실려 누구나 내 돈으로 AI 를 부른다. 서버에서만 부르고 접두사를 뗀다' });
+  const all = ctx.parts.flatMap(p => sources(ctx, p).map(f => ({ p, f })));
+  const limited = all.some(({ f }) => LIMITER.test(read(f)));
+  for (const { p, f } of all) {
+    const src = read(f), rel = ctx.rel(f);
+    if (NOT_SHIPPED.test(rel)) continue;
+    if (/dangerouslyAllowBrowser\s*:\s*true/.test(src)) items.push({ name: `${rel}:${lineOf(src, src.search(/dangerouslyAllowBrowser/))}`, ok: false, detail: 'dangerouslyAllowBrowser: true — 브라우저에서 AI 키로 바로 부른다. 키가 화면에 그대로 보인다' });
+    for (const m of src.matchAll(new RegExp(AI_CALL.source, 'g'))) {
+      if (!/openai|anthropic|claude|gemini|genai|generative|\bai\b|ai-sdk|@ai-sdk|llm/i.test(src)) break;   // 같은 이름의 다른 함수(messages.create 등)
+      const call = callText(src, m.index), line = lineOf(src, m.index);
+      if (!/max_?tokens|maxTokens|max_output_tokens|maxOutputTokens/.test(call)) items.push({ name: `${rel}:${line}`, ok: null, detail: 'AI 호출에 응답 길이 상한(max_tokens)이 없다 — 한 번 호출이 길게 늘어나 비용이 튄다' });
+    }
+  }
+  // 경로 단위 — AI 를 부르는 경로가 로그인 없이·횟수 제한 없이 열려 있는가
+  const GUARD = /\b(require\w*|auth\w*|isAuthenticated|protect\w*|verify\w*|login_required|IsAuthenticated|PreAuthorize|Secured|UseGuards|Depends\(\s*get_current|getServerSession|currentUser|clerk|withAuth)/;
+  for (const r of ctx.routes().filter(r => AI_CALL.test(String(r.handler || '')))) {
+    const guarded = GUARD.test(String(r.handler || '').split('\n').slice(0, 3).join('\n'));
+    items.push({ name: `${r.method} ${r.path} · AI 호출`, ok: guarded && limited ? true : !guarded && !limited ? false : null,
+      detail: guarded && limited ? '로그인과 횟수 제한이 있다' : !guarded && !limited ? '로그인 없이, 횟수 제한 없이 AI 를 부른다 — 스크립트 하나로 하루 요금이 수십만 원이 될 수 있다. 로그인을 걸고 사용자·IP 별 횟수 제한을 둔다' : !guarded ? '로그인 없이 부른다 (횟수 제한은 있다) — 공개 기능이면 제한 값이 충분히 작은지 확인' : '로그인은 있지만 횟수 제한이 없다 — 한 사람이 무제한으로 부를 수 있다' });
+  }
+  return items;
+}
+
 module.exports = {
   id: '11', name: '외부 서비스 의존', weight: 2,
   async run(ctx) {
@@ -206,6 +249,10 @@ module.exports = {
     const checks = [];
     const rules = backendRules(ctx);
     if (rules.length) checks.push(owasp('A01', checkItems('Supabase·Firebase 보안 규칙이 누구나에게 열려 있지 않다', rules)));
+    const hooks = webhookItems(ctx);
+    if (hooks.length) checks.push(owasp('A08', checkItems('외부 서비스가 보내는 웹훅의 서명을 확인한다', hooks)));
+    const ai = aiItems(ctx);
+    if (ai.length) checks.push(owasp('A06', checkItems('AI 호출 — 키가 새지 않고, 아무나 무제한으로 부르지 못한다', ai)));
     const { hits, calls } = untimedCalls(ctx);
     if (calls) {
       const HOW = { js: 'fetch 는 { signal: AbortSignal.timeout(10000) }, axios 는 { timeout: 10000 } (또는 axios.create({ timeout }))', python: 'requests.get(url, timeout=10)', java: 'RestTemplate 은 SimpleClientHttpRequestFactory 에 setConnectTimeout·setReadTimeout' };

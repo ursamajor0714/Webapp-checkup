@@ -52,6 +52,13 @@ test('정적 사이트 — 심은 버그를 모두 잡는다', { timeout: 300000
   caught(rep, '2', /CSP 위반/);                          // 보안 정책이 막은 인라인 스크립트
   const shots = (rep.results.find(r => r.id === '2') || {}).shots || [];
   assert.ok(shots.length && shots.every(x => /^[A-Za-z0-9+/=]{1000,}$/.test(x.jpg)), `문제 난 화면 사진: ${shots.length}장`);
+  const items = id => rep.results.find(r => r.id === id).checks.flatMap(c => (c.items || []).map(i => ({ ...i, check: c.name })));
+  const st = (id, re) => (items(id).find(i => re.test(`${i.check} ${i.name} ${i.detail}`)) || {}).ok;
+  assert.strictEqual(st('5', /지우기 전에.*"삭제"/), false, '확인 없이 지우는 버튼');
+  assert.strictEqual(st('5', /지우기 전에.*"항목 지우기"/), true, '확인을 묻는 버튼');
+  assert.strictEqual(st('7', /list\.html · 키보드 초점/), false, '초점 표시 없음');
+  assert.strictEqual(st('7', /list\.html · 누르는 크기/), null, '너무 작은 버튼');
+  assert.ok(items('2').some(i => /뒤로·앞으로/.test(i.check)), '뒤로·앞으로·새로고침 검사가 돈다');
 });
 
 test('Express 서버 — 심은 버그를 모두 잡는다', { timeout: 600000 }, async t => {
