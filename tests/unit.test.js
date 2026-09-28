@@ -325,3 +325,20 @@ test('한 원인이 여러 영역에 걸린 곳 — 같은 경로가 두 영역 
   assert.strictEqual(hs[0].s500, 3);
   assert.match(hs[0].hint, /서버 오류/);
 });
+
+test('커밋 직전 비밀 검사 — 올리려는 키·.env 는 잡고 견본·환경변수 읽기는 넘긴다', () => {
+  const { execFileSync } = require('child_process');
+  const { stagedCheck } = require('../common/staged');
+  const root = write(tmp(), {
+    'a.js': 'const k = "AKIAABCDEFGHIJKLMNOP";\n',
+    '.env': 'OPENAI_API_KEY=sk-realvalue123456789012345\n',
+    '.env.example': 'API_KEY=your-key-here\n',
+    'b.js': 'const k = process.env.STRIPE_SECRET_KEY;\n',
+  });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '-A'], { cwd: root });
+  const r = stagedCheck(root);
+  assert.deepStrictEqual(r.hits.map(h => h.file).sort(), ['.env', 'a.js']);
+  execFileSync('git', ['reset', '-q', 'a.js', '.env'], { cwd: root });
+  assert.strictEqual(stagedCheck(root).hits.length, 0);
+});

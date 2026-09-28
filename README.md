@@ -54,6 +54,7 @@ node run.js ~/Developer/my-app                 # 전체 검사 (꺼진 서버는
 node run.js my-app --level=초급                 # 검사 수준 — 초급·중급·고급(기본)·전문가
 node run.js my-app --only=B,F,I                 # 영역 골라서
 node run.js my-app --ci --fail-under=60         # CI — 새 문제가 생기거나 점수가 기준 아래면 실패
+node run.js . --staged                          # 커밋 직전 — git add 한 것에 키·.env 가 섞였으면 멈춘다
 ```
 
 1. **＋ 프로젝트 추가** → 레포 폴더 경로

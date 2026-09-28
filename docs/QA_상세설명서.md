@@ -22,6 +22,8 @@ node run.js my-app --only=B,F,I             # 영역 골라서
 node run.js my-app --json > result.json     # 기계가 읽을 결과
 node run.js my-app --no-serve               # 꺼진 서버를 켜지 않는다 (코드로 잴 수 있는 것만)
 node run.js my-app --ci --fail-under=60     # CI: 지난 검사보다 새 문제가 생기거나 점수가 60 아래면 끝 코드 1
+node run.js . --staged                      # 커밋 직전: 스테이징된 파일에 비밀(K 영역과 같은 패턴)·.env 가 있으면 끝 코드 1
+                                            #   훅으로 쓰려면 .git/hooks/pre-commit 에 이 한 줄을 넣는다
 node run.js my-app --level=초급              # 검사 수준 — 초급·중급·고급(기본)·전문가 (basic·standard·advanced·expert)
 ```
 
