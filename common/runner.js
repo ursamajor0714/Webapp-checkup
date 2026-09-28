@@ -127,7 +127,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
         // 떠 있는 서버가 지금 코드보다 먼저 켜졌으면 옛 코드를 검사하게 된다 (브랜치를 바꿨거나, 켠 뒤에 고쳤거나)
         const own = ctx.serverStates[p.dir];
         const started = own && own.child && own.startedAt ? own.startedAt : processStartOf(p.baseUrl);
-        const newest = serve.newestSource(p.absDir);
+        const newest = serve.newestCode(p.absDir);
         if (!started || newest <= started + 2000) continue;
         const ago = m => `${Math.round((Date.now() - m) / 60000)}분 전`;
         if (own && own.child && own.startedByQa) {
@@ -328,7 +328,13 @@ async function runProbe(ctx, probe) {
   const t0 = Date.now();
   // 검사 도중 서버가 꺼졌나 — 꺼진 서버에 보낸 요청(응답 0)을 결함으로 세지 않도록, 영역마다 들어가기 전에 확인한다
   if (ctx.live && !ctx.serverDown) {
-    const alive = await Promise.all(ctx.services.filter(s => (ctx.up || {})[s.id]).map(s => require('./serve').healthy(ctx.baseUrl(s.id)).then(h => h.up).catch(() => false)));
+    const svcs = ctx.services.filter(s => (ctx.up || {})[s.id]);
+    let alive = [];
+    for (let i = 0; i < 3; i++) {   // 부하가 큰 순간 한 번 늦게 답한 것을 '꺼짐'으로 단정하지 않게
+      alive = await Promise.all(svcs.map(s => require('./serve').healthy(ctx.baseUrl(s.id)).then(h => h.up).catch(() => false)));
+      if (!alive.length || alive.some(Boolean)) break;
+      await new Promise(r => setTimeout(r, 1000));
+    }
     if (alive.length && !alive.some(Boolean)) {
       ctx.serverDown = probe.id; ctx.live = false;
       ctx.notes.push(`⚠ 검사 도중(${probe.id} 영역 앞) 서버가 꺼졌다 — 이후 서버가 필요한 검사는 '서버가 꺼져 있다'로 건너뛴다. 결함이 아니라 검사 환경 문제다 (누가 서버를 멈췄거나 서버가 죽었다 — 4 영역의 서버 로그 확인)`);

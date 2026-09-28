@@ -37,7 +37,7 @@ function lintItems(ctx) {
   for (const p of ctx.parts) {
     const dir = p.absDir, bin = n => path.join(dir, 'node_modules', '.bin', n);
     if (p.lang === 'js' && fs.existsSync(bin('eslint')) && (has(dir, ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts', '.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml']) || (readJson(path.join(dir, 'package.json')) || {}).eslintConfig)) {
-      const r = run([bin('eslint'), '.', '-f', 'json', '--no-warn-ignored'], dir, {}, 300000);
+      const r = run([bin('eslint'), '.', '-f', 'json'], dir, {}, 300000);   // --no-warn-ignored 는 ESLint 9 에만 있다 (8 에선 멈춘다)
       let res = null; try { res = JSON.parse(r.out.slice(r.out.indexOf('['), r.out.lastIndexOf(']') + 1)); } catch { /* 출력이 JSON 이 아니다 */ }
       if (!res) items.push({ name: `${p.dir} eslint`, ok: null, detail: `돌렸지만 결과를 읽지 못했다 — ${r.out.trim().split('\n')[0].slice(0, 160)}` });
       else {
@@ -64,7 +64,8 @@ function lintItems(ctx) {
   if (sh.length && !run(['shellcheck', '--version'], ctx.root, {}, 10000).missing) {
     const r = run(['shellcheck', '-f', 'gcc', '-S', 'warning', ...sh], ctx.root, {}, 120000);
     const bad = r.out.split('\n').filter(l => /: (error|warning):/.test(l));
-    items.push({ name: `셸 스크립트 ${sh.length}개 shellcheck`, ok: !bad.length, detail: bad.length ? `${bad.length}개 — ${bad.slice(0, 2).map(l => l.replace(ctx.root + '/', '')).join(' · ').slice(0, 220)}` : '문제 없음' });
+    const errs = bad.filter(l => /: error:/.test(l));   // 오류만 문제, 경고(따옴표 권장 등)는 확인 필요
+    items.push({ name: `셸 스크립트 ${sh.length}개 shellcheck`, ok: errs.length ? false : bad.length ? null : true, detail: bad.length ? `${bad.length}개 — ${bad.slice(0, 2).map(l => l.replace(ctx.root + '/', '')).join(' · ').slice(0, 220)}` : '문제 없음' });
   }
   return items;
 }

@@ -172,8 +172,9 @@ function backendRules(ctx) {
     const sql = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).map(f => read(path.join(migDir, f))).join('\n').replace(/--[^\n]*/g, '');
     const name = s => s.replace(/["`]/g, '').replace(/^public\./i, '').toLowerCase();
     const tables = [...sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?([\w."]+)/gi)].map(m => name(m[1])).filter(t => !t.includes('.'));
+    const dropped = new Set([...sql.matchAll(/drop\s+table\s+(?:if\s+exists\s+)?([\w."]+)/gi)].map(m => name(m[1])));   // 나중에 지운 표는 빼고
     const rls = new Set([...sql.matchAll(/alter\s+table\s+(?:only\s+)?([\w."]+)\s+enable\s+row\s+level\s+security/gi)].map(m => name(m[1])));
-    for (const t of [...new Set(tables)]) items.push(rls.has(t) ? { name: `표 ${t} · RLS`, ok: true, detail: '켜져 있다' } : { name: `표 ${t} · RLS`, ok: false, detail: `RLS 가 꺼져 있다 — 화면의 공개 키로 누구나 이 표를 읽고 고친다. alter table ${t} enable row level security; 와 정책(policy)을 만든다` });
+    for (const t of [...new Set(tables)].filter(t => !dropped.has(t))) items.push(rls.has(t) ? { name: `표 ${t} · RLS`, ok: true, detail: '켜져 있다' } : { name: `표 ${t} · RLS`, ok: false, detail: `RLS 가 꺼져 있다 — 화면의 공개 키로 누구나 이 표를 읽고 고친다. alter table ${t} enable row level security; 와 정책(policy)을 만든다` });
     // 정책이 "누구나" (using (true)) — 읽기는 공개 자료일 수 있어 확인 필요, 쓰기는 문제
     for (const m of sql.matchAll(/create\s+policy\s+"?([^"\n]+?)"?\s+on\s+([\w."]+)([\s\S]*?);/gi)) {
       const body = m[3];
@@ -191,9 +192,10 @@ function backendRules(ctx) {
       continue;
     }
     const testMode = src.match(/request\.time\s*<\s*timestamp\.date\([^)]*\)/);
-    const openAll = src.match(/allow\s+(read|write|read\s*,\s*write|write\s*,\s*read)\s*(?::\s*if\s+true\s*)?;/);
+    // allow read, write · allow create, delete · allow get, list … — 조건이 없거나 'if true'
+    const openAll = src.match(/allow\s+((?:read|write|get|list|create|update|delete)(?:\s*,\s*(?:read|write|get|list|create|update|delete))*)\s*(?::\s*if\s+true\s*)?;/);
     items.push(testMode ? { name: `${rel}:${lineOf(src, testMode.index)}`, ok: false, detail: '"테스트 모드" 규칙(기한까지 누구나 읽고 쓰기)이 남아 있다 — 기한 전엔 활짝 열려 있고, 기한이 지나면 앱이 통째로 멈춘다' }
-      : openAll ? { name: `${rel}:${lineOf(src, openAll.index)}`, ok: /write/.test(openAll[1]) ? false : null, detail: `${openAll[0].trim()} — 조건 없이 ${/write/.test(openAll[1]) ? '누구나 쓰고 지운다' : '누구나 읽는다'}. request.auth != null 이나 주인 조건을 건다` }
+      : openAll ? { name: `${rel}:${lineOf(src, openAll.index)}`, ok: /write|create|update|delete/.test(openAll[1]) ? false : null, detail: `${openAll[0].trim()} — 조건 없이 ${/write|create|update|delete/.test(openAll[1]) ? '누구나 쓰고 지운다' : '누구나 읽는다'}. request.auth != null 이나 주인 조건을 건다` }
       : { name: rel, ok: true, detail: '조건 없이 여는 규칙이 없다' });
   }
   return items;
@@ -204,9 +206,15 @@ const WEBHOOK_PATH = /webhook|web-hook|\/hooks?\/|callback|\/ipn\b|notify|(strip
 const VERIFIES = /constructEvent|verify(Signature|Webhook|Header)?\s*\(|createHmac|hmac|timingSafeEqual|compare_digest|x-hub-signature|stripe-signature|toss-?signature|svix|webhooks?\.verify|validateWebhook|signature|WebhookSignature|verify_webhook/i;
 function webhookItems(ctx) {
   const items = [];
-  for (const r of (ctx.allRoutes ? ctx.allRoutes() : ctx.routes()).filter(r => ['POST', 'PUT', 'ANY'].includes(r.method) && WEBHOOK_PATH.test(r.path) && !/oauth|login|auth\/callback|signin/i.test(r.path))) {
-    const src = String(r.handler || ''), file = r.file ? read(r.file) : '';
-    const ok = VERIFIES.test(src) || (VERIFIES.test(file) && /webhook/i.test(file));
+  const { guardLine } = require('../../roles');
+  // 관리자·로그인 가드가 붙은 경로는 외부 서비스가 부르는 웹훅이 아니다 (내부 알림 등)
+  const INTERNAL = /require\w*|isAuthenticated|protect\w*|login_required|IsAuthenticated|PreAuthorize|UseGuards|authenticate\w*/;
+  for (const r of (ctx.allRoutes ? ctx.allRoutes() : ctx.routes()).filter(r => ['POST', 'PUT', 'ANY'].includes(r.method) && WEBHOOK_PATH.test(r.path) && !/oauth|login|auth\/callback|signin/i.test(r.path) && !INTERNAL.test(guardLine(r.handler)))) {
+    const pp = ctx.parts.find(x => x.id === r.service);
+    const src = String(r.handler || ''), file = r.file ? read(path.resolve(pp ? pp.absDir : ctx.root, r.file)) : '';
+    // 파일 전체에서 찾는 것은 그 파일의 웹훅이 하나일 때만 — 여럿이면 다른 웹훅의 서명 확인을 이 웹훅 것으로 착각한다
+    const hooksInFile = (ctx.allRoutes ? ctx.allRoutes() : ctx.routes()).filter(x => x.file === r.file && x.service === r.service && WEBHOOK_PATH.test(x.path)).length;
+    const ok = VERIFIES.test(src) || (hooksInFile === 1 && VERIFIES.test(file) && /webhook/i.test(file));
     items.push({ name: `${r.method} ${r.path}`, ok: ok ? true : false, detail: ok ? '서명을 확인한다' : `처리 코드에서 서명 확인을 찾지 못했다 — 누구나 이 주소로 가짜 이벤트(결제 완료 등)를 보낼 수 있다. 서비스가 주는 서명(예: Stripe constructEvent, HMAC + timingSafeEqual)과 시각을 확인한다${r.file ? ` · ${ctx.rel(r.file)}` : ''}` });
   }
   return items;
@@ -227,15 +235,19 @@ function aiItems(ctx) {
     if (NOT_SHIPPED.test(rel)) continue;
     if (/dangerouslyAllowBrowser\s*:\s*true/.test(src)) items.push({ name: `${rel}:${lineOf(src, src.search(/dangerouslyAllowBrowser/))}`, ok: false, detail: 'dangerouslyAllowBrowser: true — 브라우저에서 AI 키로 바로 부른다. 키가 화면에 그대로 보인다' });
     for (const m of src.matchAll(new RegExp(AI_CALL.source, 'g'))) {
-      if (!/openai|anthropic|claude|gemini|genai|generative|\bai\b|ai-sdk|@ai-sdk|llm/i.test(src)) break;   // 같은 이름의 다른 함수(messages.create 등)
+      if (!/openai|anthropic|claude|gemini|genai|generative-?ai|@ai-sdk|langchain|groq|mistral|cohere|deepseek/i.test(src) || /twilio|solapi|coolsms/i.test(src)) break;   // 같은 이름의 다른 함수(문자 발송 messages.create 등)
       const call = callText(src, m.index), line = lineOf(src, m.index);
       if (!/max_?tokens|maxTokens|max_output_tokens|maxOutputTokens/.test(call)) items.push({ name: `${rel}:${line}`, ok: null, detail: 'AI 호출에 응답 길이 상한(max_tokens)이 없다 — 한 번 호출이 길게 늘어나 비용이 튄다' });
     }
   }
   // 경로 단위 — AI 를 부르는 경로가 로그인 없이·횟수 제한 없이 열려 있는가
   const GUARD = /\b(require\w*|auth\w*|isAuthenticated|protect\w*|verify\w*|login_required|IsAuthenticated|PreAuthorize|Secured|UseGuards|Depends\(\s*get_current|getServerSession|currentUser|clerk|withAuth)/;
-  for (const r of ctx.routes().filter(r => AI_CALL.test(String(r.handler || '')))) {
-    const guarded = GUARD.test(String(r.handler || '').split('\n').slice(0, 3).join('\n'));
+  const { guardLine } = require('../../roles');
+  const PROVIDER = /openai|anthropic|claude|gemini|genai|generative-?ai|@ai-sdk|langchain|groq|mistral|cohere|deepseek/i;
+  const fileOf = r => { const p = ctx.parts.find(x => x.id === r.service); return r.file ? read(path.resolve(p ? p.absDir : ctx.root, r.file)) : ''; };
+  // 경로 처리 코드가 AI SDK 를 부르는가 — 같은 이름의 문자 발송(twilio client.messages.create)은 뺀다
+  for (const r of ctx.routes().filter(r => AI_CALL.test(String(r.handler || '')) && PROVIDER.test(fileOf(r)) && !/twilio|solapi|coolsms/i.test(fileOf(r)))) {
+    const guarded = GUARD.test(String(r.handler || '').split('\n').slice(0, 3).map(guardLine).join('\n'));
     items.push({ name: `${r.method} ${r.path} · AI 호출`, ok: guarded && limited ? true : !guarded && !limited ? false : null,
       detail: guarded && limited ? '로그인과 횟수 제한이 있다' : !guarded && !limited ? '로그인 없이, 횟수 제한 없이 AI 를 부른다 — 스크립트 하나로 하루 요금이 수십만 원이 될 수 있다. 로그인을 걸고 사용자·IP 별 횟수 제한을 둔다' : !guarded ? '로그인 없이 부른다 (횟수 제한은 있다) — 공개 기능이면 제한 값이 충분히 작은지 확인' : '로그인은 있지만 횟수 제한이 없다 — 한 사람이 무제한으로 부를 수 있다' });
   }

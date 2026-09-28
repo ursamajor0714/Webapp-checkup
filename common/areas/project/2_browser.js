@@ -144,7 +144,7 @@ module.exports = {
           if (m) {
             const mb = x => (x / 1024 / 1024).toFixed(2) + 'MB';
             const bad = m.js > 3 * 1024 * 1024 || m.load > 8000, warn = m.js > 1.5 * 1024 * 1024 || m.load > 4000 || m.total > 5 * 1024 * 1024;
-            metrics[where] = { load: m.load, js: m.js, total: m.total, n: m.n };
+            Object.assign(metrics[where] ||= {}, { load: m.load, js: m.js, total: m.total, n: m.n });   // 위에서 넣은 LCP·CLS 를 지우지 않게
             perf.push({ name: where, ok: bad ? false : warn ? null : true, detail: `불러오기 ${(m.load / 1000).toFixed(1)}초 · JS ${mb(m.js)} · 전체 ${mb(m.total)} (${m.n}개 파일)${bad || warn ? ' — 느린 폰·데이터 요금에 부담 (개발 서버라면 배포 빌드로 다시 재 볼 것)' : ''}` });
           }
         }
@@ -171,7 +171,7 @@ module.exports = {
           await page.goto(a, { waitUntil: 'load', timeout: 20000 }); await page.waitForTimeout(500);
           const aLen = await textLen();
           // 화면 안의 링크를 실제로 누른다 (SPA 는 goto 로는 라우터를 안 거친다)
-          const clicked = await page.evaluate(href => { const el = [...document.querySelectorAll('a[href]')].find(x => x.href === href); if (!el) return false; el.click(); return true; }, next).catch(() => false);
+          const clicked = await page.evaluate(href => { const el = [...document.querySelectorAll('a[href]')].find(x => x.href === href); if (!el || el.target === '_blank') return false; el.click(); return true; }, next).catch(() => false);
           if (!clicked) await page.goto(next, { waitUntil: 'load', timeout: 20000 });
           await page.waitForTimeout(800);
           const bUrl = page.url().replace(/#.*$/, '');
@@ -185,7 +185,7 @@ module.exports = {
           if (backUrl !== a.replace(/#.*$/, '')) probs.push(`뒤로 가기가 원래 화면으로 안 간다 (${new URL(backUrl).pathname})`);
           else if (aLen > 20 && backLen < aLen * 0.3) probs.push(`뒤로 가면 화면이 거의 비었다 (글자 ${aLen} → ${backLen})`);
           if (fwdUrl !== bUrl) probs.push('앞으로 가기가 다음 화면으로 안 간다');
-          if (reLen === 0) probs.push('새로고침하면 빈 화면이다 (주소로 바로 들어오는 길이 없다 — 서버가 SPA 경로를 index.html 로 돌려주는지)');
+          if (aLen > 20 && reLen === 0) probs.push('새로고침하면 빈 화면이다 (주소로 바로 들어오는 길이 없다 — 서버가 SPA 경로를 index.html 로 돌려주는지)');
           if (errsN.length) probs.push(`예외: ${errsN[0].slice(0, 120)}`);
           history.push({ name: `${where} → ${new URL(next).pathname}`, ok: probs.length ? (errsN.length || reLen === 0 ? false : null) : true, detail: probs.length ? probs.join(' / ') : '뒤로·앞으로·새로고침 모두 멀쩡하다' });
         } catch (e) { history.push({ name: where, ok: null, detail: `시험하지 못함: ${String(e.message).split('\n')[0].slice(0, 100)}` }); }

@@ -118,7 +118,10 @@ async function runLive(url, def = null, { log = console.log } = {}) {
 
   // 6. CORS — 아무 사이트나 로그인 쿠키를 싣고 읽어 가게 두지 않는다
   const evil = 'https://qa-evil.example';
-  const probe = await get('/api/', { headers: { Origin: evil } });
+  // 코드가 있으면 실제 API 경로로 묻는다 (CORS 는 경로마다 붙는 경우가 많다)
+  let corsPath = '/api/';
+  if (def) { try { const { loadProject } = require('./project'); const { makeContext } = require('./context'); const r0 = makeContext(loadProject(def)).routes().find(r => r.method === 'GET' && /^\/api\//.test(r.path) && !r.path.includes(':')); if (r0) corsPath = r0.path; } catch { /* 코드를 못 읽으면 /api/ */ } }
+  const probe = await get(corsPath, { headers: { Origin: evil } });
   const acao = probe.headers.get('access-control-allow-origin'), acac = probe.headers.get('access-control-allow-credentials');
   add('다른 사이트가 내 API 를 읽어 가지 못한다 (CORS)', [acao === evil && acac === 'true' ? bad('Origin 을 그대로 되돌린다 + 쿠키 허용', '어떤 사이트든 로그인한 사람의 데이터를 읽어 간다 — 허용할 주소를 목록으로 적는다')
     : acao === evil ? warn('Origin 을 그대로 되돌린다', '쿠키는 안 싣지만, 허용 목록으로 좁히는 게 안전하다') : good('모르는 Origin 을 허락하지 않는다', acao ? `허용: ${acao}` : '허용 헤더 없음')]);
@@ -141,7 +144,8 @@ async function runLive(url, def = null, { log = console.log } = {}) {
     if (pages.length) add('코드에 있는 화면이 배포본에서 열린다', pages);
     // 7. 로그인 없이 열리면 안 되는 API — 처리 코드에 로그인·권한 가드가 붙은 GET 만 (익명으로 읽기만 한다)
     const GUARDED = /\b(require\w*|auth\w*|isAuthenticated|protect\w*|verify\w*|login_required|IsAuthenticated|PreAuthorize|Secured|UseGuards|Depends\(\s*get_current)/;
-    const guarded = routes.filter(r => r.method === 'GET' && !pub.has(`GET ${r.path}`) && GUARDED.test(String(r.handler || '').split('\n')[0]) && !/login|logout|health/i.test(r.path));
+    const { guardLine } = require('./roles');   // 경로 문자열은 뺀다 ('/api/authors' 의 auth)
+    const guarded = routes.filter(r => r.method === 'GET' && !pub.has(`GET ${r.path}`) && GUARDED.test(guardLine(r.handler)) && !/login|logout|health/i.test(r.path));
     const open = [];
     for (const r of guarded.slice(0, 60)) {
       const res = await get(r.path.replace(/:[A-Za-z0-9_]+\*?|\{[^}]+\}|<[^>]+>/g, '1'));

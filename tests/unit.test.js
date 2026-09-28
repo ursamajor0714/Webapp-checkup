@@ -626,3 +626,27 @@ test('서버가 응답하지 않으면 결함이 아니다 — 인증 매트릭�
   assert.strictEqual(r.skip, '서버가 꺼져 있다');
   assert.ok(c2.notes.some(n => /검사 도중.*서버가 꺼졌다/.test(n)));
 });
+
+test('전면 점검에서 고친 오탐 — shipping 은 비밀번호가 아니다 · run 뒤의 env 는 셸이 아니다 · 문자 발송은 AI 가 아니다 · 경로 이름의 auth 는 가드가 아니다', async () => {
+  const { findRoles, guardLine } = require('../common/roles');
+  const roles = findRoles([{ method: 'POST', path: '/api/shop/login', service: 's', handler: 'const { email, shipping_address } = req.body;' }], { loginPath: '/api/admin/login' });
+  assert.strictEqual(roles.length, 0, 'shipping 의 pin 을 비밀번호로 보지 않는다');
+  assert.ok(!/auth/.test(guardLine("router.get('/api/authors', async (req, res) => {")), '경로 문자열은 가드 판단에서 뺀다');
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ name: 'x', dependencies: { express: '^4', twilio: '^4' } }),
+    'server.js': "const app = require('express')(); const twilio = require('twilio')(); app.post('/api/sms', async (req, res) => { await twilio.messages.create({ to: req.body.to, body: 'hi' }); res.json({}); }); app.listen(3000);",
+    '.github/workflows/ok.yml': ['on: pull_request', 'jobs:', '  t:', '    runs-on: ubuntu-latest', '    steps:', '      - run: |', '          echo "$TITLE"', '        env:', '          TITLE: ${{ github.event.pull_request.title }}', ''].join('\n'),
+    'firestore.rules': "service cloud.firestore { match /databases/{db}/documents { match /posts/{id} { allow read: if request.auth != null; allow create, delete; } } }\n",
+    'supabase/migrations/1.sql': 'create table old_stuff (id int);\ndrop table old_stuff;\ncreate table posts (id int);\nalter table posts enable row level security;\n',
+  });
+  const ctx = makeContext(loadProject({ root }));
+  const k = await require('../common/areas/security/k_secrets').run(ctx);
+  assert.ok(k.checks.find(c => /워크플로/.test(c.name)).items.every(i => i.ok === true), 'env 로 옮긴 값은 통과');
+  const saas = await require('../common/areas/project/b_saas').run(ctx);
+  assert.ok(!saas.checks.some(c => /AI 호출/.test(c.name)), '문자 발송을 AI 호출로 보지 않는다');
+  const rules = saas.checks.find(c => /Supabase·Firebase/.test(c.name)).items;
+  assert.strictEqual(rules.find(i => /firestore/.test(i.name)).ok, false, 'allow create, delete — 조건 없음');
+  assert.ok(!rules.some(i => /old_stuff/.test(i.name)), '지운 표는 빼고');
+});

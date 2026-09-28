@@ -10,12 +10,13 @@ const fs = require('fs');
 const path = require('path');
 
 const LOGIN = /(^|\/)(login|signin|sign-in|log-in)\/?$/i;
-const PW = /pass|pw$|pwd|pin/i;
+const PW = /pass(word|wd|code)?|^pw$|_pw$|pwd|^pin$|pin_?code/i;   // shipping·spinner 의 'pin' 에 걸리지 않게
 const dir = p => p.replace(/\/[^/]*\/?$/, '');
 const bodyFields = h => { const m = String(h || '').match(/\{\s*([\w\s,:]+?)\s*\}\s*=\s*(?:req|request|ctx\.request)\.body/); return m ? m[1].split(',').map(s => s.split(':')[0].trim()).filter(Boolean) : []; };
 const tableOf = h => { const s = String(h || ''); const m = s.match(/\bFROM\s+["`]?(\w+)["`]?\s+WHERE/i) || s.match(/prisma\.(\w+)\.find/) || s.match(/\b([A-Z]\w+)\.findOne\(/); return m ? m[1] : null; };
 const inserts = (h, t) => new RegExp(`INSERT\\s+INTO\\s+["\`]?${t}\\b|prisma\\.${t}\\.create|\\b${t}\\.create\\(`, 'i').test(String(h || ''));
-const guardLine = h => String(h || '').split('\n')[0];
+// 첫 줄(경로 선언 + 미들웨어)에서 문자열을 뺀 것 — '/api/authors' 의 'auth' 에 가드로 걸리지 않게
+const guardLine = h => String(h || '').split('\n')[0].replace(/(['"`])(?:\\.|(?!\1).)*\1/g, "''");
 
 function findRoles(routes, auth = {}, contracts = []) {
   const { passwordEnvOf } = require('./project');
@@ -57,10 +58,8 @@ function tokenHeaderOf(root, loginPath) {
   const words = loginPath.split('/').filter(w => w && !/^(api|v\d+|login|signin|auth)$/i.test(w));
   if (!words.length || !root) return null;
   const names = new Set();
-  const walk = dir => { let es = []; try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of es) { if (/^(node_modules|\.|dist|build|coverage)/.test(e.name)) continue; const f = path.join(dir, e.name);
-      if (e.isDirectory()) walk(f); else if (/\.(js|ts|mjs|cjs|py)$/.test(e.name)) for (const m of fs.readFileSync(f, 'utf8').matchAll(/headers\s*(?:\[\s*|\.get\(\s*)['"](x-[\w-]*token)['"]|req\.get\(\s*['"](x-[\w-]*token)['"]/gi)) names.add((m[1] || m[2]).toLowerCase()); } };
-  walk(root);
+  const { walk } = require('./stacks/util');   // node_modules·venv·reports 등은 건너뛴다
+  for (const f of walk(root, ['.js', '.ts', '.mjs', '.cjs', '.py'])) for (const m of fs.readFileSync(f, 'utf8').matchAll(/headers\s*(?:\[\s*|\.get\(\s*)['"](x-[\w-]*token)['"]|req\.get\(\s*['"](x-[\w-]*token)['"]/gi)) names.add((m[1] || m[2]).toLowerCase());
   return [...names].find(n => words.some(w => n.includes(w.toLowerCase()))) || null;
 }
 
@@ -75,7 +74,9 @@ async function acquireRoles(ctx, base, log = () => {}) {
     const r = { ...role, accounts: [], sessions: [], why: null };
     const header = tokenHeaderOf(ctx.project.root, role.loginPath);
     if (header) r.tokenHeader = header;
-    const tryLogin = async (acct, i) => { const l = await login(base, a, acct, `role${i}`); if (l.ok) { if (header) l.sess.tokenHeader = header; r.accounts.push(acct); r.sessions.push(l.sess); } else r.why = `로그인 실패 — ${l.why}`; };
+    // 로그인 응답에 id 가 오면(가입·공용 비밀번호로 들어간 계정) 그것으로 회원끼리 IDOR 를 잰다
+    const idIn = b => b && typeof b === 'object' ? (b.id ?? b._id ?? b.member_id ?? b.userId ?? b.user_id ?? (b.user && (b.user.id ?? b.user._id)) ?? (b.member && b.member.id) ?? (b.data && (b.data.id ?? (b.data.user && b.data.user.id)))) : null;
+    const tryLogin = async (acct, i) => { const l = await login(base, a, acct, `role${i}`); if (l.ok) { if (header) l.sess.tokenHeader = header; if (!acct.id && idIn(l.body) != null) acct.id = String(idIn(l.body)); r.accounts.push(acct); r.sessions.push(l.sess); } else r.why = `로그인 실패 — ${l.why}`; };
     if (given[role.loginPath] && given[role.loginPath].password) await tryLogin({ ...given[role.loginPath], from: '설정' }, 0);
     else if (role.how === 'shared') {
       // 관리자 로그인이 실제로 통한 비밀번호 (설정 값이 틀려 .env 값으로 들어갔으면 그 값)
