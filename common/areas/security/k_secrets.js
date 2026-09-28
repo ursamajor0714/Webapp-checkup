@@ -50,6 +50,7 @@ function gitHistorySecrets(ctx) {
 }
 
 module.exports = {
+  HIST,   // 커밋 전 검사(common/staged.js)도 같은 패턴을 쓴다
   id: 'K', name: '비밀·암호화', weight: 7, owasp: ['A02', 'A05'],
   async run(ctx) {
     const checks = [];

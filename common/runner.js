@@ -537,7 +537,17 @@ function ciMarkdown(report, reasons) {
 async function run(arg) {
   const args = process.argv.slice(2);
   const target = arg || args.find(a => !a.startsWith('--'));
-  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60] [--staged: 커밋 직전 비밀 검사만]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  // 커밋 직전 비밀 검사 — 서버·설정 없이 스테이징된 것만 (커밋 훅용)
+  if (args.includes('--staged')) {
+    const root = resolveProject(target).root.replace(/^~/, require('os').homedir());
+    const r = require('./staged').stagedCheck(path.resolve(root));
+    if (r.error) { console.log(`✗ ${r.error}`); process.exitCode = 1; return; }
+    if (!r.hits.length) { console.log(`✓ 스테이징된 파일 ${r.files}개 — 비밀로 보이는 것 없음. 올려도 된다`); return; }
+    for (const h of r.hits) console.log(`  ✗ ${h.file}${h.line ? ':' + h.line : ''} — ${h.what}`);
+    console.log(`\n올리기 전에 ${r.hits.length}건을 정리한다. 한 번 올라간 비밀은 지워도 깃 기록에 남는다 (키를 바꿔야 한다).`);
+    process.exitCode = 1; return;
+  }
   const only = (args.find(a => a.startsWith('--only=')) || '').replace('--only=', '').split(',').filter(Boolean);
   const jsonOnly = args.includes('--json');
   const def = resolveProject(target);
