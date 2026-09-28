@@ -4,7 +4,7 @@
 //   · 이 프로젝트가 기대는 외부 서비스 목록 + 서비스마다 확인할 것 (무료 요금제 한도·잠자기·비용) — 참고용, 점수에 넣지 않는다
 const fs = require('fs');
 const path = require('path');
-const { checkItems, sources, NOT_SHIPPED } = require('../_util');
+const { checkItems, owasp, sources, NOT_SHIPPED } = require('../_util');
 const { walk, read, readJson } = require('../../stacks/util');
 
 // 알려진 외부 서비스 — 의존성 이름(deps)·환경변수 이름(env)·설정 파일(files)로 찾는다. 값(비밀)은 읽지 않는다
@@ -150,15 +150,70 @@ function untimedCalls(ctx) {
   return { hits, calls: seen.calls };
 }
 
+// ── Supabase·Firebase 보안 설정 — 서버 없이 화면이 DB 에 바로 붙는 구조라, 규칙 한 줄이 곧 접근 통제 전부다
+//   Supabase: 화면에 드러난 공개 키(anon)로 누구나 표에 닿는다 → 표마다 RLS 가 켜져 있어야 하고, 관리자 키(service_role)는 화면에 없어야 한다
+//   Firebase: 규칙이 "누구나 읽고 쓰기"(테스트 모드 포함)면 주소만 알면 DB 를 통째로 읽고 지운다
+const PUBLIC_ENV = /^(NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|PUBLIC_)/;
+function backendRules(ctx) {
+  const items = [];
+  const { names } = envNames(ctx);
+  // 1) Supabase 관리자 키가 화면으로 나간다 — 공개 접두사가 붙은 환경변수 · 화면 코드에서 service_role 을 쓴다
+  for (const [n, from] of names) if (PUBLIC_ENV.test(n) && /SERVICE_ROLE|SERVICE_KEY|SECRET/.test(n) && /SUPABASE/.test(n)) items.push({ name: `환경변수 ${n} (${from})`, ok: false, detail: '관리자 키(service_role)에 화면 공개 접두사가 붙었다 — 빌드된 화면에 그대로 실려 누구나 RLS 를 건너뛴다. 접두사를 떼고 서버에서만 쓴다' });
+  for (const p of ctx.parts.filter(p => p.kind === 'client' || p.kind === 'both')) for (const f of sources(ctx, p)) {
+    const rel = ctx.rel(f); if (NOT_SHIPPED.test(rel)) continue;
+    const src = read(f);
+    if (p.kind === 'both' && !/^\s*['"]use client['"]/.test(src)) continue;   // Next.js 등은 'use client' 파일만 화면 코드
+    const m = src.match(/SUPABASE_SERVICE_ROLE\w*|service_role/);
+    if (m && /createClient|supabase/i.test(src)) items.push({ name: `${rel}:${lineOf(src, m.index)}`, ok: false, detail: '화면 코드가 Supabase 관리자 키(service_role)를 쓴다 — 브라우저로 내려가 RLS 가 무력해진다' });
+  }
+  // 2) Supabase 표마다 RLS — supabase/migrations/*.sql 에서 만든 표와 켠 표를 대조
+  const migDir = [path.join(ctx.root, 'supabase', 'migrations'), ...ctx.parts.map(p => path.join(p.absDir, 'supabase', 'migrations'))].find(d => fs.existsSync(d));
+  if (migDir) {
+    const sql = fs.readdirSync(migDir).filter(f => f.endsWith('.sql')).map(f => read(path.join(migDir, f))).join('\n').replace(/--[^\n]*/g, '');
+    const name = s => s.replace(/["`]/g, '').replace(/^public\./i, '').toLowerCase();
+    const tables = [...sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?([\w."]+)/gi)].map(m => name(m[1])).filter(t => !t.includes('.'));
+    const rls = new Set([...sql.matchAll(/alter\s+table\s+(?:only\s+)?([\w."]+)\s+enable\s+row\s+level\s+security/gi)].map(m => name(m[1])));
+    for (const t of [...new Set(tables)]) items.push(rls.has(t) ? { name: `표 ${t} · RLS`, ok: true, detail: '켜져 있다' } : { name: `표 ${t} · RLS`, ok: false, detail: `RLS 가 꺼져 있다 — 화면의 공개 키로 누구나 이 표를 읽고 고친다. alter table ${t} enable row level security; 와 정책(policy)을 만든다` });
+    // 정책이 "누구나" (using (true)) — 읽기는 공개 자료일 수 있어 확인 필요, 쓰기는 문제
+    for (const m of sql.matchAll(/create\s+policy\s+"?([^"\n]+?)"?\s+on\s+([\w."]+)([\s\S]*?);/gi)) {
+      const body = m[3];
+      if (!/(using|with\s+check)\s*\(\s*true\s*\)/i.test(body)) continue;
+      const write = /for\s+(insert|update|delete|all)\b/i.test(body);
+      items.push({ name: `정책 "${m[1]}" on ${name(m[2])}`, ok: write ? false : null, detail: write ? '쓰기 정책이 (true) — 로그인 안 한 사람도 고치고 지운다. auth.uid() = user_id 처럼 주인만으로 좁힌다' : '읽기 정책이 (true) — 누구나 읽는다. 공개 자료면 괜찮고, 개인 자료면 주인만으로 좁힌다' });
+    }
+  }
+  // 3) Firebase 보안 규칙 — firestore.rules · storage.rules · database.rules.json
+  for (const f of walk(ctx.root, ['firestore.rules', 'storage.rules', 'database.rules.json']).filter(f => !/node_modules/.test(f))) {
+    const src = read(f).replace(/\/\/[^\n]*/g, ''), rel = ctx.rel(f);
+    if (/\.json$/.test(f)) {
+      const open = [...src.matchAll(/"\.(read|write)"\s*:\s*(true|"true")/g)].map(m => m[1]);
+      items.push(open.length ? { name: rel, ok: open.includes('write') ? false : null, detail: `"${[...new Set(open)].join('·')}": true — ${open.includes('write') ? '주소만 알면 누구나 DB 를 쓰고 지운다' : '누구나 읽는다 (공개 자료인지 확인)'}. "auth != null" 이나 주인 조건으로 좁힌다` } : { name: rel, ok: true, detail: '누구나 열어 둔 규칙이 없다' });
+      continue;
+    }
+    const testMode = src.match(/request\.time\s*<\s*timestamp\.date\([^)]*\)/);
+    const openAll = src.match(/allow\s+(read|write|read\s*,\s*write|write\s*,\s*read)\s*(?::\s*if\s+true\s*)?;/);
+    items.push(testMode ? { name: `${rel}:${lineOf(src, testMode.index)}`, ok: false, detail: '"테스트 모드" 규칙(기한까지 누구나 읽고 쓰기)이 남아 있다 — 기한 전엔 활짝 열려 있고, 기한이 지나면 앱이 통째로 멈춘다' }
+      : openAll ? { name: `${rel}:${lineOf(src, openAll.index)}`, ok: /write/.test(openAll[1]) ? false : null, detail: `${openAll[0].trim()} — 조건 없이 ${/write/.test(openAll[1]) ? '누구나 쓰고 지운다' : '누구나 읽는다'}. request.auth != null 이나 주인 조건을 건다` }
+      : { name: rel, ok: true, detail: '조건 없이 여는 규칙이 없다' });
+  }
+  return items;
+}
+
 module.exports = {
   id: '11', name: '외부 서비스 의존', weight: 2,
   async run(ctx) {
     const info = { title: '기대는 외부 서비스 (참고 — 점수에 넣지 않는다)', items: inventory(ctx) };
+    const checks = [];
+    const rules = backendRules(ctx);
+    if (rules.length) checks.push(owasp('A01', checkItems('Supabase·Firebase 보안 규칙이 누구나에게 열려 있지 않다', rules)));
     const { hits, calls } = untimedCalls(ctx);
-    if (!calls) return { skip: ctx.services.length || ctx.parts.some(p => p.kind === 'both') ? '서버 코드에서 외부로 나가는 HTTP 호출을 찾지 못했다' : '서버가 없는 프로젝트', info };
-    const HOW = { js: 'fetch 는 { signal: AbortSignal.timeout(10000) }, axios 는 { timeout: 10000 } (또는 axios.create({ timeout }))', python: 'requests.get(url, timeout=10)', java: 'RestTemplate 은 SimpleClientHttpRequestFactory 에 setConnectTimeout·setReadTimeout' };
-    const how = [...new Set(ctx.parts.filter(p => p.kind !== 'client').map(p => HOW[p.lang]).filter(Boolean))].join(' · ');
-    const items = hits.length ? hits.slice(0, 80).map(h => ({ ...h, detail: `${h.detail} → 고치는 법: ${how}` })) : [{ name: `외부 호출 ${calls}곳`, ok: true, detail: '모두 제한 시간이 있다' }];
-    return { checks: [checkItems('서버가 외부를 부를 때 제한 시간(timeout)을 건다', items)], info, skipped: hits.length > 80 ? [`제한 시간 없는 호출이 ${hits.length}곳 — 80곳까지만 적었다`] : [] };
+    if (calls) {
+      const HOW = { js: 'fetch 는 { signal: AbortSignal.timeout(10000) }, axios 는 { timeout: 10000 } (또는 axios.create({ timeout }))', python: 'requests.get(url, timeout=10)', java: 'RestTemplate 은 SimpleClientHttpRequestFactory 에 setConnectTimeout·setReadTimeout' };
+      const how = [...new Set(ctx.parts.filter(p => p.kind !== 'client').map(p => HOW[p.lang]).filter(Boolean))].join(' · ');
+      const items = hits.length ? hits.slice(0, 80).map(h => ({ ...h, detail: `${h.detail} → 고치는 법: ${how}` })) : [{ name: `외부 호출 ${calls}곳`, ok: true, detail: '모두 제한 시간이 있다' }];
+      checks.push(checkItems('서버가 외부를 부를 때 제한 시간(timeout)을 건다', items));
+    }
+    if (!checks.length) return { skip: ctx.services.length || ctx.parts.some(p => p.kind === 'both') ? '서버 코드에서 외부로 나가는 HTTP 호출을 찾지 못했다' : '서버가 없는 프로젝트', info };
+    return { checks, info, skipped: hits.length > 80 ? [`제한 시간 없는 호출이 ${hits.length}곳 — 80곳까지만 적었다`] : [] };
   },
 };

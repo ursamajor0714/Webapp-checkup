@@ -20,8 +20,9 @@ if not exist node_modules\.qa-package.json set NEED_INSTALL=1
 if exist node_modules\.qa-package.json fc /b package.json node_modules\.qa-package.json >nul || set NEED_INSTALL=1
 if %NEED_INSTALL%==1 (
   echo 필요한 부품을 설치합니다... ^(처음이거나 QA 가 새 부품을 쓰게 됐다^)
-  call npm install --no-audit --no-fund --loglevel=error
-  copy /y package.json node_modules\.qa-package.json >nul
+  rem 설치에 성공했을 때만 표시를 남긴다 — 실패했는데 남기면 다음부터 설치를 건너뛰어 부품이 빈 채로 뜬다
+  call npm install --no-audit --no-fund --loglevel=error && copy /y package.json node_modules\.qa-package.json >nul
+  if not exist node_modules\.qa-package.json echo 부품 설치에 실패했습니다 - 인터넷 연결을 확인하고 다시 더블클릭하세요. 화면은 있는 부품으로 띄웁니다.
 )
 node ui.js %OPEN%
 if %errorlevel%==75 (
