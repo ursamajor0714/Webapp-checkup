@@ -28,6 +28,47 @@ function summarize(out) {
   return { passed, failed, names };
 }
 
+// 린트·안 쓰는 코드 — 레포가 스스로 정한 규칙을 지키는가 (gstack /health). 설정이 있고 도구가 깔려 있을 때만 돌린다
+//   ESLint(설정 + node_modules) · Ruff(pyproject 의 [tool.ruff] 또는 ruff.toml) · knip(devDependencies) · ShellCheck(설치돼 있고 .sh 가 있을 때)
+//   경고는 세지 않고 오류만 — 규칙은 팀이 정한 것이라 경고까지 문제로 보면 소음이 된다
+function lintItems(ctx) {
+  const items = [];
+  const has = (dir, names) => names.some(n => fs.existsSync(path.join(dir, n)));
+  for (const p of ctx.parts) {
+    const dir = p.absDir, bin = n => path.join(dir, 'node_modules', '.bin', n);
+    if (p.lang === 'js' && fs.existsSync(bin('eslint')) && (has(dir, ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts', '.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml']) || (readJson(path.join(dir, 'package.json')) || {}).eslintConfig)) {
+      const r = run([bin('eslint'), '.', '-f', 'json', '--no-warn-ignored'], dir, {}, 300000);
+      let res = null; try { res = JSON.parse(r.out.slice(r.out.indexOf('['), r.out.lastIndexOf(']') + 1)); } catch { /* 출력이 JSON 이 아니다 */ }
+      if (!res) items.push({ name: `${p.dir} eslint`, ok: null, detail: `돌렸지만 결과를 읽지 못했다 — ${r.out.trim().split('\n')[0].slice(0, 160)}` });
+      else {
+        const errs = res.filter(f => f.errorCount > 0);
+        const n = errs.reduce((a, f) => a + f.errorCount, 0);
+        items.push({ name: `${p.dir} eslint`, ok: n === 0, detail: n ? `오류 ${n}개 (${errs.length}개 파일) — 예: ${errs.slice(0, 3).map(f => `${path.relative(dir, f.filePath)}:${(f.messages.find(m => m.severity === 2) || {}).line} ${(f.messages.find(m => m.severity === 2) || {}).ruleId || ''}`).join(' · ')}` : `오류 없음 (파일 ${res.length}개)` });
+      }
+    }
+    if (p.lang === 'js' && fs.existsSync(bin('knip'))) {
+      const r = run([bin('knip'), '--no-progress', '--reporter', 'compact'], dir, {}, 300000);
+      const lines = r.out.split('\n').filter(l => /\S/.test(l) && !/^\s*$/.test(l));
+      items.push({ name: `${p.dir} knip (안 쓰는 파일·내보내기·의존성)`, ok: r.code === 0 ? true : null, detail: r.code === 0 ? '안 쓰는 것 없음' : `${lines.length}줄 — ${lines.slice(0, 3).join(' · ').slice(0, 200)} (지워도 되는지 사람이 확인)` });
+    }
+    const ruffCfg = has(dir, ['ruff.toml', '.ruff.toml']) || /\[tool\.ruff/.test((() => { try { return fs.readFileSync(path.join(dir, 'pyproject.toml'), 'utf8'); } catch { return ''; } })());
+    if (p.lang === 'python' && ruffCfg) {
+      const serve = require('../../serve');
+      const py = serve.pythonFor({ ...ctx.project, id: ctx.project.id || ctx.project.name }, p) || 'python3';
+      const r = run([py, '-m', 'ruff', 'check', '.', '--output-format', 'concise'], dir, {}, 300000);
+      if (/No module named ruff/.test(r.out) || r.missing) items.push({ name: `${p.dir} ruff`, ok: null, detail: 'ruff 설정은 있는데 가상환경에 ruff 가 없다 — pip install ruff' });
+      else { const bad = r.out.split('\n').filter(l => /:\d+:\d+: [A-Z]+\d+/.test(l)); items.push({ name: `${p.dir} ruff`, ok: r.code === 0, detail: r.code === 0 ? '오류 없음' : `${bad.length}개 — ${bad.slice(0, 3).map(l => l.replace(dir + '/', '')).join(' · ').slice(0, 220)}` }); }
+    }
+  }
+  const sh = ctx.files(ctx.parts, ['.sh']).filter(f => !/node_modules/.test(f)).slice(0, 50);
+  if (sh.length && !run(['shellcheck', '--version'], ctx.root, {}, 10000).missing) {
+    const r = run(['shellcheck', '-f', 'gcc', '-S', 'warning', ...sh], ctx.root, {}, 120000);
+    const bad = r.out.split('\n').filter(l => /: (error|warning):/.test(l));
+    items.push({ name: `셸 스크립트 ${sh.length}개 shellcheck`, ok: !bad.length, detail: bad.length ? `${bad.length}개 — ${bad.slice(0, 2).map(l => l.replace(ctx.root + '/', '')).join(' · ').slice(0, 220)}` : '문제 없음' });
+  }
+  return items;
+}
+
 module.exports = {
   id: '1', name: '자체 테스트', weight: 6,
   async run(ctx) {
@@ -86,7 +127,11 @@ module.exports = {
         for (const n of s.names) items.push({ name: `${p.dir} 실패한 테스트`, ok: false, detail: n });
       }
     }
-    if (!items.length) return { skip: '테스트를 돌릴 수 있는 부분이 없다' };
-    return { checks: [checkItems('레포의 자체 테스트가 통과한다', items)] };
+    const lint = lintItems(ctx);
+    if (!items.length && !lint.length) return { skip: '테스트를 돌릴 수 있는 부분이 없다' };
+    return { checks: [
+      ...(items.length ? [checkItems('레포의 자체 테스트가 통과한다', items)] : []),
+      ...(lint.length ? [checkItems('레포의 린트·안 쓰는 코드 검사가 깨끗하다', lint)] : []),
+    ] };
   },
 };

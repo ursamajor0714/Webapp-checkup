@@ -1,4 +1,4 @@
-// B. 인증 — OWASP A01(접근 통제) · A07(식별·인증 실패) · A04(무차별 대입)
+// B. 인증 — OWASP A01(접근 통제) · A07(식별·인증 실패) · A06(무차별 대입)
 //   · 인증 매트릭스: 공개로 정하지 않은 모든 경로 × 가짜 토큰 5종 (+ 진짜 세션은 통과하는지)
 //   · 로그인 무차별 대입: 틀린 비밀번호를 연달아 보내면 막히는가 · 잠금을 출발지 헤더 위조로 풀 수 있는가 (맨 마지막에 잰다)
 //   · 약한 비밀번호로 가입되는가
@@ -37,7 +37,7 @@ async function apiRateLimit(ctx, routes) {
 }
 
 module.exports = {
-  id: 'B', last: true, name: '인증', weight: 6, owasp: ['A01', 'A07', 'A04'],
+  id: 'B', last: true, name: '인증', weight: 6, owasp: ['A01', 'A07', 'A06'],
   async run(ctx) {
     if (!ctx.services.length) return { skip: '서버가 없는 프로젝트' };
     if (!ctx.live) return { skip: '서버가 꺼져 있다 — [서버 켜기] 후 다시' };
@@ -92,7 +92,7 @@ module.exports = {
       const fx = await sessionFixation(ctx, auth);
       if (fx) checks.push(owasp('A07', checkItems('로그인하면 세션 id 가 바뀐다 (세션 고정)', [fx])));
       const rl = await apiRateLimit(ctx, routes);
-      if (rl) checks.push(owasp('A04', checkItems('로그인 말고 다른 API 에도 요청 제한이 있다', [rl])));
+      if (rl) checks.push(owasp('A06', checkItems('로그인 말고 다른 API 에도 요청 제한이 있다', [rl])));
     }
     // 5. 무차별 대입 — 마지막에 (잠기면 이 뒤 로그인이 막히므로). 요청마다 가짜 출발지(TEST-NET 주소)를 달아
     //    잠금이 X-Forwarded-For 같은 위조 가능한 헤더에 묶여 있는지도 본다

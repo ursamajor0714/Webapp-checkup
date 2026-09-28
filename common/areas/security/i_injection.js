@@ -1,4 +1,4 @@
-// I. 주입·SSRF — OWASP A03(주입) · A10(SSRF) · A08(안전하지 않은 역직렬화)
+// I. 주입·SSRF — OWASP A05(주입) · A01(SSRF) · A08(안전하지 않은 역직렬화)
 //   코드: 위험한 싱크(eval·innerHTML·|safe·명령 실행), SQL 문자열 이어 붙이기, 사용자 URL 로 서버가 요청
 //   실제: 목록·검색 경로의 쿼리 값에 SQL·NoSQL·XSS·템플릿 주입 문자열 → 5xx·DB 오류 노출·그대로 반사되면 불합격
 const { check, checkItems, owasp, sources, scan } = require('../_util');
@@ -30,7 +30,7 @@ async function openRedirect(ctx) {
 }
 
 module.exports = {
-  id: 'I', name: '주입·SSRF', weight: 7, owasp: ['A03', 'A10', 'A08'],
+  id: 'I', name: '주입·SSRF', weight: 7, owasp: ['A05', 'A01', 'A08'],
   async run(ctx) {
     const checks = [];
     // ── 코드
@@ -73,10 +73,10 @@ module.exports = {
       // 화면의 innerHTML·escape 끈 템플릿은 기계가 escape 여부를 확신하지 못한다 — 파일마다 하나로 묶어 사람이 볼 곳을 줄인다
       ...[...byFile.entries()].map(([f, xs]) => ({ name: f, ok: null, detail: `${xs[0].tag} · ${xs.length}곳에서 값을 HTML 로 꽂는다 (${xs.slice(0, 3).map(x => x.h.split(' — ')[0].split(':')[1]).join('·')}번째 줄${xs.length > 3 ? ' …' : ''}) — 사용자·서버가 준 값이 escape 를 거치는지 확인 (textContent 나 escape 함수)` })),
     ];
-    checks.push(owasp('A03', checkItems('위험한 코드 싱크 (eval·innerHTML·|safe·명령 실행·역직렬화)', sinkItems.length ? sinkItems : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));
+    checks.push(owasp('A05', checkItems('위험한 코드 싱크 (eval·innerHTML·|safe·명령 실행·역직렬화)', sinkItems.length ? sinkItems : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));
     // 요청 값(req.·request.)이 바로 들어가면 불합격, 코드가 만든 조각(${whereSql}·자리표시자)이면 사람이 확인
-    checks.push(owasp('A03', checkItems('SQL 을 문자열로 이어 붙이지 않는다', sqlHits.length ? sqlHits.map(({ h, ok }) => ({ name: h.split(' — ')[0], ok, detail: ok === false ? h.split(' — ').slice(1).join(' — ') : `${h.split(' — ').slice(1).join(' — ')} — 끼워 넣는 값이 사용자 입력에서 오지 않는지 확인` })) : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));
-    checks.push(owasp('A10', check('사용자가 준 URL 로 서버가 요청하지 않는다 (SSRF)', { universe: scanned, scanned, passed: scanned - new Set(ssrfHits.map(h => h.split(':')[0])).size, notes: ssrfHits })));
+    checks.push(owasp('A05', checkItems('SQL 을 문자열로 이어 붙이지 않는다', sqlHits.length ? sqlHits.map(({ h, ok }) => ({ name: h.split(' — ')[0], ok, detail: ok === false ? h.split(' — ').slice(1).join(' — ') : `${h.split(' — ').slice(1).join(' — ')} — 끼워 넣는 값이 사용자 입력에서 오지 않는지 확인` })) : [{ name: `소스 ${scanned}개`, ok: true, detail: '걸린 것 없음' }], { universe: scanned })));
+    checks.push(owasp('A01', check('사용자가 준 URL 로 서버가 요청하지 않는다 (SSRF)', { universe: scanned, scanned, passed: scanned - new Set(ssrfHits.map(h => h.split(':')[0])).size, notes: ssrfHits })));
     // ── 실제 요청
     if (!ctx.live) return { checks, partial: '서버가 꺼져 있어 실제 주입 요청은 건너뛰었다' };
     const as = ctx.sessions.owner ? 'owner' : 'anon';
@@ -97,7 +97,7 @@ module.exports = {
         if (res.status === 429) break;
       }
     }
-    checks.push(owasp('A03', checkItems('주입 문자열을 넣어도 멀쩡하다 (경로·쿼리 값)', items)));
+    checks.push(owasp('A05', checkItems('주입 문자열을 넣어도 멀쩡하다 (경로·쿼리 값)', items)));
     // 저장형 XSS — 만들 수 있는 자원에 스크립트를 넣고 다시 읽을 때 HTML 로 되돌아오는가
     const stored = [];
     for (const c of (ctx.contracts || []).filter(x => x.method === 'POST' && x.strict !== undefined).slice(0, 8)) {
@@ -115,7 +115,7 @@ module.exports = {
       for (const p of pages) { const page = await ctx.call(p.path, { service: p.part, as }); if (/<img src=x onerror=alert\(1\)>/.test(page.text)) { hit = p.path; break; } }
       stored.push({ name: `${c.method} ${c.path} · ${strField[0]} 에 스크립트 저장 후 화면`, ok: !hit, detail: hit ? `${hit} 화면에 escape 없이 그려진다 (저장형 XSS)` : `${res.status} · 화면 ${pages.length}개에서 escape 됨` });
     }
-    if (stored.length) checks.push(owasp('A03', checkItems('저장한 스크립트가 화면에서 escape 된다 (저장형 XSS)', stored)));
+    if (stored.length) checks.push(owasp('A05', checkItems('저장한 스크립트가 화면에서 escape 된다 (저장형 XSS)', stored)));
     // 고급부터 — 오픈 리다이렉트: 이동할 주소를 쿼리로 받는 경로에 다른 사이트 주소를 넣으면 그대로 보내는가 (피싱에 쓰인다)
     if (ctx.level.atLeast('advanced')) { const o = await openRedirect(ctx); if (o.length) checks.push(owasp('A01', checkItems('받은 주소로 아무 데나 보내지 않는다 (오픈 리다이렉트)', o))); }
     return { checks };

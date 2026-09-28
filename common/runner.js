@@ -6,7 +6,7 @@
 //
 // 영역 = common/areas 의 범용 26개 (+ 프로젝트 폴더의 전용 검사)
 //   · 영역이 { skip } 을 돌려주면 '설정 필요·해당 없음' — 점수에서 뺀다 (0점으로 세지 않는다)
-//   · 검사마다 OWASP Top 10(2021) 카테고리를 달 수 있다 → 결과에 카테고리별 집계
+//   · 검사마다 OWASP Top 10(2025) 카테고리를 달 수 있다 → 결과에 카테고리별 집계
 // ============================================================
 const fs = require('fs');
 const path = require('path');
@@ -21,8 +21,8 @@ const SECTIONS = [['project', '프로젝트 전체 (테스트·브라우저·설
 const COMPOSITE = ['X', 'W', 'Y'];
 const QA_ROOT = path.join(__dirname, '..');
 const OWASP = {
-  A01: '접근 통제 실패', A02: '암호화 실패', A03: '주입', A04: '안전하지 않은 설계', A05: '보안 설정 오류',
-  A06: '취약하고 오래된 구성요소', A07: '식별·인증 실패', A08: '소프트웨어·데이터 무결성 실패', A09: '보안 로깅·모니터링 실패', A10: '서버 측 요청 위조(SSRF)',
+  A01: '접근 통제 실패 (SSRF 포함)', A02: '보안 설정 오류', A03: '소프트웨어 공급망 실패', A04: '암호화 실패', A05: '주입',
+  A06: '안전하지 않은 설계', A07: '인증 실패', A08: '소프트웨어·데이터 무결성 실패', A09: '보안 로깅·경보 실패', A10: '예외 상황 처리 실패',
 };
 
 // ── 프로젝트 찾기: projects/<이름>/project.js · 화면에서 추가한 것(.qa-local.json) · 폴더 경로
@@ -269,7 +269,7 @@ async function runProbe(ctx, probe) {
     return { id: probe.id, name: probe.name, weight: probe.weight, section: probe.section, file: probe.file, owasp: probe.owasp || [], composite: COMPOSITE.includes(probe.id),
       skip: `설정 오류로 못 잼 (제품 결함 아님) — ${ctx.setupBlocked}`, setup: true, skipped: [], partial: null, universe: 0, scanned: 0, passed: 0, warned: 0, failed: 0, scanRate: 0, passRate: 1, ms: 0, checks: [], error: null, info: null };
   }
-  let checks = [], error = null, skip = null, skipped = [], partial = null, info = null, finding = null;
+  let checks = [], error = null, skip = null, skipped = [], partial = null, info = null, finding = null, metrics = null, shots = null;
   try {
     const out = await probe.run(ctx) || {};
     if (out.skip) skip = out.skip;
@@ -278,6 +278,8 @@ async function runProbe(ctx, probe) {
     partial = out.partial || null;
     info = out.info || null;   // 점수에 넣지 않는 참고 정보 (예: 기대는 외부 서비스 목록)
     finding = out.finding || null;   // 잴 수 없어도 코드로 아는 것 (예: 검증 스키마가 하나도 없다)
+    metrics = out.metrics || null;   // 화면별 성능 숫자 — 다음 검사와 견준다 (2 영역)
+    shots = out.shots && out.shots.length ? out.shots : null;   // 문제 난 화면 사진 (2 영역)
     // 프로젝트 전용 검사는 대부분 로그인한 서버를 전제로 짠다 — 서버가 꺼졌거나 로그인하지 못했으면 오류 대신 건너뛴다
     const extrasReady = !ctx.services.length || (ctx.live && (!ctx.project.auth || ctx.project.auth.type === 'none' || !!ctx.sessions.owner));
     for (const ex of probe.extras || []) {
@@ -297,6 +299,7 @@ async function runProbe(ctx, probe) {
     scanRate: universe ? scanned / universe : 0,
     passRate: (scanned - warned) ? passed / (scanned - warned) : 1,
     ms: Date.now() - t0, checks, error, info, finding,
+    ...(metrics && Object.keys(metrics).length ? { metrics } : {}), ...(shots ? { shots } : {}),
   };
   // 사람이 '의도된 것·오탐' 으로 표시한 문제는 통과로 센다 (대상 레포의 .qa-ignore.json)
   require('./ignore').apply(result, ctx.ignores);
@@ -452,6 +455,24 @@ function qaVersion() {
 }
 const sameQa = (a, b) => !!(a && b && a.commit === b.commit && (a.dirty || false) === (b.dirty || false));
 
+// 성능 추세 — 화면이 조금씩 무거워지는 것은 한 번 검사로는 안 보인다. 지난 전체 검사의 숫자와 견준다 (gstack /benchmark 기준)
+//   크기(JS·전체): 25% 넘게 늘면 나빠짐, 10% 넘으면 주의 · 시간(불러오기·LCP): 50% 또는 0.5초 넘게 늘면 나빠짐, 20% 넘으면 주의
+function perfTrend(prevResults, results) {
+  const m = rs => ((rs || []).find(r => r.id === '2') || {}).metrics || {};
+  const a = m(prevResults), b = m(results), out = [];
+  const kb = x => `${Math.round(x / 1024)}KB`, sec = x => `${(x / 1000).toFixed(1)}초`;
+  for (const [page, now] of Object.entries(b)) {
+    const was = a[page]; if (!was) continue;
+    for (const [k, label, fmt, time] of [['js', 'JS', kb, false], ['total', '전체 크기', kb, false], ['n', '파일 수', String, false], ['load', '불러오기', sec, true], ['lcp', 'LCP', sec, true]]) {
+      if (!(was[k] > 0) || now[k] == null) continue;
+      const d = now[k] - was[k], pct = d / was[k];
+      const level = time ? (pct > 0.5 || d > 500 ? 'bad' : pct > 0.2 ? 'warn' : null) : k === 'n' ? (pct > 0.3 ? 'warn' : null) : (pct > 0.25 ? 'bad' : pct > 0.1 ? 'warn' : null);
+      if (level) out.push({ page, metric: label, level, before: fmt(was[k]), after: fmt(now[k]), pct: Math.round(pct * 100) });
+    }
+  }
+  return out;
+}
+
 function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
   if (!fs.existsSync(dir)) return null;
   // 일부 영역만 돌린 검사(--only·영역 조회)는 비교 기준이 못 된다 — 전체 검사끼리만
@@ -490,7 +511,8 @@ function diffWithPrevious(dir, results, score, level = 'advanced', qa = null) {
   const qaChanged = sameQa(prevQa, qa) ? null : { from: prevQa, to: qa };
   const ver = v => v ? `${v.commit}${v.dirty ? ` + 커밋 안 한 수정${typeof v.dirty === 'string' ? `(${v.dirty})` : ''}` : ''}` : '기록 없음';
   const qaNote = qaChanged ? `QA 버전이 다르다 (${ver(prevQa)} → ${ver(qa)}) — 점수 차이 일부는 대상 코드가 아니라 QA 검사 기준이 바뀐 탓일 수 있다` : null;
-  return { qaChanged, qaNote, areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
+  const perf = perfTrend(prev.results, results);
+  return { perf, qaChanged, qaNote, areaChanges: areaChanges.slice(0, 12), same, prevFile, prevAt: prev.summary && prev.summary.at, prevScore: prev.summary && (prev.summary.rawScore ?? prev.summary.score), score, added: added.slice(0, 50), fixed: fixed.slice(0, 50), addedCount: added.length, fixedCount: fixed.length };
 }
 
 async function finish(prep, results, { save = true } = {}) {
@@ -671,12 +693,13 @@ async function run(arg) {
     for (const i of miss) console.log(`  ✗ ${i.label} (+${i.plus}점) — ${i.how[0]}`);
   }
   console.log(`설정 필요·해당 없음 ${s.skippedAreas.length}개 영역 (점수에서 뺌)`);
-  console.log('\nOWASP Top 10 (2021)');
+  console.log('\nOWASP Top 10 (2025)');
   for (const o of s.owasp) console.log(`  ${o.id} ${o.name.padEnd(18)} ${o.status.padEnd(6)} 검사 ${o.scanned} · 문제 ${o.failed}${o.warned ? ` · 확인 ${o.warned}` : ''}`);
   if (s.diff) {
     const d = s.diff, delta = Math.round((d.score - d.prevScore) * 10) / 10;
     console.log(`\n▲ 지난 검사(${String(d.prevAt || d.prevFile).slice(0, 16).replace('T', ' ')})와 비교: 점수 ${d.prevScore} → ${d.score} (${delta >= 0 ? '+' : ''}${delta}) · 새 문제 ${d.addedCount} · 고친 것 ${d.fixedCount}`);
     if (d.qaNote) console.log(`   ⚠ ${d.qaNote}`);
+    for (const p of (d.perf || []).slice(0, 6)) console.log(`   ${p.level === 'bad' ? '✗' : '△'} 성능: ${p.page} ${p.metric} ${p.before} → ${p.after} (+${p.pct}%)`);
     if (Math.abs(delta) >= 0.5 && (d.areaChanges || []).length) {
       console.log(`   점수가 바뀐 이유${d.same ? ` (두 번 다 잰 영역 ${d.same.areas}개끼리: ${d.same.prev} → ${d.same.now})` : ''}`);
       for (const c of d.areaChanges.slice(0, 6)) console.log(`   · [${c.id}] ${c.name} ${c.before ?? '못 잼'} → ${c.after ?? '못 잼'} — ${c.why.join(' · ')}`);

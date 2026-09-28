@@ -35,16 +35,16 @@ module.exports = {
   importName: { 'django': 'django', 'djangorestframework': 'rest_framework', 'pillow': 'pil', 'python-dotenv': 'dotenv', 'scikit-learn': 'sklearn', 'beautifulsoup4': 'bs4', 'pyyaml': 'yaml', 'psycopg2-binary': 'psycopg2', 'python-multipart': 'multipart', 'uvicorn': 'uvicorn', 'gunicorn': 'gunicorn', 'whitenoise': 'whitenoise', 'dj-database-url': 'dj_database_url', 'opencv-python': 'cv2', 'torchvision': 'torchvision', 'python-jose': 'jose', 'passlib': 'passlib' },
   audit: () => ['pip-audit', '-r', 'requirements.txt', '-f', 'json'],
   sinks: [
-    [/mark_safe\(|\|\s*safe\b|\{%\s*autoescape\s+off/, 'escape 를 끈다 (mark_safe · |safe · autoescape off)', 'A03', 'all'],
+    [/mark_safe\(|\|\s*safe\b|\{%\s*autoescape\s+off/, 'escape 를 끈다 (mark_safe · |safe · autoescape off)', 'A05', 'all'],
     [/(?<![\w.])eval\(|(?<![\w.])exec\(|pickle\.loads?\(|yaml\.load\((?![^)]*Loader=yaml\.SafeLoader)/, 'eval·exec·pickle·yaml.load (신뢰 못 할 입력 실행)', 'A08', 'all'],
-    [/subprocess\.[\w]+\([^)]*shell\s*=\s*True|os\.system\(/, '셸 명령 실행 (명령 주입)', 'A03', 'all'],
+    [/subprocess\.[\w]+\([^)]*shell\s*=\s*True|os\.system\(/, '셸 명령 실행 (명령 주입)', 'A05', 'all'],
     [/@csrf_exempt/, 'CSRF 보호를 끈 뷰', 'A01', 'all'],
   ],
   sqlDirect: /\.(?:raw|execute|extra)\(\s*f['"][^'"]*\{\s*request\./,
   sqlConcat: /\.(?:raw|execute|extra)\(\s*(?:f['"]|['"][^'"]*['"]\s*(?:%|\+|\.format\())/,
   weakCrypto: [
-    [/hashlib\.(md5|sha1)\([^)]*pass/i, '비밀번호를 MD5/SHA1 로 해시', 'A02'],
-    [/random\.(?:random|randint|choice)\([^)]*\)[^\n]{0,40}(token|otp|code|secret)|(token|otp|code|secret)[^\n]{0,40}random\.(?:random|randint|choice)/i, '토큰·코드를 random 으로 만든다 (secrets 를 써야 한다)', 'A02'],
+    [/hashlib\.(md5|sha1)\([^)]*pass/i, '비밀번호를 MD5/SHA1 로 해시', 'A04'],
+    [/random\.(?:random|randint|choice)\([^)]*\)[^\n]{0,40}(token|otp|code|secret)|(token|otp|code|secret)[^\n]{0,40}random\.(?:random|randint|choice)/i, '토큰·코드를 random 으로 만든다 (secrets 를 써야 한다)', 'A04'],
   ],
   secrets: [
     [/SECRET_KEY\s*=\s*['"][^'"]{8,}['"]/, 'Django SECRET_KEY 가 코드에 있다'],
@@ -53,10 +53,10 @@ module.exports = {
   ],
   // 설정 실수 (Django settings)
   misconfig: [
-    [/^\s*DEBUG\s*=\s*True/m, 'DEBUG = True 가 코드에 고정 (운영에서 내부 정보 노출)', 'A05'],
-    [/ALLOWED_HOSTS\s*=\s*\[\s*['"]\*['"]\s*\]/, "ALLOWED_HOSTS = ['*'] (Host 헤더 공격)", 'A05'],
-    [/CORS_(?:ORIGIN|ALLOW)_ALL(?:OW)?(?:_ORIGINS)?\s*=\s*True/, 'CORS 모든 출처 허용', 'A05'],
-    [/SESSION_COOKIE_SECURE\s*=\s*False|CSRF_COOKIE_SECURE\s*=\s*False/, '쿠키 Secure 끔', 'A02'],
+    [/^\s*DEBUG\s*=\s*True/m, 'DEBUG = True 가 코드에 고정 (운영에서 내부 정보 노출)', 'A02'],
+    [/ALLOWED_HOSTS\s*=\s*\[\s*['"]\*['"]\s*\]/, "ALLOWED_HOSTS = ['*'] (Host 헤더 공격)", 'A02'],
+    [/CORS_(?:ORIGIN|ALLOW)_ALL(?:OW)?(?:_ORIGINS)?\s*=\s*True/, 'CORS 모든 출처 허용', 'A02'],
+    [/SESSION_COOKIE_SECURE\s*=\s*False|CSRF_COOKIE_SECURE\s*=\s*False/, '쿠키 Secure 끔', 'A04'],
   ],
   ssrf: /requests\.(?:get|post|put|delete|request)\(\s*(?:request\.(?:GET|POST|data|query_params)|f['"][^'"]*\{\s*request\.)/,
   utcDisplay: /USE_TZ\s*=\s*False/,

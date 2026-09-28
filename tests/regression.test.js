@@ -49,6 +49,9 @@ test('정적 사이트 — 심은 버그를 모두 잡는다', { timeout: 300000
   caught(rep, '5', /result-box|null/);                  // 버튼을 누르면 예외
   caught(rep, '7', /image-alt/);                        // 대체 텍스트 없는 이미지
   caught(rep, '7', /html-has-lang/);
+  caught(rep, '2', /CSP 위반/);                          // 보안 정책이 막은 인라인 스크립트
+  const shots = (rep.results.find(r => r.id === '2') || {}).shots || [];
+  assert.ok(shots.length && shots.every(x => /^[A-Za-z0-9+/=]{1000,}$/.test(x.jpg)), `문제 난 화면 사진: ${shots.length}장`);
 });
 
 test('Express 서버 — 심은 버그를 모두 잡는다', { timeout: 600000 }, async t => {

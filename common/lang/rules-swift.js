@@ -21,17 +21,17 @@ module.exports = {
   builtins: new Set(),
   audit: () => null,                  // Swift 의존성 취약점 감사 도구는 로컬에 흔하지 않다
   sinks: [
-    [/evaluateJavaScript\([^)\n]*(?:\+|\\\()/, 'WKWebView 에서 값을 이어 붙인 스크립트를 실행한다 (스크립트 주입)', 'A03', 'all'],
-    [/loadHTMLString\(/, 'loadHTMLString — 받은 HTML 을 그대로 그린다 (escape 확인)', 'A03', 'all'],
-    [/\bUIWebView\b/, 'UIWebView — 지원이 끝났고 보안 문제가 있다 (WKWebView 로)', 'A06', 'all'],
+    [/evaluateJavaScript\([^)\n]*(?:\+|\\\()/, 'WKWebView 에서 값을 이어 붙인 스크립트를 실행한다 (스크립트 주입)', 'A05', 'all'],
+    [/loadHTMLString\(/, 'loadHTMLString — 받은 HTML 을 그대로 그린다 (escape 확인)', 'A05', 'all'],
+    [/\bUIWebView\b/, 'UIWebView — 지원이 끝났고 보안 문제가 있다 (WKWebView 로)', 'A03', 'all'],
     [/NSKeyedUnarchiver\.unarchiveObject\(/, '안전하지 않은 역직렬화 (unarchivedObject(ofClass:from:) 를 쓴다)', 'A08', 'all'],
   ],
   sqlDirect: NONE,
   sqlConcat: /(?:sqlite3_exec|sqlite3_prepare_v2|execute|raw)\(\s*[^,\n]*"[^"\n]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^"\n]*\\\(/i,
   weakCrypto: [
-    [/UserDefaults[^\n]{0,80}\.set\([^\n]{0,100}(token|password|secret|jwt|accessToken)/i, '토큰·비밀번호를 UserDefaults 에 저장한다 — 기기에 평문으로 남는다 (Keychain 을 써야 한다)', 'A02'],
-    [/Insecure\.MD5|Insecure\.SHA1|CC_MD5|CC_SHA1/, 'MD5/SHA1 해시', 'A02'],
-    [/NSAllowsArbitraryLoads/, 'ATS 해제 키(NSAllowsArbitraryLoads)가 있다 — true 면 모든 http(암호화 안 된) 통신을 허용한다', 'A02'],
+    [/UserDefaults[^\n]{0,80}\.set\([^\n]{0,100}(token|password|secret|jwt|accessToken)/i, '토큰·비밀번호를 UserDefaults 에 저장한다 — 기기에 평문으로 남는다 (Keychain 을 써야 한다)', 'A04'],
+    [/Insecure\.MD5|Insecure\.SHA1|CC_MD5|CC_SHA1/, 'MD5/SHA1 해시', 'A04'],
+    [/NSAllowsArbitraryLoads/, 'ATS 해제 키(NSAllowsArbitraryLoads)가 있다 — true 면 모든 http(암호화 안 된) 통신을 허용한다', 'A04'],
   ],
   secrets: [
     [/(?:apiKey|api_key|secretKey|clientSecret|accessToken|password)\s*[:=]\s*"[^"\s\\]{8,}"/i, '비밀값을 코드에 적음'],

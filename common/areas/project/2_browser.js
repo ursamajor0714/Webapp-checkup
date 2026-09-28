@@ -2,6 +2,8 @@
 //   · 잡히지 않은 예외(pageerror)·콘솔 오류     · 실패한 요청(5xx·없는 파일·끊긴 요청)
 //   · 화면에 찍힌 undefined·NaN·[object Object]·Invalid Date     · 깨진 이미지
 //   · 모바일 폭(375px)에서 가로로 넘침     · 화면 무게(JS 크기)·불러오기 시간
+//   · CSP 위반(브라우저가 막은 스크립트·자원) · https 화면이 http 자원을 부름(섞인 자원)
+//   · 문제가 난 화면은 사진을 찍어 리포트에 붙인다 (최대 8장)
 // 버튼은 누르지 않는다(데이터를 바꾸지 않게). 같은 사이트 링크를 따라가며 최대 25개 화면. 로그인 쿠키가 있으면 싣는다.
 const { checkItems } = require('../_util');
 const { openBrowser, startPages, newContext } = require('../../browser');
@@ -16,7 +18,10 @@ module.exports = {
     if (!start.length) return { skip: ctx.pagesLive ? '열 화면이 없다' : '화면 서버가 꺼져 있다 — 서버를 켜거나, 끈 채로 돌리면 QA 가 켠다' };
     const b = await openBrowser();
     if (!b.browser) return { skip: `브라우저를 열 수 없다 — ${b.why}` };
-    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [], fwItems = [], storm = [], meta = [], vitals = [];
+    const errs = [], reqs = [], junk = [], imgs = [], mobile = [], perf = [], fwItems = [], storm = [], meta = [], vitals = [], csp = [];
+    const metrics = {};   // 화면별 숫자 — 다음 검사와 견줘 '점점 무거워지는지' 본다
+    const shots = [];      // 문제 난 화면 사진
+    const shoot = async (page, where) => { if (shots.length >= 8 || shots.some(x => x.where === where)) return; try { shots.push({ where, jpg: (await page.screenshot({ type: 'jpeg', quality: 55 })).toString('base64') }); } catch { /* 닫힌 화면 */ } };
     const skipped = [];
     try {
       const base0 = ctx.baseUrl(start[0].part);
@@ -31,12 +36,15 @@ module.exports = {
         if (seen.has(key)) continue; seen.add(key);
         const where = new URL(url).pathname + new URL(url).search;
         const page = await context.newPage();
-        const pErr = [], pReq = [], fw = [];
+        const pErr = [], pReq = [], fw = [], pCsp = [];
         let reqCount = 0; page.on('request', () => reqCount++);
         page.on('pageerror', e => pErr.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
         page.on('console', m => {
           const t = m.text();
           // 프레임워크가 알려 주는 진짜 버그 — 경고(warning)로 나와도 모은다
+          // CSP 위반 · 섞인 자원 — 브라우저가 콘솔로만 알린다
+          if (/Content Security Policy|Refused to (load|execute|apply|connect|frame|evaluate)/i.test(t)) { pCsp.push({ kind: 'CSP 위반', text: t.split('\n')[0] }); return; }
+          if (/Mixed Content/i.test(t)) { pCsp.push({ kind: '섞인 자원', text: t.split('\n')[0] }); return; }
           if (/hydrat|did not match|Each child in a list should have a unique "?key|Cannot update a component .* while rendering|Maximum update depth|Can't perform a React state update on an unmounted|validateDOMNesting|is not a valid DOM|\[Vue warn\]/i.test(t)) fw.push({ text: t.split('\n')[0] });
           else if (m.type() === 'error') pErr.push({ kind: '콘솔 오류', text: t.split('\n')[0] });
         });
@@ -46,6 +54,7 @@ module.exports = {
           // 외부 자원(폰트·CDN)이 안 오는 것은 검사하는 컴퓨터의 네트워크 탓일 수 있다
           pReq.push({ ok: same ? false : null, text: `${r.method()} ${r.url().slice(0, 140)} — 요청 실패 (${f})${same ? '' : ' · 외부 자원 — 네트워크 환경 탓인지, 주소가 틀렸는지 확인'}` });
         });
+        page.on('request', r => { if (/^https:/.test(url) && /^http:\/\//.test(r.url())) pCsp.push({ kind: '섞인 자원', text: `https 화면이 http 로 부른다: ${r.url().slice(0, 140)}` }); });
         page.on('response', r => {
           const s = r.status(); if (s < 400) return;
           const u = new URL(r.url()); const same = u.origin === new URL(url).origin;
@@ -62,6 +71,9 @@ module.exports = {
           await page.waitForTimeout(800);
         } catch (e) { pErr.push({ kind: '열기 실패', text: String(e.message).split('\n')[0] }); }
         const name = `${where}${from ? `  (← ${from})` : ''}`;
+        const uc = [...new Map(pCsp.map(e => [e.text.slice(0, 120), e])).values()];
+        if (uc.length) for (const e of uc.slice(0, 5)) csp.push({ name, ok: false, detail: `${e.kind}: ${e.text.slice(0, 220)}${e.kind === 'CSP 위반' ? ' — 보안 정책이 이 화면의 스크립트·자원을 막았다 (기능이 안 될 수 있다). 정책에 출처를 더하거나 인라인 코드를 파일로' : ' — 브라우저가 막거나 경고한다. https 주소로'}` });
+        else csp.push({ name, ok: true, detail: 'CSP 위반·섞인 자원 없음' });
         // 1) 예외·콘솔 오류
         const uniq = [...new Map(pErr.map(e => [e.kind + e.text, e])).values()];
         // 'Failed to load resource' 는 아래 요청 검사가 주소와 함께 따로 판정한다 (403 은 권한상 정상일 수 있다)
@@ -88,6 +100,7 @@ module.exports = {
         else junk.push({ name, ok: true, detail: 'undefined·NaN·[object Object] 없음' });
         if (info.broken.length) for (const s of info.broken) imgs.push({ name, ok: false, detail: `깨진 이미지: ${s}` });
         else imgs.push({ name, ok: true, detail: '깨진 이미지 없음' });
+        if (uniq.length || info.hits.length || info.broken.length || uc.length || status >= 400) await shoot(page, where);
         for (const l of info.links) if (!/logout|signout|delete|remove/i.test(l) && !seen.has(l.replace(/#.*$/, ''))) queue.push({ url: l, from: where });
         // 가만히 10초 두었을 때의 요청 수 — 폴링이 너무 잦거나 무한 반복이면 서버·배터리를 태운다 (시작 화면만)
         if (!from && storm.length < 3) {   // 시간이 들어 앞의 3개 화면만
@@ -112,6 +125,7 @@ module.exports = {
           })).catch(() => null);
           if (v) {
             const bad = v.cls > 0.25 || v.lcp > 4000, warn = v.cls > 0.1 || v.lcp > 2500;
+            Object.assign(metrics[where] ||= {}, { lcp: v.lcp, cls: v.cls });
             vitals.push({ name: where, ok: bad ? false : warn ? null : true, detail: `CLS ${v.cls} (좋음 ≤0.1) · LCP ${(v.lcp / 1000).toFixed(1)}초 (좋음 ≤2.5초)${v.cls > 0.1 ? ' — 늦게 나타나는 요소가 본문을 민다. 자리를 미리 잡아 둔다 (이미지 width·height, 배너 높이)' : ''}${v.lcp > 2500 ? ' — 첫 화면의 큰 내용이 늦다 (개발 서버라면 배포 빌드로 다시)' : ''}` });
           }
         }
@@ -127,6 +141,7 @@ module.exports = {
           if (m) {
             const mb = x => (x / 1024 / 1024).toFixed(2) + 'MB';
             const bad = m.js > 3 * 1024 * 1024 || m.load > 8000, warn = m.js > 1.5 * 1024 * 1024 || m.load > 4000 || m.total > 5 * 1024 * 1024;
+            metrics[where] = { load: m.load, js: m.js, total: m.total, n: m.n };
             perf.push({ name: where, ok: bad ? false : warn ? null : true, detail: `불러오기 ${(m.load / 1000).toFixed(1)}초 · JS ${mb(m.js)} · 전체 ${mb(m.total)} (${m.n}개 파일)${bad || warn ? ' — 느린 폰·데이터 요금에 부담 (개발 서버라면 배포 빌드로 다시 재 볼 것)' : ''}` });
           }
         }
@@ -138,6 +153,7 @@ module.exports = {
             await mp.goto(url, { waitUntil: 'load', timeout: 20000 }); await mp.waitForTimeout(600);
             const o = await mp.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
               wide: [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth + 4).slice(0, 3).map(e => e.tagName.toLowerCase() + (e.id ? '#' + e.id : e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : '')) }));
+            if (o.sw > o.cw + 4 && shots.length < 8) { try { shots.push({ where: `${where} (모바일 375px)`, jpg: (await mp.screenshot({ type: 'jpeg', quality: 55 })).toString('base64') }); } catch { /* 무시 */ } }
             mobile.push({ name: where, ok: o.sw <= o.cw + 4, detail: o.sw <= o.cw + 4 ? `375px 에 맞음` : `375px 화면에서 ${o.sw}px 로 가로 스크롤이 생긴다 — 넘치는 것: ${o.wide.join(', ')}` });
           } catch (e) { mobile.push({ name: where, ok: null, detail: `열지 못함: ${String(e.message).split('\n')[0].slice(0, 100)}` }); }
           await mp.close();
@@ -153,9 +169,10 @@ module.exports = {
       checkItems('모바일 폭(375px)에서 가로로 넘치지 않는다', mobile.length ? mobile : [{ name: '모바일', ok: null, detail: '열지 못함' }]),
       ...(perf.length ? [checkItems('화면이 가볍고 빨리 뜬다 (JS 1.5MB·4초 이하)', perf)] : []),
       ...(vitals.length ? [checkItems('Core Web Vitals — 화면이 밀리지 않고(CLS) 큰 내용이 빨리 뜬다(LCP)', vitals)] : []),
+      checkItems('CSP 위반·http 섞인 자원이 없다', csp.length ? csp : [{ name: '화면', ok: null, detail: '열지 못함' }]),
       checkItems('프레임워크 경고가 없다 (하이드레이션 불일치·React key·무한 갱신)', fwItems),
       ...(storm.length ? [checkItems('가만히 둔 화면이 요청을 쏟아내지 않는다 (10초)', storm)] : []),
       ...(meta.length ? [checkItems('제목·설명·공유 미리보기·파비콘이 있다', meta)] : []),
-    ], skipped };
+    ], skipped, metrics, shots };
   },
 };

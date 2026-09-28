@@ -3,7 +3,7 @@
 //   · 잡히지 않은 예외로 죽는가 → 문제      · 하얀 빈 화면이 되는가 → 문제
 //   · 오류를 알리는가(오류·다시 시도·실패 …) → 통과      · 아무 말 없이 빈 목록·옛 값을 보이는가 → 확인 필요
 //   실제 서버는 건드리지 않는다 — 브라우저 안에서 응답을 바꿔 끼운다. 쓰기 요청은 모두 막는다.
-const { checkItems } = require('../_util');
+const { checkItems, owasp } = require('../_util');
 const { openBrowser, startPages, newContext } = require('../../browser');
 
 const MAX_PAGES = 8;
@@ -62,6 +62,6 @@ module.exports = {
     } finally { await b.browser.close().catch(() => {}); }
     if (noData) skipped.push(`데이터 요청이 없는 화면 ${noData}개는 건너뛰었다`);
     if (!items.length) return { skip: '화면이 데이터 요청(fetch·XHR)을 하지 않는다 — 서버 템플릿으로 그리는 사이트는 E(에러 처리)가 본다', skipped };
-    return { checks: [checkItems('API 가 실패해도 화면이 죽지 않고 알린다', items)], skipped };
+    return { checks: [owasp('A10', checkItems('API 가 실패해도 화면이 죽지 않고 알린다', items))], skipped };
   },
 };

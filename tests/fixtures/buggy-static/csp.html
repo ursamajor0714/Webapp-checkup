@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<!-- 심은 버그: 보안 정책이 인라인 스크립트를 막는데 화면은 인라인 스크립트에 기댄다 -->
+<meta http-equiv="Content-Security-Policy" content="script-src 'self'">
+<title>CSP</title></head>
+<body><p id="t">대기</p><script>document.getElementById('t').textContent = '실행됨';</script></body></html>
