@@ -352,3 +352,13 @@ test('한 원인 묶기 — 같은 예외 메시지가 여러 화면에서 나�
   assert.deepStrictEqual(h[0].areas, ['2', '5']);
   assert.strictEqual(hotspots([{ id: '2', checks: [{ name: '화면', items: bad(4, '') }] }]).length, 0);   // 4건 이하는 묶지 않는다
 });
+
+test('언어 규칙 — 빈 줄에 맞는 패턴이 없다 (빈 줄마다 문제로 잡힌다)', () => {
+  const bad = [];
+  const walk = (o, p) => { for (const [k, v] of Object.entries(o || {})) {
+    if (v instanceof RegExp) { if (v.test('')) bad.push(p + k); }
+    else if (v && typeof v === 'object') walk(v, `${p}${k}.`);
+  } };
+  for (const f of fs.readdirSync(path.join(__dirname, '../common/lang')).filter(f => f.startsWith('rules-'))) walk(require(`../common/lang/${f}`), `${f}:`);
+  assert.deepStrictEqual(bad, []);
+});
