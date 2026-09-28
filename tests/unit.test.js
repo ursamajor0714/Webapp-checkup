@@ -578,3 +578,12 @@ test('바뀐 부분만 (--diff) — 바뀐 서버 파일의 경로만 남긴다'
   assert.deepStrictEqual(prep.ctx.routes().map(r => r.path), ['/api/b']);
   assert.strictEqual(prep.ctx.diffScope.base, 'main');
 });
+
+test('document.write — 값을 HTML 로 꽂는 곳이라 확신할 수 없다 (문제가 아니라 확인 필요)', async () => {
+  const { makeContext } = require('../common/context');
+  const { loadProject } = require('../common/project');
+  const root = write(tmp(), { 'index.html': '<!doctype html><html lang="ko"><body><script src="print.js"></script></body></html>', 'print.js': "function p(h) { const w = window.open('', '_blank'); w.document.write(h); }\n" });
+  const out = await require('../common/areas/security/i_injection').run(makeContext(loadProject({ root })));
+  const it = out.checks.find(c => /싱크/.test(c.name)).items.find(i => /print\.js/.test(i.name));
+  assert.strictEqual(it.ok, null, JSON.stringify(it));
+});

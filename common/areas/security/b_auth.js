@@ -110,8 +110,12 @@ module.exports = {
     if (limited) {
       const r = await attempt(fakeIp());
       const bypass = r.status !== 429 && r.status !== 423;
-      checks.push(owasp('A07', check('잠금을 X-Forwarded-For 위조로 풀 수 없다', { universe: 1, scanned: 1, passed: bypass ? 0 : 1,
-        notes: bypass ? [`잠긴 뒤 X-Forwarded-For 만 바꿔 보내니 ${r.status} — 공격자가 헤더를 바꿔 가며 무제한으로 대입할 수 있다 (믿을 수 있는 프록시 뒤에서만 이 헤더를 믿어야 한다)`] : ['출발지 헤더를 바꿔도 잠김 유지'] })));
+      // 코드가 '프록시 뒤에 있다'고 설정했으면(trust proxy·ProxyFix 등) — 지금처럼 프록시 없이 바로 두드릴 때만 뚫린다.
+      //   운영에서 앞단 프록시가 헤더를 덮어쓰면 안전하므로, 이 경우는 확신할 수 없어 '확인 필요'
+      const proxyCfg = bypass && ctx.parts.flatMap(p => require('../_util').sources(ctx, p)).find(f => /trust proxy|ProxyFix|FORWARDED_ALLOW_IPS|forwarded-allow-ips|USE_X_FORWARDED_(HOST|FOR)|ForwardedHeaders|server\.forward-headers-strategy/.test(require('../_util').read(f)));
+      checks.push(owasp('A07', check('잠금을 X-Forwarded-For 위조로 풀 수 없다', { universe: 1, scanned: 1, passed: bypass ? 0 : 1, warned: proxyCfg ? 1 : 0,
+        notes: bypass && !proxyCfg ? [`잠긴 뒤 X-Forwarded-For 만 바꿔 보내니 ${r.status} — 공격자가 헤더를 바꿔 가며 무제한으로 대입할 수 있다 (믿을 수 있는 프록시 뒤에서만 이 헤더를 믿어야 한다)`] : bypass ? [] : ['출발지 헤더를 바꿔도 잠김 유지'],
+        warnNotes: proxyCfg ? [`잠긴 뒤 X-Forwarded-For 만 바꿔 보내니 ${r.status} — 다만 코드가 프록시 뒤라고 설정했다(${ctx.rel(proxyCfg)}). 지금은 프록시 없이 바로 두드려서 뚫린 것이고, 운영 앞단(nginx 등)이 이 헤더를 덮어쓰면 안전하다 — 운영 프록시 설정(proxy_set_header X-Forwarded-For $remote_addr 또는 $proxy_add_x_forwarded_for 와 신뢰 홉 수)을 확인`] : [] })));
       if (!bypass) ctx.notes.push('로그인 잠금이 걸렸다 — 잠금 시간이 지나기 전에 다시 돌리면 로그인이 필요한 검사가 \'설정 필요\' 로 나온다');
     }
     return { checks };

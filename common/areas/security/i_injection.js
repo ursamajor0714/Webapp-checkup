@@ -67,9 +67,9 @@ module.exports = {
     for (const x of sinkHits.filter(x => /innerHTML/.test(x.h))) if (safeInner(x.h)) x.safe = true;
     const unsafe = sinkHits.filter(x => !x.safe);
     const byFile = new Map();
-    for (const x of unsafe.filter(x => /innerHTML|<%-|escape/.test(x.h))) { const f = x.h.split(':')[0]; (byFile.get(f) || byFile.set(f, []).get(f)).push(x); }
+    for (const x of unsafe.filter(x => /innerHTML|<%-|escape|document\.write/.test(x.h))) { const f = x.h.split(':')[0]; (byFile.get(f) || byFile.set(f, []).get(f)).push(x); }
     const sinkItems = [
-      ...unsafe.filter(x => !/innerHTML|<%-|escape/.test(x.h)).map(({ h, tag }) => ({ name: h.split(' — ')[0], ok: false, detail: `${tag} · ${h.split(' — ')[1]}` })),
+      ...unsafe.filter(x => !/innerHTML|<%-|escape|document\.write/.test(x.h)).map(({ h, tag }) => ({ name: h.split(' — ')[0], ok: false, detail: `${tag} · ${h.split(' — ')[1]}` })),
       // 화면의 innerHTML·escape 끈 템플릿은 기계가 escape 여부를 확신하지 못한다 — 파일마다 하나로 묶어 사람이 볼 곳을 줄인다
       ...[...byFile.entries()].map(([f, xs]) => ({ name: f, ok: null, detail: `${xs[0].tag} · ${xs.length}곳에서 값을 HTML 로 꽂는다 (${xs.slice(0, 3).map(x => x.h.split(' — ')[0].split(':')[1]).join('·')}번째 줄${xs.length > 3 ? ' …' : ''}) — 사용자·서버가 준 값이 escape 를 거치는지 확인 (textContent 나 escape 함수)` })),
     ];

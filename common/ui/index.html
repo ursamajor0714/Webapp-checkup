@@ -360,12 +360,13 @@ function renderMaturity() {
 
 // AI 에게 넘길 수정 요청 — 검사는 토큰 0 으로 끝내고, 고치는 데만 AI 를 쓴다. 원인 묶음과 먼저 고칠 것만 담아 짧게
 function fixPrompt(s) {
-  const L = ['이 레포를 웹앱 건강검진(webapp-checkup)으로 검사한 결과다. 아래 문제를 고쳐 줘.',
+  const L = [`레포 ${s.root || s.target} 를 웹앱 건강검진(webapp-checkup)으로 검사한 결과다. 아래 문제를 고쳐 줘.`,
+    `- 이 레포 폴더에서 작업한다 (다른 폴더에 열려 있으면 먼저 알려 줘). 새 브랜치(예: fix/qa-findings)를 만들어 고치고, main 에 바로 올리지 않는다.`,
     '- 한 번에 한 원인씩 고치고, 고친 뒤 무엇을 왜 바꿨는지 짧게 알려 줘.',
     '- 오탐(실제로는 문제가 아닌 것)으로 보이면 고치지 말고 그렇게 판단한 이유를 말해 줘.', ''];
   if ((s.hotspots || []).length) { L.push('## 한 원인이 여러 곳에 걸린 곳 (먼저)'); s.hotspots.forEach(h => L.push(`- ${[h.methods.join('·'), h.path].filter(Boolean).join(' ')} — 영역 ${h.areas.join(' ')} · ${h.count}건. ${h.hint}`, ...h.examples.map(e => `  - [${e.area}] ${e.item} — ${e.detail}`))); L.push(''); }
   if ((s.top || []).length) { L.push('## 먼저 고칠 것 (영향 큰 순서)'); s.top.forEach((t, i) => L.push(`${i + 1}. [${t.area}] ${t.check} — ${t.failed}건`, ...t.examples.slice(0, 3).map(x => `   - ${x}`))); L.push(''); }
-  L.push(`고친 뒤 다시 검사: node run.js ${state.project}`);
+  L.push(`고친 뒤 다시 검사 (QA 폴더에서, 사람이 돌린다): node run.js ${state.project}`);
   return L.join('\n');
 }
 function renderSummary() {
