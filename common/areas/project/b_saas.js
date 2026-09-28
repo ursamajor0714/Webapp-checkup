@@ -132,7 +132,7 @@ function untimedCalls(ctx) {
       { re: /\brequests\.(?:get|post|put|patch|delete|head|request)\(/g, ok: /timeout\s*=/, what: 'requests' },
       { re: /\burlopen\(/g, ok: /timeout\s*=/, what: 'urllib' },
     ] : p.lang === 'java' ? [
-      { re: /new RestTemplate\(\s*\)/g, ok: /$^/, fileOk: /setConnectTimeout|setReadTimeout|connectTimeout|readTimeout/, what: 'RestTemplate' },
+      { re: /new RestTemplate\(\s*\)/g, ok: /(?!)/, fileOk: /setConnectTimeout|setReadTimeout|connectTimeout|readTimeout/, what: 'RestTemplate' },
       { re: /HttpClient\.newHttpClient\(\)|HttpClient\.newBuilder\(\)/g, ok: /connectTimeout/, fileOk: /\.timeout\(|connectTimeout/, what: 'HttpClient' },
     ] : [];
     for (const r of rules) {

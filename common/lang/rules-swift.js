@@ -1,7 +1,7 @@
 // Swift (iOS 앱 · Vapor 서버) 정적 규칙 — 다른 언어 규칙과 같은 칸을 모두 채운다 (해당 없는 칸은 걸리지 않는 정규식)
 const path = require('path');
 const { read, exists, walk } = require('../stacks/util');
-const NONE = /$^/;
+const NONE = /(?!)/;   // 절대 안 맞는 패턴 — /$^/ 는 빈 줄에 맞아서 빈 줄마다 SQL·SSRF 로 잡혔다
 
 module.exports = {
   id: 'swift', exts: ['.swift', '.plist'],
