@@ -341,6 +341,15 @@ test('커밋 직전 비밀 검사 — 올리려는 키·.env 는 잡고 견본·
   assert.deepStrictEqual(r.hits.map(h => h.file).sort(), ['.env', 'a.js']);
   execFileSync('git', ['reset', '-q', 'a.js', '.env'], { cwd: root });
   assert.strictEqual(stagedCheck(root).hits.length, 0);
+  // 이미 올라가 있던 줄은 다시 잡지 않는다 — 그 파일의 다른 줄을 고쳐도 커밋이 막히면 훅을 못 쓴다
+  execFileSync('git', ['add', 'a.js'], { cwd: root });
+  execFileSync('git', ['-c', 'user.email=qa@example.com', '-c', 'user.name=qa', 'commit', '-qm', 'x', '--no-verify'], { cwd: root });
+  fs.appendFileSync(path.join(root, 'a.js'), 'const ok = 1;\n');
+  execFileSync('git', ['add', 'a.js'], { cwd: root });
+  assert.strictEqual(stagedCheck(root).hits.length, 0, '고친 줄만 본다');
+  fs.appendFileSync(path.join(root, 'a.js'), `const k2 = "AKIA${'Z'.repeat(16)}";\n`);   // 이 파일 자체가 커밋 검사에 걸리지 않게 실행 중에 만든다
+  execFileSync('git', ['add', 'a.js'], { cwd: root });
+  assert.deepStrictEqual(stagedCheck(root).hits.map(h => `${h.file}:${h.line}`), ['a.js:3'], '새로 넣은 키는 줄 번호와 함께');
 });
 
 test('한 원인 묶기 — 같은 예외 메시지가 여러 화면에서 나면 하나로 모은다', () => {
@@ -361,4 +370,55 @@ test('언어 규칙 — 빈 줄에 맞는 패턴이 없다 (빈 줄마다 문제
   } };
   for (const f of fs.readdirSync(path.join(__dirname, '../common/lang')).filter(f => f.startsWith('rules-'))) walk(require(`../common/lang/${f}`), `${f}:`);
   assert.deepStrictEqual(bad, []);
+});
+
+test('다른 로그인 입구 — 계정 얻는 길: 가입 · 관리자가 만들기 · 공용 비밀번호 · 못 찾음', () => {
+  const { findRoles } = require('../common/roles');
+  const R = (method, p, handler) => ({ method, path: p, service: 's', handler });
+  const how = routes => findRoles(routes, { loginPath: '/api/admin/login' }).map(r => r.how);
+  assert.deepStrictEqual(how([R('POST', '/api/shop/login', 'const { email, password } = req.body;'), R('POST', '/api/shop/register', '')]), ['register']);
+  assert.deepStrictEqual(how([R('POST', '/api/member/login', "const { name, password } = req.body; db.get('SELECT * FROM members WHERE name = ?'); phone.slice(-4)"), R('POST', '/api/members', "router.post('/api/members', requireAdmin, (req, res) => { const { name, phone } = req.body; db.run('INSERT INTO members (name, phone)')")]), ['create']);
+  assert.deepStrictEqual(how([R('POST', '/api/kiosk/login', 'const { password } = req.body; if (safeCompare(password, KIOSK_PASSWORD))')]), ['shared']);
+  assert.deepStrictEqual(how([R('POST', '/api/partner/login', "const { id, password } = req.body; db.get('SELECT * FROM partners WHERE id = ?')")]), [null]);   // 만들 길이 없다 → 설정 칸
+  assert.deepStrictEqual(how([R('POST', '/api/admin/login', 'const { password } = req.body;')]), []);   // 주 로그인은 제외
+});
+
+test('배포 주소 검사 — 읽기만 하고, 헤더·민감 파일·오류 화면·CORS·가드 빠진 API·옛 파일을 잡는다', async () => {
+  const http = require('http');
+  const { runLive } = require('../common/live');
+  const seen = [];
+  // 옛 코드가 떠 있는 배포본 흉내 — /api/members 가드가 빠졌고, app.js 가 옛 것이고, .env 가 열린다
+  const srv = http.createServer((req, res) => {
+    seen.push(req.method);
+    const send = (st, body, h = {}) => { res.writeHead(st, { 'X-Powered-By': 'Express', ...h }); res.end(body); };
+    if (req.url === '/') return send(200, '<!doctype html><title>x</title><script src="/app.js"></script>', { 'Content-Type': 'text/html' });
+    if (req.url === '/app.js.map') return send(200, '{"version":3}', { 'Content-Type': 'application/json' });
+    if (req.url === '/.env') return send(200, 'DB_PASSWORD=hunter2\n', { 'Content-Type': 'text/plain' });
+    if (req.url === '/app.js') return send(200, "document.title = '옛 버전';", { 'Content-Type': 'application/javascript' });
+    if (req.url === '/app.css') return send(200, 'body { margin: 0 }', { 'Content-Type': 'text/css' });
+    if (req.url === '/api/members') return send(200, '[]', { 'Content-Type': 'application/json' });
+    if (req.url === '/api/orders/1') return send(401, '');
+    if (req.url.startsWith('/api/')) return send(404, 'Error: not found\n    at Layer.handle (/home/app/node_modules/express/lib/router/layer.js:95:5)', { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': req.headers.origin || '*', 'Access-Control-Allow-Credentials': 'true' });
+    send(404, 'not found', { 'Content-Type': 'text/plain' });
+  });
+  await new Promise(r => srv.listen(0, r));
+  process.env.QA_LIVE_GAP_MS = '0';
+  try {
+    const root = path.join(__dirname, 'fixtures/live-site');
+    const rep = await runLive(`http://localhost:${srv.address().port}/`, { id: 'live-site', root });
+    const items = rep.checks.flatMap(c => c.items.map(i => ({ ...i, check: c.name })));
+    const bad = re => items.some(i => i.ok === false && re.test(`${i.check} ${i.name} ${i.detail}`));
+    assert.ok(seen.every(m => m === 'GET' || m === 'HEAD'), `읽기만 한다: ${[...new Set(seen)]}`);
+    assert.ok(bad(/GET \/\.env/), '.env 가 열린다');
+    assert.ok(bad(/GET \/app\.js\.map/), '소스맵이 열린다');
+    assert.ok(bad(/x-powered-by/), '서버 종류 노출');
+    assert.ok(bad(/content-security-policy/), 'CSP 없음');
+    assert.ok(bad(/스택/), '오류 화면의 스택');
+    assert.ok(bad(/Origin 을 그대로 되돌린다 \+ 쿠키/), 'CORS 되돌림 + 쿠키');
+    assert.ok(bad(/GET \/api\/members .*로그인 없이 연다/), '가드가 빠진 배포본');
+    assert.ok(items.some(i => i.ok === true && /GET \/api\/orders\/:id/.test(i.name)), '가드가 있는 배포본은 통과');
+    assert.ok(bad(/\/app\.js .*옛 파일/), '옛 js 가 떠 있다');
+    assert.ok(items.some(i => i.ok === true && i.name === '/app.css'), '같은 css 는 통과');
+    assert.ok(!items.some(i => /GET \/api\/notices/.test(i.name)), '가드 없는 공개 경로는 안 본다');
+  } finally { srv.close(); delete process.env.QA_LIVE_GAP_MS; }
 });

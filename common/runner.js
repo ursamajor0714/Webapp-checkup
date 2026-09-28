@@ -46,6 +46,7 @@ function applyLocal(def, p) {
   if (p.name) d.name = p.name;
   const creds = Object.fromEntries(CRED_KEYS.filter(k => p[k]).map(k => [k, p[k]]));
   if (Object.keys(creds).length) d.auth = { ...(def.auth || {}), ...creds };
+  if (p.roles && Object.keys(p.roles).length) d.roleAccounts = { ...(def.roleAccounts || {}), ...p.roles };   // { '/api/member/login': { user, password } }
   if (p.parts && Object.keys(p.parts).length) d.partOverrides = { ...(def.partOverrides || {}), ...p.parts };   // { dir: { port } }
   return d;
 }
@@ -222,6 +223,8 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       // 내 정보 경로 — 계정 흐름 마지막 단계
       const me = routes.find(r => r.method === 'GET' && /(^|\/)(me|profile|myinfo|mypage)\/?$/i.test(r.path) && r.service === ctx.authService);
       if (me) { const r = await ctx.call(me.path, { service: ctx.authService }); ctx.accountFlow.push({ name: `내 정보 GET ${me.path}`, ok: r.status < 300, detail: `${r.status}` }); }
+      // 관리자 입구로 들어간 계정이면 '일반 계정' 이 아니다 — 관리자 경로를 이 계정으로 두드리면 열리는 게 정상
+      ctx.ownerIsAdmin = /(^|\/)(admin|manage|staff|backoffice)(\/|$)/i.test(auth.loginPath) || /ADMIN|OWNER|ROOT|MASTER/.test(auth.passwordEnv || '');
       ctx.freshSession = async name => { const l = await login(base, auth, accounts[0], name); if (l.ok) { ctx.sessions[name] = l.sess; return l.sess; } return null; };
     } else if (auth.type !== 'none') ctx.notes.push('로그인하지 못했다 — 로그인이 필요한 검사는 \'설정 필요\' 로 표시된다 (⚙ 설정에 계정을 넣는다)');
     if (reg) ctx.tryRegister = async (route, pw) => {
@@ -238,6 +241,13 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
   const rawCall = ctx.call.bind(ctx);
   const idOfBody = b => { for (const o of [b, b && b.data, b && b.item, b && b.result]) if (o && typeof o === 'object' && !Array.isArray(o)) for (const k of ['id', '_id', 'pk', 'uuid']) if (o[k] !== undefined && o[k] !== null) return String(o[k]); return null; };
   ctx.call = async (p, o = {}) => { const r = await rawCall(p, o); if ((o.method || 'GET') === 'POST' && r.status >= 200 && r.status < 300) { const id = idOfBody(r.body); if (id) ctx.created.push({ path: p.split('?')[0], id, service: o.service, as: o.as }); } return r; };
+  // 다른 로그인 입구(회원·직원) — 코드에서 계정 얻는 길을 찾아 들어간다. 만든 계정은 위 기록에 남아 끝나면 지워진다
+  if (ctx.live && auth.loginPath) await require('./roles').acquireRoles(ctx, base, log).catch(e => ctx.notes.push(`다른 로그인 입구 계정을 준비하지 못했다: ${e.message}`));
+  // 들어간 입구는 계정 흐름에 통과로, 못 들어간 입구는 점수 밖 안내로 (제품 결함이 아니라 검사 준비 문제일 수 있다)
+  for (const r of ctx.roles || []) {
+    if (r.sessions.length) (ctx.accountFlow ||= []).push({ name: `다른 입구 ${r.loginPath}`, ok: true, detail: `${r.accounts.map(a => a.from).join(', ')} 로 들어갔다` });
+    else ctx.notes.push(`다른 로그인 입구 ${r.loginPath} 는 로그인 검사를 못 했다 — ${r.why || r.desc}${r.how ? '' : ' (⚙ 설정의 \'다른 로그인 입구\' 칸)'}`);
+  }
   // 비어 있는 목록이 있으면 검사용 데이터를 몇 개 만든다 (끝나면 지운다)
   if (def.seed !== false) await require('./seed').seed(ctx, log).catch(e => ctx.notes.push(`검사용 데이터를 만들지 못했다: ${e.message}`));
   const all = listAreas(def);
@@ -476,7 +486,8 @@ async function finish(prep, results, { save = true } = {}) {
       const del = routes.find(r => r.method === 'DELETE' && r.path.replace(/\/:[\w]+$/, '') === c.path.replace(/\/+$/, ''));
       if (!del) { left.set(c.path, (left.get(c.path) || 0) + 1); continue; }
       const r = await ctx.call(del.path.replace(/:[\w]+/, encodeURIComponent(c.id)), { service: c.service, as: ctx.sessions.owner ? 'owner' : 'anon', method: 'DELETE' }).catch(() => null);
-      if (r && r.status < 300) gone++; else left.set(c.path, (left.get(c.path) || 0) + 1);
+      // 404 — 앞의 검사용 데이터 정리가 이미 지웠다
+      if (r && (r.status < 300 || r.status === 404 || r.status === 410)) gone++; else left.set(c.path, (left.get(c.path) || 0) + 1);
     }
     ctx.notes.push(`검사가 만든 것 ${ctx.created.length}개 중 ${gone}개를 지웠다${left.size ? ` · 남긴 것: ${[...left].map(([p, n]) => `${p} ${n}개`).join(', ')} (지우는 경로가 없거나 거절)` : ''}`);
   }
@@ -550,7 +561,26 @@ function ciMarkdown(report, reasons) {
 async function run(arg) {
   const args = process.argv.slice(2);
   const target = arg || args.find(a => !a.startsWith('--'));
-  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60] [--staged: 커밋 직전 비밀 검사만]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
+  // 배포된 주소 검사 — 읽기만 한다 (GET·HEAD). 레포는 있으면 쓰고 없어도 된다
+  const liveArg = (args.find(a => a === '--live' || a.startsWith('--live=')) || '').replace(/^--live$/, '--live=') || null;
+  if (liveArg) {
+    const def0 = target ? resolveProject(target) : null;
+    const url = liveArg.slice(7) || (def0 && def0.liveUrl) || '';   // 주소를 안 주면 프로젝트 설정의 liveUrl
+    if (!/^https?:\/\//.test(url)) { console.log('--live= 뒤에 http:// 나 https:// 로 시작하는 주소를 준다'); process.exitCode = 1; return; }
+    const def = def0;
+    if (def) def.root = String(def.root).replace(/^~/, require('os').homedir());
+    console.log(`배포 주소 검사 (읽기 전용 — GET·HEAD 만): ${url}${def ? ` · 레포 ${def.root}` : ' · 레포 없이 (주소만으로 볼 수 있는 것만)'}\n`);
+    const { runLive, printLive } = require('./live');
+    const rep = await runLive(url, def);
+    const dir = path.join(QA_ROOT, 'reports', def ? def.id : new URL(url).hostname.replace(/[^\w.-]/g, '_'));
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `live-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.json`);
+    fs.writeFileSync(file, JSON.stringify(rep, null, 2));
+    process.exitCode = printLive(rep);
+    console.log(`리포트: ${path.relative(QA_ROOT, file)}`);
+    return;
+  }
+  if (!target) { console.log('사용법: node run.js <프로젝트 이름 | 레포 폴더> [--only=b,f] [--json] [--no-serve: 꺼진 서버를 켜지 않는다] [--level=초급|중급|고급|전문가 (basic·standard·advanced·expert, 기본 고급)] [--ci: 새 문제가 생기면 실패] [--fail-under=60] [--staged: 커밋 직전 비밀 검사만] [--live=https://배포주소: 읽기 전용 배포 검사]\n프로젝트:', Object.keys(projectDefs()).join(', ') || '(없음)'); return; }
   // 커밋 직전 비밀 검사 — 서버·설정 없이 스테이징된 것만 (커밋 훅용)
   if (args.includes('--staged')) {
     const root = resolveProject(target).root.replace(/^~/, require('os').homedir());

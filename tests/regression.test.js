@@ -130,3 +130,16 @@ test('고급·전문가 — 권한 상승·동시 수정·CSRF·오픈 리다이
   if (why) return t.skip(`브라우저 없음 — 화면 검사 단정은 건너뜀 (${why})`);
   caught(rep, '2', /CLS 0\.[1-9]/, { warnOk: true });                   // 늦게 끼어드는 배너가 화면을 민다
 });
+
+test('다른 로그인 입구 — 관리자가 만든 회원 계정으로 회원끼리 남의 정보·관리자 기능을 잡고, 계정은 지운다', { timeout: 300000 }, async () => {
+  const rep = await qa('member-roles', { auth: { password: 'qa-admin-pw' } }, { only: ['C'], log: () => {} });
+  assert.ok(rep.summary.live, '서버를 켜서 잰다: ' + rep.summary.notes.join(' / '));
+  caught(rep, 'C', /GET \/api\/member\/:id\/info · 다른 회원의 id/);          // ① 로그인만 보고 본인은 안 본다
+  caught(rep, 'C', /GET \/api\/admin\/stats · \/api\/member\/login 토큰/);   // ② 회원 토큰으로 관리자 통계
+  const items = rep.results.find(r => r.id === 'C').checks.flatMap(c => c.items || []);
+  const ok = n => (items.find(i => i.name.startsWith(n)) || {}).ok;
+  assert.strictEqual(ok('GET /api/member/:id/visits · 다른 회원의 id'), true, '본인 확인이 있는 경로는 통과');
+  assert.strictEqual(ok('GET /api/members · /api/member/login 토큰'), true, '관리자 가드가 있는 경로는 통과');
+  assert.ok(!items.some(i => /GET \/api\/admin\/stats · 일반 계정/.test(i.name)), '관리자로 들어간 계정을 일반 계정으로 보지 않는다');
+  assert.ok(rep.summary.notes.some(n => /검사가 만든 것 (\d+)개 중 \1개를 지웠다/.test(n)), '만든 회원을 모두 지웠다: ' + rep.summary.notes.join(' / '));
+});
