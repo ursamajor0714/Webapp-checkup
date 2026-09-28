@@ -309,3 +309,19 @@ test('스택 Swift — iOS 앱은 앱 부분(켜지 않음)·API 호출·위험 
   assert.deepStrictEqual(vapor.p.parts.map(x => [x.stack, x.kind, x.native, x.port]), [['swift', 'service', false, 8080]]);
   assert.deepStrictEqual(keys(vapor.ctx.routes()).sort(), ['GET /api/users', 'GET /api/users/:id', 'GET /health', 'POST /api/users']);
 });
+
+test('한 원인이 여러 영역에 걸린 곳 — 같은 경로가 두 영역 이상에서 걸리면 하나로 모은다', () => {
+  const { hotspots } = require('../common/runner');
+  const area = (id, items) => ({ id, checks: [{ name: 'c', items }] });
+  const hs = hotspots([
+    area('I', [{ name: 'GET /accounts/login/ · SQL 따옴표', ok: false, detail: '서버 오류 500' }]),
+    area('E', [{ name: 'POST /accounts/login/ · 본문 {}', ok: false, detail: '서버 오류 500' }, { name: 'GET /other · x', ok: false, detail: '404' }]),
+    area('O', [{ name: 'POST /accounts/login/ · 5MB 본문', ok: false, detail: '서버 오류 500' }]),
+    area('B', [{ name: 'GET /other · 토큰 없음', ok: true, detail: '401' }]),
+  ]);
+  assert.strictEqual(hs.length, 1, '한 영역에서만 걸린 /other 는 묶지 않는다');
+  assert.strictEqual(hs[0].path, '/accounts/login');
+  assert.deepStrictEqual(hs[0].areas.sort(), ['E', 'I', 'O']);
+  assert.strictEqual(hs[0].s500, 3);
+  assert.match(hs[0].hint, /서버 오류/);
+});
