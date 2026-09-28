@@ -76,7 +76,7 @@ test('Express 서버 — 심은 버그를 모두 잡는다', { timeout: 600000 }
   assert.ok(rep.summary.notes.some(n => /검사용 데이터 \d+개를 지웠다/.test(n)), '검사용 데이터를 만들고 지운다');
   caught(rep, '11', /server\.js:\d+.*api\.example\.com\/rate/, { warnOk: true });   // 제한 시간 없는 외부 호출 (△)
   const r11 = rep.results.find(r => r.id === '11');
-  assert.ok(!r11.checks[0].items.some(i => /ping/.test(i.detail)), '제한 시간이 있는 호출은 잡지 않는다');
+  assert.ok(!r11.checks.find(c => /제한 시간/.test(c.name)).items.some(i => /ping/.test(i.detail)), '제한 시간이 있는 호출은 잡지 않는다');
   assert.deepStrictEqual((rep.summary.saas || []).map(x => x.name).sort(), ['OpenAI', 'Render', 'Resend']);
   const why = browserSkipped(rep);
   if (why) return t.skip(`브라우저 없음 — 화면 검사 단정은 건너뜀 (${why})`);
@@ -142,7 +142,7 @@ test('고급·전문가 — 권한 상승·동시 수정·CSRF·오픈 리다이
 });
 
 test('다른 로그인 입구 — 관리자가 만든 회원 계정으로 회원끼리 남의 정보·관리자 기능을 잡고, 계정은 지운다', { timeout: 300000 }, async () => {
-  const rep = await qa('member-roles', { auth: { password: 'qa-admin-pw' } }, { only: ['C'], log: () => {} });
+  const rep = await qa('member-roles', { auth: { password: 'qa-admin-pw' } }, { only: ['C', 'B'], log: () => {} });
   assert.ok(rep.summary.live, '서버를 켜서 잰다: ' + rep.summary.notes.join(' / '));
   caught(rep, 'C', /GET \/api\/member\/:id\/info · 다른 회원의 id/);          // ① 로그인만 보고 본인은 안 본다
   caught(rep, 'C', /GET \/api\/admin\/stats · \/api\/member\/login 토큰/);   // ② 회원 토큰으로 관리자 통계
@@ -152,4 +152,7 @@ test('다른 로그인 입구 — 관리자가 만든 회원 계정으로 회원
   assert.strictEqual(ok('GET /api/members · /api/member/login 토큰'), true, '관리자 가드가 있는 경로는 통과');
   assert.ok(!items.some(i => /GET \/api\/admin\/stats · 일반 계정/.test(i.name)), '관리자로 들어간 계정을 일반 계정으로 보지 않는다');
   assert.ok(rep.summary.notes.some(n => /검사가 만든 것 (\d+)개 중 \1개를 지웠다/.test(n)), '만든 회원을 모두 지웠다: ' + rep.summary.notes.join(' / '));
+  // 코드가 'trust proxy' 면 X-Forwarded-For 우회는 운영 프록시에 달렸다 — 문제(X)가 아니라 확인 필요(△)
+  const xff = rep.results.find(r => r.id === 'B').checks.find(c => /X-Forwarded-For/.test(c.name));
+  assert.ok(xff && xff.warned === 1 && xff.failed === 0, 'X-Forwarded-For: ' + JSON.stringify(xff && { w: xff.warned, f: xff.failed, n: xff.notes }));
 });
