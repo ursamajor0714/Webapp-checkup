@@ -67,8 +67,13 @@ const vue = {
   serve(dir) { const d = pkgDeps(dir) || {}; return { install: ['npm', 'install'], start: d.vite ? ['npx', 'vite', '--port', '{PORT}', '--strictPort'] : ['npx', 'vue-cli-service', 'serve', '--port', '{PORT}'] }; },
 };
 
+const webCapable = dir => { const d = pkgDeps(dir) || {}; return !!(d['react-native-web'] && d['react-dom']); };
 const expo = {
   id: 'expo', label: 'Expo (React Native)', kind: 'client', lang: 'js', native: true,
+  // react-native-web 이 깔린 Expo 앱은 웹으로 띄워 화면 검사(브라우저·클릭·접근성)를 그대로 돌린다
+  nativeOf: dir => !webCapable(dir),
+  defaultPort: () => 8081,
+  serve: dir => (webCapable(dir) ? { install: ['npm', 'install'], start: ['npx', 'expo', 'start', '--web', '--port', '{PORT}'], env: { CI: '1', BROWSER: 'none' } } : null),
   detect: dir => { const d = pkgDeps(dir); return !!(d && (d.expo || d['react-native'])); },
   sources: dir => srcFiles(dir),
   calls(dir) { const files = this.sources(dir); return js.extractCalls(files, dir).map(c => ({ ...c, prefixes: js.basePrefixes(files) })); },

@@ -24,8 +24,8 @@
 
 | 넣는 것 (자동 감지 · 한 레포에 섞여도 된다) | 찾는 것 (37개 영역) |
 |---|---|
-| **서버** Next.js · Express · Django · Spring Boot · FastAPI | **프로젝트 전체 11** 자체 테스트 · 브라우저 실행 오류 · 설정·환경변수 · 서버 로그 · 클릭 탐색 · 레포 위생 · 접근성 · 장애 대응 · 느린 API · 폼 · 외부 서비스 의존 |
-| **화면** React(Vite/CRA) · Expo · 정적 HTML · 서버 템플릿(EJS·Django) | **A~Z 26** API 계약 · 인증 · 권한(IDOR) · 입력 검증 · 주입·SSRF · 비밀·암호화 · 개인정보 · 동시성 · 금액 · 시간·날짜 · 업무 흐름 … |
+| **서버** Next.js · Nuxt · Express · NestJS · Django · Spring Boot · FastAPI · Vapor(Swift) | **프로젝트 전체 11** 자체 테스트 · 브라우저 실행 오류 · 설정·환경변수 · 서버 로그 · 클릭 탐색 · 레포 위생 · 접근성 · 장애 대응 · 느린 API · 폼 · 외부 서비스 의존 |
+| **화면·앱** React · Vue · Expo(웹 모드면 브라우저 검사까지) · iOS(Swift, 코드 검사) · 정적 HTML · 서버 템플릿(EJS·Django) | **A~Z 26** API 계약 · 인증 · 권한(IDOR) · 입력 검증 · 주입·SSRF · 비밀·암호화 · 개인정보 · 동시성 · 금액 · 시간·날짜 · 업무 흐름 … |
 | **로컬 DB** `.env` 가 가리키는 Postgres·MySQL·Redis 를 Docker 로 켠다 | **운영 성숙도 10** CI · 자동 테스트 · 장애 감시 · 시험 환경 · 백업 · 되돌리기 … |
 
 ## 다른 도구와 무엇이 다른가

@@ -48,7 +48,7 @@ function valueCases(spec, sampleOf) {
     if (spec.max !== undefined && !spec.pattern) add(`최대 길이(${max}자)`, fill(max), 'valid');
     add(`최대 길이 초과(${max + 1}자)`, fill(max + 1), spec.max !== undefined ? 'invalid' : 'any');
     if (spec.min > 1) add(`최소 길이 미만(${spec.min - 1}자)`, 'a'.repeat(spec.min - 1), 'invalid');
-    add('빈 문자열', '', min > 0 ? 'invalid' : (spec.pattern ? 'invalid' : 'valid'));
+    add('빈 문자열', '', min > 0 || spec.pattern || spec.format ? 'invalid' : 'valid');
     add('공백만', '   ', spec.pattern ? 'invalid' : 'any');
     add('숫자 타입', 12345, 'invalid');
     add('불리언 타입', true, 'invalid');

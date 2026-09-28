@@ -55,6 +55,12 @@ module.exports = {
         cmd = fs.existsSync(path.join(dir, 'gradlew')) ? ['./gradlew', 'test', '-q'] : fs.existsSync(path.join(dir, 'mvnw')) ? ['./mvnw', '-q', 'test'] : null;
         if (!cmd) { items.push({ name: `${p.dir} 테스트`, ok: null, detail: 'gradlew·mvnw 가 없어 돌리지 않았다' }); continue; }
         why = ' (자바 빌드라 몇 분 걸릴 수 있다)';
+      } else if (p.lang === 'swift') {
+        const spm = fs.existsSync(path.join(dir, 'Package.swift'));
+        const has = ctx.files([p], ['.swift']).some(f => /Tests?[\\/]/.test(f));
+        if (!has) { items.push({ name: `${p.dir} 테스트`, ok: false, detail: 'Tests 폴더에 테스트가 없다 (XCTest)' }); continue; }
+        if (!spm) { items.push({ name: `${p.dir} 테스트`, ok: null, detail: 'Xcode 프로젝트 테스트(xcodebuild test)는 시뮬레이터가 필요해 돌리지 않았다 — Xcode 나 CI 에서' }); continue; }
+        cmd = ['swift', 'test']; why = ' (Swift 빌드라 몇 분 걸릴 수 있다)';
       } else continue;
       // 서버를 켤 때와 같은 설정으로 돌린다 (프로젝트 설정값 + 비어 있는 비밀 키·DB 주소에 검사용 값)
       const serve = require('../../serve');

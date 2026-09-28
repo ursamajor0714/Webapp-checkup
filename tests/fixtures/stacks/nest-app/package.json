@@ -1,0 +1,13 @@
+{
+  "name": "nest-app",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start:prod": "node dist/main"
+  },
+  "dependencies": {
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/common": "^10.0.0",
+    "class-validator": "^0.14.0"
+  }
+}

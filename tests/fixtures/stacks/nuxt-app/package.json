@@ -1,0 +1,12 @@
+{
+  "name": "nuxt-app",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev"
+  },
+  "dependencies": {
+    "nuxt": "^3.12.0",
+    "vue": "^3.4.0"
+  }
+}

@@ -115,6 +115,7 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     // 서버가 기대는 로컬 DB·Redis 가 꺼져 있으면 켠다 (Docker 컨테이너·compose). 못 켜면 할 일을 알려 주고 멈춘다
     const deps = await require('./deps').ensureLocalServices(part, def.root || path.dirname(part.absDir), env, m => logLine(st, m));
     if (!deps.ok) throw new Error(deps.why);
+    Object.assign(env, plan.env || {});
     const filled = fillDefaults(def, part, env);
     if (filled.length) { st.filledEnv = filled; logLine(st, `비어 있던 설정에 QA 가 검사용 값을 넣었다: ${filled.join(', ')}`); }
     // 파이썬인데 쓸 가상환경이 없으면 QA 폴더에 만든다

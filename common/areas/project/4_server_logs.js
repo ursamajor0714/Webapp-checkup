@@ -32,6 +32,8 @@ module.exports = {
       for (let i = 0; i < lines.length; i++) {
         const l = lines[i];
         if (/^\$ /.test(l) || /켜졌습니다/.test(l)) continue;
+        // 오류 객체를 여러 줄로 찍은 속성 줄 (fatal: false, · statusCode: 500, · unhandled: true,) — 그 자체는 새 오류가 아니다
+        if (/^\s*(fatal|unhandled|statusCode|statusMessage|data|cause)\s*:\s*[^{(]*,?\s*$/i.test(l)) continue;
         // 요청 기록: 4xx 이하는 검사가 일부러 만든 것 — 넘어간다. 5xx 는 서버가 오류로 답한 것이다 (Django 는 DEBUG 가 꺼져 있으면 스택을 안 찍고 이 줄만 남긴다)
         const st = accessStatus(l);
         if (st !== null && st < 500) continue;
