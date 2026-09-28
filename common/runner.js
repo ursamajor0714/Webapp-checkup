@@ -368,6 +368,27 @@ function actionable(results) {
   return { fix: fix.size, failed: sum(fix), look: look.size, warned: sum(look) };
 }
 
+// 여러 영역에 걸친 한 원인 — 같은 경로가 서로 다른 영역에서 문제로 잡히면 대개 고칠 곳은 하나다
+//   (예: 로그인 화면 템플릿이 없어 GET·POST /accounts/login/ 이 주입·에러 처리·요청 크기·인증 검사에서 모두 500)
+function hotspots(results, n = 8) {
+  const by = new Map();
+  for (const r of results) {
+    if (r.skip) continue;
+    for (const c of r.checks || []) for (const i of (c.items || []).filter(i => i.ok === false)) {
+      const m = String(i.name).match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\/\S*)/); if (!m) continue;
+      const p = m[2].replace(/\?.*$/, '').replace(/\/+$/, '') || '/';
+      const h = by.get(p) || { path: p, areas: new Set(), methods: new Set(), count: 0, s500: 0, examples: [] };
+      h.areas.add(r.id); h.methods.add(m[1]); h.count++;
+      if (/\b5\d\d\b|서버 오류/.test(i.detail || '')) h.s500++;
+      if (h.examples.length < 3 && !h.examples.some(e => e.area === r.id)) h.examples.push({ area: r.id, check: c.name, item: i.name, detail: String(i.detail || '').slice(0, 120) });
+      by.set(p, h);
+    }
+  }
+  return [...by.values()].filter(h => h.areas.size >= 2).sort((a, b) => b.areas.size - a.areas.size || b.count - a.count).slice(0, n)
+    .map(h => ({ path: h.path, methods: [...h.methods], areas: [...h.areas], count: h.count, s500: h.s500, examples: h.examples,
+      hint: h.s500 >= h.count / 2 ? '이 경로가 여러 검사에서 서버 오류(5xx)를 낸다 — 처리 코드 한 곳의 예외일 가능성이 크다. 서버 로그 영역의 스택부터 본다' : '이 경로 하나가 여러 영역에 걸렸다 — 한 번에 고칠 수 있는지 먼저 본다' }));
+}
+
 // 문제 하나의 열쇠 — 영역 + 검사 이름 + 항목 이름 (숫자는 지워 매번 달라지는 id·시간에 흔들리지 않게)
 const failKeys = results => {
   const { findingKey } = require('./ignore');
@@ -477,6 +498,7 @@ async function finish(prep, results, { save = true } = {}) {
     combined, score, grade: gradeOf(score).label, tier: tierOf(score),
     owasp: owaspSummary(results),
     top: topFixes(results),
+    hotspots: hotspots(results),
     ignored: results.reduce((a, r) => a + (r.ignored || 0), 0),
     saas: ((results.find(r => r.id === '11') || {}).info || {}).items || null,
     level: { id: ctx.level.id, label: ctx.level.label, desc: ctx.level.desc, strict: ctx.level.strict },
@@ -592,6 +614,10 @@ async function run(arg) {
     for (const x of s.saas) console.log(`  · ${x.name} [${x.kind}] — ${x.watch}\n      근거: ${x.why.join(' · ')}`);
   }
   if (s.ignored) console.log(`\n(무시 목록으로 뺀 문제 ${s.ignored}건 — ${path.join(project.root, require('./ignore').FILE)})`);
+  if (s.hotspots && s.hotspots.length) {
+    console.log('\n◎ 한 원인이 여러 영역에 걸린 곳 (한 번 고치면 여러 개가 같이 풀린다)');
+    for (const h of s.hotspots) console.log(`  ${h.methods.join('·')} ${h.path} — 영역 ${h.areas.join(' ')} 에서 ${h.count}건${h.s500 ? ` (서버 오류 ${h.s500})` : ''} · ${h.hint}`);
+  }
   if (s.top && s.top.length) {
     console.log('\n★ 먼저 고칠 것 (영향 큰 순서)');
     s.top.forEach((t, i) => {
@@ -612,4 +638,4 @@ async function run(arg) {
   if (ciLine) console.log(ciLine);
 }
 
-module.exports = { CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, actionable, placeOf, diffWithPrevious, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };
+module.exports = { CRED_KEYS, QA_ROOT, run, prepare, runProbe, finish, scoreOf, actionable, hotspots, placeOf, diffWithPrevious, listAreas, projectDefs, resolveProject, SECTIONS, OWASP };
