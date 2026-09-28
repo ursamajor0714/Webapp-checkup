@@ -16,7 +16,7 @@ const { STACKS } = require('./stacks');
 const { walk, read } = require('./stacks/util');
 const { Session, request } = require('./session');
 
-const LANGS = { js: require('./lang/rules-js'), python: require('./lang/rules-python'), java: require('./lang/rules-java'), swift: require('./lang/rules-swift') };
+const LANGS = { js: require('./lang/rules-js'), python: require('./lang/rules-python'), java: require('./lang/rules-java'), swift: require('./lang/rules-swift'), php: require('./lang/rules-php') };
 
 function makeContext(project) {
   const services = project.parts.filter(p => p.kind === 'service' || p.kind === 'both');
@@ -74,7 +74,8 @@ function makeContext(project) {
       return request(base, sess, p, opt);
     },
     // 서버 소스 · 화면 소스 (문자열 검사용)
-    get serverSrc() { return once('ssrc', () => services.flatMap(s => walk(s.absDir, ['.js', '.ts', '.mjs', '.py', '.java', '.kt'])).filter(f => !/\.(test|spec)\./.test(f)).map(read).join('\n')); },
+    // 서버 코드 전체 — 부분마다 그 언어의 확장자로 (예전엔 js·py·java 만 봐서 PHP·Swift 서버 코드를 못 봤다)
+    get serverSrc() { return once('ssrc', () => services.flatMap(s => walk(s.absDir, [...new Set([...(LANGS[s.lang] || LANGS.js).exts, '.js', '.ts', '.mjs'])])).filter(f => !/\.(test|spec)\./.test(f)).map(read).join('\n')); },
     get clientSrc() { return once('csrc', () => clients.flatMap(c => walk(c.absDir, ['.js', '.jsx', '.ts', '.tsx', '.html', '.ejs', '.vue', '.svelte'])).map(read).join('\n')); },
   };
   return ctx;

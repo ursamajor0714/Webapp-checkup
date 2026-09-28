@@ -26,7 +26,7 @@ module.exports = {
     checks.push(owasp('A09', checkItems('전역 오류 처리기가 있다', eh)));
     // 3. 오류를 삼키는 곳
     const sw = [];
-    for (const p of ctx.parts) sw.push(...scan(ctx, sources(ctx, p), ctx.lang(p).swallow, '오류를 삼킨다 (아무것도 안 함)'));
+    for (const p of ctx.parts) sw.push(...scan(ctx, sources(ctx, p), ctx.lang(p).swallow, '오류를 삼킨다 (아무것도 안 함)').filter(h => !/localStorage|sessionStorage/.test(h)));   // 저장 공간 오류를 일부러 무시하는 것은 흔하고 무해하다
     const n = ctx.parts.reduce((a, p) => a + sources(ctx, p).length, 0);
     checks.push(owasp('A10', check('오류를 조용히 삼키지 않는다', { universe: n, scanned: n, passed: n - new Set(sw.map(h => h.split(':')[0])).size, notes: sw.slice(0, 40) })));
     // 4. 보안 이벤트 기록 — 로그인 실패·권한 거부를 남기는가 (A09 의 핵심)

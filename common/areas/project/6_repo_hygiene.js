@@ -125,7 +125,7 @@ module.exports = {
     // 7) README 의 설치·실행 방법
     const readme = ['README.md', 'readme.md', 'README.MD', 'README'].map(f => path.join(root, f)).find(f => fs.existsSync(f));
     const rd = readme ? read(readme) : '';
-    const howTo = /npm (install|i|ci|run|start)|yarn|pnpm|bunx? (install|i|run|dev)|pip install|pipx|poetry (install|run)|uv (sync|run|pip)|pyenv|conda (create|install)|python3? (-m )?manage\.py|uvicorn|gradlew|mvnw?|docker(-compose| compose)?|npx expo|flutter run|cargo (run|build)|go run|dotnet run|bundle (install|exec)|make /i.test(rd);
+    const howTo = /npm (install|i|ci|run|start)|yarn|pnpm|bunx? (install|i|run|dev)|pip install|pipx|poetry (install|run)|uv (sync|run|pip)|pyenv|conda (create|install)|python3? (-m )?manage\.py|uvicorn|gradlew|mvnw?|docker(-compose| compose)?|npx expo|flutter run|cargo (run|build)|go run|composer (install|update)|php spark|php artisan|php -S |dotnet run|bundle (install|exec)|make /i.test(rd);
     checks.push(checkItems('README 에 설치·실행 방법이 있다', [{ name: readme ? path.basename(readme) : 'README', ok: readme ? (howTo ? true : false) : false,
       detail: !readme ? 'README 가 없다 — 새로 받은 사람이 어떻게 띄우는지 모른다' : howTo ? '설치·실행 명령이 적혀 있다' : 'README 는 있지만 설치·실행 명령(npm install · pip install · manage.py …)이 없다' }]));
     return { checks };

@@ -50,6 +50,8 @@ module.exports = {
     [/SECRET_KEY\s*=\s*['"][^'"]{8,}['"]/, 'Django SECRET_KEY 가 코드에 있다'],
     [/(?:password|passwd|api_key|secret)\s*=\s*['"][^'"\s]{6,}['"]/i, '비밀값을 코드에 적음'],
     [/os\.environ\.get\(\s*['"]\w*(?:SECRET|KEY|PASSWORD|TOKEN)\w*['"]\s*,\s*['"][^'"]{4,}['"]\s*\)/, '환경변수가 없을 때 쓰는 비밀 기본값이 코드에 있다'],
+    // 환경변수 '이름' 자리에 실제 값을 넣었다 — os.environ["db.example.com"], os.getenv("pa55word1") (이름은 보통 DB_PASSWORD 처럼 대문자)
+    [/os\.(?:environ\[|environ\.get\(|getenv\()\s*['"](?=[^'"]*[a-z])(?:[^'"]*\.[a-z]{2,}|(?=[^'"]*\d)[a-z0-9_]*[a-z][a-z0-9_]*\d[a-z0-9_]*)['"]/, '환경변수 이름 자리에 실제 값(주소·계정·비밀번호로 보이는 것)이 들어 있다 — 코드에 그대로 드러난다. 이름은 DB_PASSWORD 처럼 쓰고 값은 .env 에'],
   ],
   // 설정 실수 (Django settings)
   misconfig: [

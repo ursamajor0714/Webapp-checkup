@@ -13,7 +13,7 @@ module.exports = {
       const res = await ctx.call(r.path, { service: r.service, as });
       if (res.status >= 300 && res.status < 400) continue;
       const ct = res.headers.get('content-type') || '';
-      const isJson = /json/.test(ct) && res.body !== null;
+      const isJson = /json/.test(ct) && (res.body !== null || /^\s*null\s*$/.test(res.text || ''));   // 본문이 JSON null 이어도 JSON 이다
       if (/spreadsheet|ms-excel|text\/csv|application\/pdf|application\/zip|octet-stream|^image\//.test(ct) || /attachment/i.test(res.headers.get('content-disposition') || '')) { json.push({ name: `GET ${r.path} (${res.status})`, ok: true, detail: `${ct.split(';')[0]} — 파일 내려받기 (JSON 이 아니어도 된다)` }); continue; }
       json.push({ name: `GET ${r.path} (${res.status})`, ok: isJson || res.status === 204 || /text\/plain/.test(ct) && res.text.length < 50, detail: isJson ? 'JSON' : `${ct || '형식 없음'} — API 가 JSON 이 아니다${/html/.test(ct) ? ' (오류 페이지 HTML?)' : ''}` });
       const bad = [...res.text.matchAll(/"(\w*(?:date|time|at|At|Date|Time))"\s*:\s*"([^"]+)"/g)].filter(m => !/^\d{4}-\d{2}-\d{2}([T ][\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/.test(m[2])).slice(0, 3);

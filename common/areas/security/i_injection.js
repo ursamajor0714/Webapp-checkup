@@ -84,6 +84,9 @@ module.exports = {
     const items = [];
     for (const r of targets) {
       const hasParam = r.path.includes(':');
+      // 평범한 이상한 값(qa-없는값)에도 500 이면 — 주입 문자열 때문이 아니라 그 경로가 이상한 값을 못 다루는 것 (E 가 센다)
+      const plainUrl = hasParam ? r.path.replace(/:[A-Za-z0-9_]+\*?/, 'qa-not-exist').replace(/:[A-Za-z0-9_]+\*?/g, '1') : `${r.path}${r.path.includes('?') ? '&' : '?'}q=qa-not-exist`;
+      const plain500 = (await ctx.call(plainUrl, { service: r.service, as })).status >= 500;
       for (const [label, pl] of PAYLOADS) {
         const enc = encodeURIComponent(pl);
         const url = hasParam ? r.path.replace(/:[A-Za-z0-9_]+\*?/, enc).replace(/:[A-Za-z0-9_]+\*?/g, '1') : `${r.path}${r.path.includes('?') ? '&' : '?'}q=${enc}&search=${enc}&id=${enc}&page=${enc}&sort=${enc}`;
@@ -93,6 +96,7 @@ module.exports = {
         const reflected = html && /<script>alert\(1\)<\/script>|onerror=alert\(1\)/.test(res.text) && label.startsWith('XSS');
         const tpl = /\b49\b/.test(res.text) && label === '템플릿 주입' && !/\b49\b/.test((await ctx.call(url.replace(enc, 'qa'), { service: r.service, as })).text);
         const ok = res.status < 500 && !dbErr && !reflected && !tpl;
+        if (res.status >= 500 && plain500 && !dbErr) { items.push({ name: `GET ${r.path} · ${label}`, ok: null, detail: `서버 오류 ${res.status} — 주입 문자열이 아닌 평범한 값에도 500 이다 (주입 문제가 아니라 이상한 값을 못 다룬다 — E 영역)` }); if (res.status === 429) break; continue; }
         items.push({ name: `GET ${r.path} · ${label}`, ok, detail: res.status >= 500 ? `서버 오류 ${res.status} — 입력을 걸러내지 못한다` : dbErr ? `${res.status} 인데 DB 오류 메시지가 응답에 보인다` : reflected ? '스크립트가 escape 없이 HTML 로 되돌아온다 (반사형 XSS)' : tpl ? '{{7*7}} 이 49 로 계산됐다 (템플릿 주입)' : `${res.status}` });
         if (res.status === 429) break;
       }
