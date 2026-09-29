@@ -26,7 +26,7 @@ module.exports = {
         for (const [mode, label] of [['500', 'API 가 전부 500'], ['down', '네트워크 끊김']]) {
           const page = await context.newPage();
           const errs = []; let hit = 0;
-          page.on('pageerror', e => errs.push(String(e.message || e).split('\n')[0]));
+          page.on('pageerror', e => errs.push(require('../../browser').errText(e)));
           page.on('dialog', d => { errs.push(`알림창: ${d.message()}`); d.dismiss().catch(() => {}); });
           await page.route('**/*', route => {
             const req = route.request();
@@ -42,18 +42,23 @@ module.exports = {
             await page.goto(url, { waitUntil: 'load', timeout: 20000 });
             await page.waitForTimeout(2500);
           } catch (e) { errs.push(`열기 실패: ${String(e.message).split('\n')[0]}`); }
-          const view = await page.evaluate(() => {
+          const look = () => page.evaluate(() => {
             const text = (document.body && document.body.innerText || '').trim();
             const visible = [...document.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 20 && r.height > 20; }).length;
             return { text: text.slice(0, 4000), len: text.length, visible };
           }).catch(() => ({ text: '', len: 0, visible: 0 }));
+          // 끊긴 요청을 몇 번 다시 시도한 뒤에 오류를 띄우는 앱이 있다 (outline) — 비어 있으면 6초 더 기다려 본다
+          let view = await look();
+          for (let i = 0; i < 6 && (view.len < 15 || view.visible < 3); i++) { await page.waitForTimeout(1000); view = await look(); }
           await page.close();
           if (!hit) { noData++; break; }   // 데이터 요청이 없는 화면 — 볼 게 없다
           const name = `${pg.path} · ${label} (요청 ${hit}개)`;
           const uncaught = errs.filter(e => !e.startsWith('알림창'));
           const blank = view.len < 15 || view.visible < 3;
           const told = TOLD.test(view.text) || errs.some(e => e.startsWith('알림창') && TOLD.test(e));
-          if (uncaught.length) items.push({ name, ok: false, detail: `잡히지 않은 예외로 멈춘다: ${uncaught[0].slice(0, 160)}` });
+          // 화면이 오류를 알렸으면 멈춘 게 아니다 — 남은 예외는 처리하지 않은 Promise 거절일 뿐 (outline RequestError·NetworkError)
+          if (uncaught.length && told && !blank) items.push({ name, ok: null, detail: `오류를 알린다: "${(view.text.split('\n').find(l => TOLD.test(l)) || '').trim().slice(0, 60)}" — 다만 잡히지 않은 예외(${uncaught[0].slice(0, 60)})도 남긴다 · 콘솔에만 보인다` });
+          else if (uncaught.length) items.push({ name, ok: false, detail: `잡히지 않은 예외로 멈춘다: ${uncaught[0].slice(0, 160)}` });
           else if (blank) items.push({ name, ok: false, detail: '하얀 빈 화면이 된다 — 사용자는 무엇이 잘못됐는지 모른다' });
           else if (told) items.push({ name, ok: true, detail: `오류를 알린다: "${(view.text.split('\n').find(l => TOLD.test(l)) || errs.find(e => TOLD.test(e)) || '').trim().slice(0, 80)}"` });
           else items.push({ name, ok: null, detail: '죽지는 않지만 오류를 알리지 않는다 — 빈 목록·0 을 진짜 값처럼 보이는지 확인 (관제·결제 화면이면 위험)' });

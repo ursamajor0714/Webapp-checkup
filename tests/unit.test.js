@@ -884,3 +884,10 @@ test('가드 판단 — 여러 줄에 걸친 경로 선언의 미들웨어까지
   assert.doesNotMatch(guardLine("router.get('/api/authors', async (req, res) => {"), /auth/, '경로 문자열은 가드가 아니다');
   assert.match(guardLine("app.get('/x', requireAdmin, (req, res) => {"), /requireAdmin/);
 });
+
+test('화면 예외 글 — 압축된 코드의 한 글자 메시지 대신 오류 이름을 쓴다 (outline: "b" → AuthorizationError)', () => {
+  const { errText } = require('../common/browser');
+  assert.strictEqual(errText({ name: 'AuthorizationError', message: 'b' }), 'AuthorizationError');
+  assert.strictEqual(errText({ name: 'RequestError', message: 'Error 500' }), 'RequestError: Error 500');
+  assert.strictEqual(errText({ name: 'Error', message: 'x is not a function\n at y' }), 'x is not a function');
+});

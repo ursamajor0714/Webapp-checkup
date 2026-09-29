@@ -112,4 +112,12 @@ async function newContext(ctx, browser, baseUrl, opt = {}) {
   return { context, note };
 }
 
-module.exports = { openBrowser, startPages, newContext, uiLogin };
+// 화면 예외를 글로 — 압축된 코드는 메시지가 'b' 처럼 한 글자라 알 수 없다. 오류 이름(AuthorizationError)을 붙인다 (outline)
+function errText(e) {
+  const msg = String((e && e.message) || e || '').split('\n')[0];
+  const name = e && e.name && e.name !== 'Error' ? e.name : '';
+  if (!name) return msg;
+  return msg.length <= 2 ? name : `${name}: ${msg}`;
+}
+
+module.exports = { openBrowser, startPages, newContext, uiLogin, errText };
