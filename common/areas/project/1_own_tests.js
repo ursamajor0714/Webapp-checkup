@@ -84,7 +84,7 @@ module.exports = {
         if (!t || PLACEHOLDER.test(t)) { items.push({ name: `${p.dir} 테스트`, ok: false, detail: 'package.json 에 test 스크립트가 없다 — 고치면 다른 데가 깨지는지 알 방법이 없다' }); continue; }
         if (!fs.existsSync(path.join(dir, 'node_modules'))) { items.push({ name: `${p.dir} npm test`, ok: null, detail: 'node_modules 없음 — 설치(서버 켜기) 뒤에 잰다' }); continue; }
         // 레포의 패키지 관리자로 (pnpm 워크스페이스를 npm 으로 돌리면 멈춘다)
-        { const sv = require('../../serve'); const pl = sv.withPm({ install: ['npm', 'install'], start: ['npm', 'test', '--silent'] }, sv.nodePm(dir, ctx.root)); cmd = pl.start; }
+        { const sv = require('../../serve'); const pl = sv.withPm({ install: ['npm', 'install'], start: ['npm', 'test', '--silent'] }, sv.nodePm(dir, ctx.root), dir, ctx.root); cmd = pl.start; }
         // 감시 모드로 멈추지 않게 — jest·vitest·react-scripts 는 CI=1 이면 한 번만 돈다
       } else if (p.lang === 'python') {
         const hasPytest = fs.existsSync(path.join(dir, 'pytest.ini')) || fs.existsSync(path.join(dir, 'conftest.py')) || /pytest/.test((() => { try { return fs.readFileSync(path.join(dir, 'requirements.txt'), 'utf8'); } catch { return ''; } })());
