@@ -88,7 +88,9 @@ function guessAuth(root, parts, routes) {
   // 앱이 직접 만든 로그인 경로가 있으면 그쪽 (django.contrib.auth.urls 의 기본 경로는 템플릿이 없으면 500)
   if (svc.stack === 'django') return { type: 'form', loginPath: (routes.find(r => /\/login\/$/.test(r.path) && r.service === svc.id && !r.builtin) || routes.find(r => /\/login\/$/.test(r.path) && r.service === svc.id) || {}).path || '/accounts/login/', fields: { user: 'username', password: 'password' }, guessed: true };
   // 로그인 본문의 아이디 칸 이름 — email · username · id
-  const userField = /email/i.test((login && src.split(login.path.split('/').filter(Boolean).pop()).slice(1, 3).join('')) || '') ? 'email'
+  //   로그인 처리 코드가 꺼내는 칸이 먼저 (umami: { username, password } — 코드 전체엔 email 도 있어 email 로 잘못 봤다)
+  const own = login && (login.handler || '').match(/\{\s*(?:[\w]+\s*,\s*)*(username|email|loginId|userId|login)\b[^}]*\bpassword\b/);
+  const userField = own ? own[1] : /email/i.test((login && src.split(login.path.split('/').filter(Boolean).pop()).slice(1, 3).join('')) || '') ? 'email'
     : /req\.body\.email|\bemail\s*[,}]|"email"|getEmail\(\)|email:\s*z\./.test(src) ? 'email' : /username/.test(src) ? 'username' : 'email';
   const fields = { user: userField, password: 'password' };
   if (!login) {

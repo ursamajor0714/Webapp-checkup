@@ -238,6 +238,13 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
     if (auth.password && (auth.user || !auth.fields.user)) accounts.push({ user: auth.user, password: auth.password, from: ctx.envFirst ? `레포 .env 의 ${auth.passwordEnv}` : '설정', config: true });
     if (auth.user2 && auth.password2) accounts.push({ user: auth.user2, password: auth.password2, from: '설정', config: true });
     ctx.accountFlow = [];
+    // 설정 계정이 없으면 README 에 적힌 첫 설치 기본 계정 (umami: admin/umami) — 한 번만 시도해 통하는 것만 쓴다
+    const doc = !accounts.length && def.autoAccounts !== false && require('./roles').docDefaultAccount(project.root);
+    if (doc && (auth.fields.user || !doc.user)) {
+      const l = await login(base, auth, doc, 'owner');
+      ctx.accountFlow.push({ name: 'README 기본 계정', ok: l.ok, detail: l.ok ? `${doc.user} — "${doc.line}"` : l.why });
+      if (l.ok) { accounts.push({ user: doc.user, password: doc.password, from: 'README 기본 계정' }); ctx.notes.push(`로그인은 README 에 적힌 기본 계정(${doc.user})으로 했다 — ⚙ 설정에 넣지 않아도 된다`); }
+    }
     const regContract = reg && ctx.contracts.find(c => c.path === reg.path && c.method === 'POST');
     while (accounts.length < 2 && reg && def.autoAccounts !== false) {
       const r = await register(base, auth, reg, regContract ? regContract.fields : (auth.registerFields || []));
@@ -264,7 +271,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
         if (!l.ok) continue;
       }
       if (ctx.accountFlow) ctx.accountFlow.push({ name: `로그인 (${name} · ${a.from})`, ok: l.ok, detail: l.ok ? `${l.status}` : l.why });
-      if (l.ok) { ctx.sessions[name] = l.sess; ctx.tokens[name] = l.sess.token; if (name === 'owner') ctx.loginResponse = { cookies: Object.entries(l.sess.cookies).map(([k]) => k) }; }
+      if (l.ok) { ctx.sessions[name] = l.sess; ctx.tokens[name] = l.sess.token; if (name === 'owner') { ctx.loginResponse = { cookies: Object.entries(l.sess.cookies).map(([k]) => k) }; ctx.ownerLoginBody = l.body; } }
       else ctx.notes.push(`로그인 실패 (${name}): ${l.why}${/429/.test(l.why || '') ? ' — 직전 실행의 무차별 대입 검사로 잠겼다. 잠금 시간(보통 수 분)이 지난 뒤 다시 돌린다' : ''}`);
     }
     if (setupFail.length) {
@@ -285,7 +292,9 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       const me = routes.find(r => r.method === 'GET' && /(^|\/)(me|profile|myinfo|mypage)\/?$/i.test(r.path) && r.service === ctx.authService);
       if (me) { const r = await ctx.call(me.path, { service: ctx.authService }); ctx.accountFlow.push({ name: `내 정보 GET ${me.path}`, ok: r.status < 300, detail: `${r.status}` }); }
       // 관리자 입구로 들어간 계정이면 '일반 계정' 이 아니다 — 관리자 경로를 이 계정으로 두드리면 열리는 게 정상
-      ctx.ownerIsAdmin = /(^|\/)(admin|manage|staff|backoffice)(\/|$)/i.test(auth.loginPath) || /ADMIN|OWNER|ROOT|MASTER/.test(auth.passwordEnv || '');
+      ctx.ownerIsAdmin = /(^|\/)(admin|manage|staff|backoffice)(\/|$)/i.test(auth.loginPath) || /ADMIN|OWNER|ROOT|MASTER/.test(auth.passwordEnv || '')
+        // 로그인 응답이 관리자 역할이라고 말하면 (umami README 기본 계정 admin → user.role: 'admin')
+        || /"(role|roles|userRole)"\s*:\s*\[?\s*"(admin|super_?admin|owner|root|administrator)"|"(isAdmin|is_admin|admin|isSuperuser|is_superuser)"\s*:\s*true/i.test(JSON.stringify(ctx.ownerLoginBody || ''));
       ctx.freshSession = async name => { const l = await login(base, auth, accounts[0], name); if (l.ok) { ctx.sessions[name] = l.sess; return l.sess; } return null; };
     } else if (auth.type !== 'none') ctx.notes.push('로그인하지 못했다 — 로그인이 필요한 검사는 \'설정 필요\' 로 표시된다 (⚙ 설정에 계정을 넣는다)');
     if (reg) ctx.tryRegister = async (route, pw) => {

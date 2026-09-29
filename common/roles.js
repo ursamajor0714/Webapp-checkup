@@ -113,4 +113,24 @@ async function acquireRoles(ctx, base, log = () => {}) {
   return ctx.roles;
 }
 
-module.exports = { findRoles, acquireRoles, guardLine, tokenHeaderOf };
+// README·docs 에 적힌 첫 설치 기본 계정 — "creates a user with username **admin** and password **umami**", "Default login: admin / admin"
+//   설정 계정이 없을 때 한 번만 시도한다 (틀려도 실패 1회 — 잠금이 쌓이지 않게). 설치 안내 문장에 있는 것만: 기본·처음·만든다는 말이 같은 줄에
+function docDefaultAccount(root) {
+  const files = ['README.md', 'readme.md', 'README.rst', 'INSTALL.md', 'docs'].map(f => path.join(root, f));
+  const txt = files.flatMap(f => { try { return fs.statSync(f).isDirectory() ? fs.readdirSync(f).filter(x => /\.md$/i.test(x)).slice(0, 50).map(x => path.join(f, x)) : [f]; } catch { return []; } })
+    .map(f => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } }).join('\n');
+  const q = '[*`\'"]*';
+  const val = '(?<![<{$\\w])([\\w.@+!#%-]+)(?![\\w>}])';   // <your-name>·${VAR} 같은 자리표시는 빼고
+  for (const line of txt.split('\n')) {
+    if (!/default|initial|first|create|기본|처음|초기/i.test(line)) continue;
+    const bad = /^(and|is|with|the|your|a|an|user|username|login|password|<.*>|\$\{?.*|x+)$/i;
+    const pats = [new RegExp(`(?:user\\s?name|user|login|email|아이디)\\W{0,4}${q}${val}${q}[^\\n]{0,40}?(?:password|passwd|pw|비밀번호)\\W{0,4}${q}${val}${q}`, 'gi'),
+      new RegExp(`(?:credentials|login|account|계정)[^\\n]{0,20}?[:：]\\s*${q}${val}${q}\\s*/\\s*${q}${val}${q}`, 'gi')];
+    for (const re of pats) for (let i = 0, m; i < line.length && (re.lastIndex = i, m = re.exec(line)); i = m.index + 1) {
+      if (!bad.test(m[1]) && !bad.test(m[2])) return { user: m[1], password: m[2].replace(/[.:]$/, ''), line: line.trim().slice(0, 160) };
+    }
+  }
+  return null;
+}
+
+module.exports = { findRoles, acquireRoles, guardLine, tokenHeaderOf, docDefaultAccount };

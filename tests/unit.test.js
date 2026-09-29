@@ -801,3 +801,20 @@ test('검사용 DB — DB 종류를 Prisma·compose·의존성 순으로 읽는�
   const e = write(tmp(), { 'package.json': '{"dependencies":{"mongoose":"8"}}' });
   assert.strictEqual(dbKind(e, e), null, '모르는 DB 면 띄우지 않는다');
 });
+
+test('README 기본 계정 — 설치 안내 문장에서 아이디·비밀번호를 읽는다 (문장 속 낱말은 건너뛴다)', () => {
+  const { docDefaultAccount } = require('../common/roles');
+  const umami = write(tmp(), { 'README.md': 'It will also create a login user with username **admin** and password **umami**.\n' });
+  assert.deepStrictEqual((({ user, password }) => ({ user, password }))(docDefaultAccount(umami)), { user: 'admin', password: 'umami' });
+  const slash = write(tmp(), { 'docs/setup.md': 'Default login: `admin` / `changeme`\n' });
+  assert.strictEqual(docDefaultAccount(slash).password, 'changeme');
+  assert.strictEqual(docDefaultAccount(write(tmp(), { 'README.md': 'Set username and password in .env\n' })), null, '설치 안내가 아니면 없음');
+  assert.strictEqual(docDefaultAccount(write(tmp(), { 'README.md': 'Default user: <your-name> password: ${ADMIN_PASSWORD}\n' })), null, '자리표시는 계정이 아니다');
+});
+
+test('검사용 DB 마이그레이션 — 레포 스크립트 먼저, 없으면 prisma migrate deploy, reset·dev 는 쓰지 않는다', () => {
+  const { migrateCmd } = require('../common/serve');
+  assert.deepStrictEqual(migrateCmd(write(tmp(), { 'package.json': '{"scripts":{"db:migrate":"prisma migrate deploy"}}' }), 'pnpm'), ['pnpm', 'run', 'db:migrate']);
+  assert.deepStrictEqual(migrateCmd(write(tmp(), { 'package.json': '{"scripts":{"migrate":"prisma migrate reset --force"}}', 'prisma/schema.prisma': '', 'prisma/migrations/01/migration.sql': '' })), ['npx', '--no-install', 'prisma', 'migrate', 'deploy'], 'reset 은 건너뛰고 Prisma');
+  assert.strictEqual(migrateCmd(write(tmp(), { 'package.json': '{}' })), null);
+});
