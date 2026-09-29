@@ -346,6 +346,7 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
     const body = ['POST', 'PUT', 'PATCH'].includes(r.method) ? bodyFor(r) : undefined;
     // 읽기 경로는 로그인한 응답과 견준다 — 누구에게나 같은 내용이면 '공개 목록' 일 수 있다 (의도인지 사람이 확인)
     const mine = real && r.method === 'GET' ? await ctx.call(url, { method: 'GET', as: realAs }) : null;
+    let noneBlocked = false;
     for (const [label, header] of variants) {
       const res = await ctx.call(url, { method: r.method, as: 'anon', headers: header ? { Authorization: header } : {}, body });
       // 이동(3xx) — 로그인 화면이나 다른 곳(/ 등)으로 보내면 막은 것 (폼·세션 앱은 401 대신 이렇게 막는다)
@@ -353,11 +354,14 @@ async function authMatrix(ctx, { routes, publicRoutes = [], bodyFor = () => ({})
       const offsite = to && to.origin !== new URL(ctx.baseUrl(r.service)).origin;
       if (offsite && r.method === 'GET') { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: true, detail: `${res.status} — 다른 사이트(${to.host})로 보낸다 (소셜 로그인 시작 등 공개 경로)` }); continue; }
       const blocked = res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400 && (/login|signin/i.test(res.location || '') || (to && to.pathname.replace(/\/$/, '') !== url.split('?')[0].replace(/\/$/, ''))));
+      if (label === '토큰 없음') noneBlocked = blocked;
+      // '형식 다른 헤더' 는 진짜 토큰을 싣는다 — 토큰 없이는 막히는데 이것만 통하면 서버가 진짜 토큰을 읽은 것이다 (Bearer 글자를 안 따질 뿐, 우회가 아니다)
+      if (!blocked && real && label === '형식 다른 헤더' && noneBlocked) { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: true, detail: `${res.status} — 'Token 진짜토큰' 도 받는다 (앞 글자를 따지지 않을 뿐 진짜 토큰이라 우회가 아니다 · 토큰 없이는 막힌다)` }); continue; }
       let ok = blocked, detail = blocked ? `${res.status} 차단` : res.status >= 500 ? `${res.status} — 로그인 확인 전에 서버가 죽는다 (로그인 안 한 요청을 401 로 막지 않는다)` : `${res.status} — 인증 없이 통과`;
       // 로그인이 아예 없는 앱 — 서버 오류는 인증과 무관하다 (같은 500 을 E·4 영역이 센다)
       if (res.status >= 500 && !(ctx.config && ctx.config.auth && ctx.config.auth.type && ctx.config.auth.type !== 'none')) { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: null, detail: `${res.status} — 로그인이 없는 앱이라 인증 문제가 아니다 (서버 오류 자체는 E 영역이 센다)` }); continue; }
       // 응답이 없다(0·멈춤) — 서버가 꺼졌거나 멈췄다. 통과도 결함도 아니다
-      if (!res.status || res.hung) { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: null, detail: '응답 없음 — 서버가 꺼졌거나 멈춰 재지 못했다' }); continue; }
+      if (!res.status || res.hung || res.timedOut) { items.push({ name: `${r.method} ${r.path} · ${label}`, ok: null, detail: '응답 없음 — 서버가 꺼졌거나 멈춰 재지 못했다' }); continue; }
       if (!blocked && r.method !== 'GET' && res.status < 400 && PUBLICISH.test(r.path)) { ok = true; detail = `${res.status} — 로그인 전에 쓰는 경로 (가입·로그인·비밀번호 찾기)`; }
       else if (!blocked && r.method === 'GET' && res.status < 300) {
         if (PUBLICISH.test(r.path)) { ok = true; detail = `${res.status} — 로그인 상태 확인·발급 경로 (누구나 부른다)`; }

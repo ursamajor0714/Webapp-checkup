@@ -818,3 +818,32 @@ test('검사용 DB 마이그레이션 — 레포 스크립트 먼저, 없으면 
   assert.deepStrictEqual(migrateCmd(write(tmp(), { 'package.json': '{"scripts":{"migrate":"prisma migrate reset --force"}}', 'prisma/schema.prisma': '', 'prisma/migrations/01/migration.sql': '' })), ['npx', '--no-install', 'prisma', 'migrate', 'deploy'], 'reset 은 건너뛰고 Prisma');
   assert.strictEqual(migrateCmd(write(tmp(), { 'package.json': '{}' })), null);
 });
+
+test('화면 호출 — 다른 사이트 주소를 담은 상수·개발용 스크립트는 이 앱의 경로가 아니다 (umami)', () => {
+  const { extractCalls } = require('../common/lang/js');
+  const root = write(tmp(), {
+    'src/lib/constants.ts': "export const UPDATES_URL = 'https://api.umami.is/v1/updates';\nexport const API_URL = 'http://localhost:3000/api';",
+    'src/store/version.ts': "fetch(`${UPDATES_URL}?v=1`); fetch(`${API_URL}/me`);",
+    'scripts/test-api.ts': "fetch('/api/heartbeat');",
+  });
+  const files = ['src/lib/constants.ts', 'src/store/version.ts', 'scripts/test-api.ts'].map(f => path.join(root, f));
+  const paths = extractCalls(files, root).map(c => c.path);
+  assert.ok(!paths.includes('/v1/updates'), '다른 사이트'); assert.ok(paths.includes('/api/me'), 'localhost 는 경로'); assert.ok(!paths.includes('/api/heartbeat'), '스크립트');
+});
+
+test('화면 호출 — 훅에서 꺼낸 래퍼(get·post·del)와 래퍼가 붙이는 /api 접두어 (umami useApi)', () => {
+  const { extractCalls } = require('../common/lang/js');
+  const root = write(tmp(), {
+    'src/lib/api-url.ts': "export const getApiUrl = url => joinPath(joinPath(basePath, '/api'), url);",
+    'src/Board.tsx': "const { get, post, del } = useApi();\nget(`/boards/${id}`); post('/boards', data); del(`/boards/${id}`); cache.get('/nope');",
+  });
+  const calls = extractCalls(['src/lib/api-url.ts', 'src/Board.tsx'].map(f => path.join(root, f)), root);
+  assert.deepStrictEqual(calls.map(c => `${c.method} ${c.path}`).sort(), ['DELETE /boards/:id', 'GET /boards/:id', 'POST /boards']);
+  assert.deepStrictEqual(calls[0].prefixes, ['/api']);
+});
+
+test('가입 경로 — 팀 합류(/api/teams/join)는 가입이 아니다', () => {
+  const { REGISTER } = require('../common/project');
+  for (const p of ['/api/auth/register', '/api/member/register', '/join.php', '/member/join_process.php', '/accounts/signup/']) assert.ok(REGISTER.test(p), p);
+  for (const p of ['/api/teams/join', '/api/admin/register']) assert.ok(!REGISTER.test(p), p);
+});

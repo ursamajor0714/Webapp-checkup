@@ -46,7 +46,8 @@ async function request(baseUrl, sess, p, { method = 'GET', body, headers = {}, f
   else if (form) { payload = new URLSearchParams(form).toString(); h['Content-Type'] ??= 'application/x-www-form-urlencoded'; }
   else if (body !== undefined) { payload = JSON.stringify(body); h['Content-Type'] ??= 'application/json'; }
   // 제한 시간 — 응답을 붙잡는 경로 하나가 검사 전체를 멈추지 않게. 한 번 시간 초과가 난 경로는 다시 기다리지 않는다
-  const key = `${method} ${baseUrl}${p.split('?')[0]}`;
+  //   누가 보냈는지도 열쇠에 넣는다 — 로그인한 요청이 멈춘다고 로그인 안 한 요청(401 로 바로 막힘)까지 멈춘 것으로 치면 안 된다 (umami /api/auth/subscription)
+  const key = `${method} ${baseUrl}${p.split('?')[0]} ${h.Authorization || h.authorization || h.Cookie ? 'auth' : 'anon'}`;   // 두 갈래만 — 토큰마다 나누면 가짜 토큰마다 15초씩 다시 기다린다
   const fake = (status, text) => ({ status, headers: new Headers(), text: async () => text, timedOut: status === 504 });
   const t0 = Date.now();
   let res;

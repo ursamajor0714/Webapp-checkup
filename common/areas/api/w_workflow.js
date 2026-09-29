@@ -31,7 +31,9 @@ module.exports = {
       for (const k of Object.keys(body)) if (typeof body[k] === 'string' && /name|title|email/i.test(k)) body[k] = res.fields[k].format === 'email' ? `qa+wf${Date.now()}@example.com` : (`QA흐름${Date.now()}`).slice(0, res.fields[k].max ?? 30);
       const made = await ctx.call(res.path, { service: res.service, as, method: 'POST', body });
       const id = idOf(made.body);
-      steps.push({ name: `1. 만들기 POST ${res.path}`, ok: made.status < 300 && id !== undefined, detail: `${made.status}${id === undefined ? ' — 응답에 id 가 없다' : ` · id ${id}`}` });
+      // 4xx 는 QA 가 만든 본문을 서버가 거절한 것 — 흐름의 결함이 아니라 재지 못한 것이다 (umami POST /api/boards: 필수 칸을 코드에서 못 읽음)
+      const rejected = made.status >= 400 && made.status < 500;
+      steps.push({ name: `1. 만들기 POST ${res.path}`, ok: rejected ? null : made.status < 300 && id !== undefined, detail: rejected ? `${made.status} — QA 가 만든 본문을 서버가 거절했다 (필수 칸·형식을 코드에서 읽지 못함 — 재지 못함)` : `${made.status}${id === undefined ? ' — 응답에 id 가 없다' : ` · id ${id}`}` });
       if (id !== undefined) {
         const url = one.path.replace(/:[A-Za-z0-9_]+/, id);
         const list1 = listOf((await ctx.call(base, { service: res.service, as })).body) || [];
