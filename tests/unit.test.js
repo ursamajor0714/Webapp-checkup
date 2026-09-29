@@ -789,3 +789,15 @@ test('서버 켜기 실패 — 로그에서 빠진 환경변수·DB 를 읽어 �
   assert.match(failHint('connect ECONNREFUSED 127.0.0.1:5432', root), /포트 5432/);
   assert.strictEqual(failHint('SyntaxError: Unexpected token', root), '');
 });
+
+test('검사용 DB — DB 종류를 Prisma·compose·의존성 순으로 읽는다', () => {
+  const { dbKind } = require('../common/deps');
+  const a = write(tmp(), { 'prisma/schema.prisma': 'datasource db {\n  provider = "postgresql"\n}', 'package.json': '{"dependencies":{"mysql2":"1"}}' });
+  assert.deepStrictEqual(dbKind(a, a), { kind: 'postgres' }, 'Prisma provider 가 먼저');
+  const b = write(tmp(), { 'docker-compose.yml': 'services:\n  db:\n    image: mariadb:11\n', 'package.json': '{}' });
+  assert.deepStrictEqual(dbKind(b, b), { kind: 'mysql', image: 'mariadb:11' });
+  const c = write(tmp(), { 'package.json': '{"dependencies":{"pg":"8"}}' });
+  assert.deepStrictEqual(dbKind(c, c), { kind: 'postgres' });
+  const e = write(tmp(), { 'package.json': '{"dependencies":{"mongoose":"8"}}' });
+  assert.strictEqual(dbKind(e, e), null, '모르는 DB 면 띄우지 않는다');
+});
