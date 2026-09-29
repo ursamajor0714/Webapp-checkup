@@ -24,7 +24,10 @@ function cleanPath(raw, vars = {}) {
 function pathVars(files) {
   const vars = {};
   for (const f of files) for (const m of read(f).matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(['"`])((?:https?:\/\/[^/'"`]+)?\/[^'"`]*|)\2/g)) {
-    if (/api|base|url|endpoint|server|host|prefix/i.test(m[1])) vars[m[1]] = m[3].replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '');
+    if (!/api|base|url|endpoint|server|host|prefix/i.test(m[1])) continue;
+    // 다른 사이트 주소(umami UPDATES_URL = 'https://api.umami.is/v1/updates')는 주소째 둔다 — cleanPath 가 이 앱 경로가 아니라고 거른다
+    const ext = /^https?:\/\/([^/:]+)/.exec(m[3]);
+    vars[m[1]] = ext && !/^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(ext[1]) ? m[3].replace(/\/$/, '') : m[3].replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '');
   }
   return vars;
 }
@@ -33,6 +36,8 @@ function extractCalls(files, root) {
   const out = [];
   const vars = pathVars(files);
   for (const f of files) {
+    // 개발·시험용 스크립트는 화면이 아니다 (umami scripts/test-api.ts 가 부르는 heartbeat)
+    if (/(^|[\\/])(scripts|tests?|__tests__|e2e|cypress)[\\/]/.test(path.relative(root, f)) || /\.(test|spec)\.[jt]sx?$/.test(f)) continue;
     const src = read(f).replace(/\/\*[\s\S]*?\*\//g, '');
     // API + '/members/' + id + '/usage' — + 로 이어진 식 전체를 읽는다 (문자열은 그대로, 변수는 :id)
     for (const m of src.matchAll(/\b(\w+)\s*\+\s*(['"`])\//g)) {
@@ -73,6 +78,13 @@ function extractCalls(files, root) {
       const meth = (m[3] && (m[3].match(/method\s*:\s*['"`](\w+)['"`]/) || [])[1]) || 'GET';
       out.push({ method: meth.toUpperCase(), path: p, file: path.relative(root, f) });
     }
+    // 훅에서 꺼낸 래퍼: const { get, post, del } = useApi() → get('/websites') · del(`/x/${id}`) (umami)
+    const hooked = new Set([...src.matchAll(/(?:const|let)\s*\{([^}]*)\}\s*=\s*use\w*\(/g)].flatMap(m => m[1].split(',').map(x => x.split(':').pop().trim())).filter(n => /^(get|post|put|patch|del|delete)$/.test(n)));
+    if (hooked.size) for (const m of src.matchAll(/(?<![.\w])(get|post|put|patch|del|delete)\(\s*(['"`])((?:(?!\2)[^\n])*)\2/g)) {
+      if (!hooked.has(m[1])) continue;
+      const p = cleanPath(m[3], vars); if (!p) continue;
+      out.push({ method: m[1] === 'del' ? 'DELETE' : m[1].toUpperCase(), path: p, file: path.relative(root, f) });
+    }
     // 공통 래퍼: api('/x', { method }) · request('/x') · apiFetch('/x')
     for (const m of src.matchAll(/\b(api|apiFetch|request|http|client|callApi|apiRequest)(?:<[^>]*>)?\(\s*(['"`])((?:(?!\2)[^\n])*)\2\s*(?:,\s*(\{[\s\S]{0,300}?\}))?/g)) {
       const p = cleanPath(m[3], vars); if (!p) continue;
@@ -81,7 +93,8 @@ function extractCalls(files, root) {
     }
   }
   const seen = new Set();
-  return out.filter(c => { const k = c.method + ' ' + c.path; if (seen.has(k)) return false; seen.add(k); return true; });
+  const prefixes = basePrefixes(files);   // 래퍼가 붙이는 접두어 — 스택마다 따로 붙이지 않게 여기서 (Next.js 는 빠져 있었다)
+  return out.filter(c => { const k = c.method + ' ' + c.path; if (seen.has(k)) return false; seen.add(k); return true; }).map(c => ({ ...c, prefixes }));
 }
 
 // axios.create({ baseURL: '.../api' }) 같은 접두어 — 호출 경로 앞에 붙는다
@@ -91,6 +104,8 @@ function basePrefixes(files) {
     const p = m[2].replace(/^\$\{[^}]+\}/, '').replace(/^https?:\/\/[^/]+/, '');
     if (p.startsWith('/') && p.length > 1) out.add(p.replace(/\/$/, ''));
   }
+  // 래퍼가 경로 앞에 '/api' 를 붙인다 — joinPath(basePath, '/api') · `${base}/api${url}` (umami getApiUrl)
+  for (const f of files) if (/\(\s*\w+\s*,\s*['"`]\/api['"`]\s*\)|\/api\$\{\s*(?:url|path|endpoint)\s*\}/.test(read(f))) { out.add('/api'); break; }
   return [...out];
 }
 

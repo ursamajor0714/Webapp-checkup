@@ -227,7 +227,7 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
       ctx.sessions.anon.csrf = { header: 'X-CSRFToken', fromCookie: 'csrftoken' };
     }
     else if (auth.csrf) await require('./session').prepareCsrf(base, ctx.sessions.anon, auth);   // 익명 요청도 CSRF 토큰을 싣는다
-    const reg = routes.find(r => r.method === 'POST' && /register|signup|join/i.test(r.path) && r.service === ctx.authService);
+    const reg = routes.find(r => r.method === 'POST' && require('./project').REGISTER.test(r.path) && r.service === ctx.authService);
     // 로그인 코드가 비교하는 환경변수(예: ADMIN_PASSWORD) — 레포 .env 에 값이 있으면 쓴다. 어떤 비밀번호를 넣어야 하는지 사람이 맞힐 필요가 없게
     const svc = ctx.parts.find(p => p.id === ctx.authService);
     const envPw = auth.passwordEnv && svc && (() => { const { readEnvFile } = require('./deps'); const v = { ...readEnvFile(path.join(project.root, '.env')), ...readEnvFile(path.join(svc.absDir, '.env')), ...readEnvFile(path.join(svc.absDir, '.env.local')) }; return v[auth.passwordEnv] || process.env[auth.passwordEnv] || null; })();
@@ -334,6 +334,23 @@ async function prepare(def, { only = [], singleOnly = false, log = () => {}, ser
 // ── 영역 하나 실행
 // 로그인한 계정으로 서버를 두드려야만 뜻이 있는 영역 — 로그인이 설정 오류로 막히면 익명 결과(401 투성이)가 잡음이 된다
 const LOGIN_ONLY = new Set(['W', 'X', 'Y', 'M', 'R', 'S', 'E', 'F', 'J', 'O', 'Z', 'C']);
+// 한 번 15초 넘게 멈춘 경로 — 그 뒤 요청은 QA 가 다시 기다리지 않고 504 를 넣는다. 그것을 영역마다 '서버 오류' 로 세면 한 멈춤이 여러 건이 된다
+//   (umami /api/auth/subscription: Z 9건·J 1건). 멈춤 자체는 9(느린 API) 영역이 한 번 센다 — 다른 영역에선 '재지 못함' 으로
+function demoteHung(id, checks) {
+  const { hung } = require('./session');
+  if (id === '9' || !hung.size) return;
+  const routes = [...hung].map(k => { const [m, u] = k.split(' '); try { return `${m} ${new URL(u).pathname}`; } catch { return null; } }).filter(Boolean);
+  for (const c of checks) {
+    let n = 0;
+    for (const i of c.items || []) {
+      if (i.ok !== false || !/504|응답이 없다|형식 없음/.test(String(i.detail))) continue;
+      if (!routes.some(x => i.name === x || i.name.startsWith(x + ' '))) continue;
+      i.ok = null; i.detail = `재지 못함 — 앞서 15초 넘게 멈춘 경로라 다시 기다리지 않았다 (멈춤은 9 느린 API 영역이 센다) · ${i.detail}`; n++;
+    }
+    if (n) { c.warned = (c.warned || 0) + n; c.failed = Math.max(0, (c.failed || 0) - n); c.notes = (c.notes || []).filter(x => !/504|응답이 없다|형식 없음/.test(x) || !routes.some(r => x.startsWith(r))); }
+  }
+}
+
 async function runProbe(ctx, probe) {
   const t0 = Date.now();
   // 검사 도중 서버가 꺼졌나 — 꺼진 서버에 보낸 요청(응답 0)을 결함으로 세지 않도록, 영역마다 들어가기 전에 확인한다
@@ -375,6 +392,7 @@ async function runProbe(ctx, probe) {
   } catch (e) {
     error = e.message + '\n' + (e.stack || '').split('\n').slice(1, 3).join('\n');
   }
+  demoteHung(probe.id, checks);
   const sum = k => checks.reduce((s, c) => s + (c[k] || 0), 0);
   const universe = sum('universe'), scanned = sum('scanned'), passed = sum('passed'), warned = sum('warned'), failed = sum('failed');
   const result = {

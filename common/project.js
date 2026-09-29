@@ -82,7 +82,7 @@ function guessAuth(root, parts, routes) {
     const password = ln.find(n => /pass|pw/i.test(n)) || 'password';
     const user = ln.find(n => n !== password && /mail|user|id|login|name|phone/i.test(n)) || null;
     // 로그인 폼이 따로 있으면(GET 경로) 그 화면에서 CSRF 숨은 칸을 읽는다 — 같은 주소일 때가 많다
-    const reg = posts.find(r => /register|signup|join/i.test(r.path) && !/admin/i.test(r.path));
+    const reg = posts.find(r => REGISTER.test(r.path));
     return { type: 'form', loginPath: phpLogin.path, fields: { ...(user ? { user } : {}), password }, guessed: true, ...(reg ? { registerFields: [...new Set(names(reg.handler))] } : {}) };
   }
   // 앱이 직접 만든 로그인 경로가 있으면 그쪽 (django.contrib.auth.urls 의 기본 경로는 템플릿이 없으면 500)
@@ -131,4 +131,7 @@ function loadProject(def) {
   return p;
 }
 
-module.exports = { detectParts, guessAuth, loadProject, passwordEnvOf };
+// 가입 경로 — 경로 전체가 api·v1·auth·users·members·accounts 와 가입 낱말로만 이뤄졌을 때 (umami /api/teams/join 은 '팀 합류' 라 가입이 아니다)
+const REGISTER = /^(?:\/(?:api|v\d+|auth|users?|members?|accounts?|customers?))*\/(?:register|signup|sign-up|join)(?:_process)?(?:\.php)?\/?$/i;
+
+module.exports = { detectParts, guessAuth, loadProject, passwordEnvOf, REGISTER };
