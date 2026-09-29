@@ -796,6 +796,8 @@ test('검사용 DB — DB 종류를 Prisma·compose·의존성 순으로 읽는�
   assert.deepStrictEqual(dbKind(a, a), { kind: 'postgres' }, 'Prisma provider 가 먼저');
   const b = write(tmp(), { 'docker-compose.yml': 'services:\n  db:\n    image: mariadb:11\n', 'package.json': '{}' });
   assert.deepStrictEqual(dbKind(b, b), { kind: 'mysql', image: 'mariadb:11' });
+  const u = write(tmp(), { 'docker-compose.yml': 'services:\n  postgres:\n    image: postgres\n' });
+  assert.deepStrictEqual(dbKind(u, u), { kind: 'postgres' }, '버전 없는 이미지는 QA 가 정한 버전으로 (outline — latest 가 18 이라 켜지지 않았다)');
   const c = write(tmp(), { 'package.json': '{"dependencies":{"pg":"8"}}' });
   assert.deepStrictEqual(dbKind(c, c), { kind: 'postgres' });
   const e = write(tmp(), { 'package.json': '{"dependencies":{"mongoose":"8"}}' });
