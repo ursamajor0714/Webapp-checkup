@@ -52,6 +52,8 @@ function newestCode(dir) {
   const files = walk(dir, ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.java', '.kt', '.html', '.css', '.vue', '.svelte', '.ejs', '.pug', '.hbs', '.go', '.rb', '.php', 'package.json']);
   return files.reduce((m, f) => Math.max(m, mtime(f)), 0);
 }
+// corepack 이 '이 버전을 받을까요? [Y/n]' 하고 묻지 않게 — QA 는 뒤에서 돌아 대답할 사람이 없다
+process.env.COREPACK_ENABLE_DOWNLOAD_PROMPT = '0';
 // 이 레포의 JS 패키지 관리자 — 잠금 파일(그 폴더부터 위로)·package.json 의 packageManager 로. npm 으로 pnpm 워크스페이스를 깔면 'workspace:*' 에서 멈춘다
 function nodePm(dir, stop) {
   for (let d = dir; ; d = path.dirname(d)) {
@@ -65,10 +67,31 @@ function nodePm(dir, stop) {
   }
 }
 const onPath = bin => { try { execFileSync(process.platform === 'win32' ? 'where' : 'which', [bin], { stdio: 'ignore' }); return true; } catch { return false; } };
-// npm 명령을 그 관리자 명령으로 — 도구가 없으면 corepack 으로 (Node 에 들어 있다)
-function withPm(plan, pm) {
+// 레포가 정한 관리자 버전 — packageManager("yarn@4.18.0") 또는 engines.pnpm("12.3.4")
+function pmVersion(dir, stop, pm) {
+  for (let d = dir; ; d = path.dirname(d)) {
+    const pkg = (() => { try { return JSON.parse(fs.readFileSync(path.join(d, 'package.json'), 'utf8')); } catch { return null; } })();
+    if (pkg) { const m = String(pkg.packageManager || '').match(new RegExp(`^${pm}@([^+\\s]+)`)); if (m) return m[1]; if (pkg.engines && pkg.engines[pm]) return String(pkg.engines[pm]); }
+    if (!stop || d === stop || path.dirname(d) === d) return null;
+  }
+}
+// 이 맥에 깔린 버전이 레포가 정한 버전에 맞나 — 정확한 버전이면 같아야, 범위면 주 버전(12)만 본다
+function pmFits(pm, want) {
+  if (!want) return true;
+  let have = ''; try { have = execFileSync(pm, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }).trim(); } catch { return false; }
+  if (/^\d+\.\d+\.\d+$/.test(want)) return have === want;
+  const major = (want.match(/\d+/) || [])[0];
+  return !major || have.split('.')[0] === major || (/^>=/.test(want) && Number(have.split('.')[0]) >= Number(major));
+}
+// npm 명령을 그 관리자 명령으로 — 도구가 없거나 레포가 정한 버전과 다르면 corepack 으로 그 버전을 쓴다 (Node 에 들어 있다)
+function withPm(plan, pm, dir = null, stop = null) {
   if (!plan || pm === 'npm') return plan;
-  const bin = onPath(pm) ? [pm] : ['pnpm', 'yarn'].includes(pm) && onPath('corepack') ? ['corepack', pm] : null;
+  const want = dir ? pmVersion(dir, stop, pm) : null;
+  const exact = want && (/^\d+\.\d+\.\d+$/.test(want) ? want : (want.match(/\d+/) || [])[0]);
+  const bin = onPath(pm) && pmFits(pm, want) ? [pm]
+    : ['pnpm', 'yarn'].includes(pm) && onPath('corepack') ? ['corepack', exact ? `${pm}@${exact}` : pm]
+    : pm === 'pnpm' && exact ? ['npx', '-y', `pnpm@${exact}`]
+    : onPath(pm) ? [pm] : null;
   if (!bin) return plan;
   const tr = a => (Array.isArray(a) && a[0] === 'npm' ? [...bin, ...a.slice(1)] : a);
   return { ...plan, install: tr(plan.install), build: tr(plan.build), start: tr(plan.start), pm };
@@ -135,8 +158,8 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
   try {
     const plan0 = STACKS[part.stack] && STACKS[part.stack].serve && STACKS[part.stack].serve(part.absDir);
     if (!plan0) throw new Error(`${part.stack} 는 켜는 방법을 모릅니다`);
-    const plan = part.lang === 'js' ? withPm(plan0, nodePm(part.absDir, def.root)) : plan0;
-    if (plan.pm) logLine(st, `패키지 관리자: ${plan.pm} (잠금 파일을 보고 골랐다)`);
+    const plan = part.lang === 'js' ? withPm(plan0, nodePm(part.absDir, def.root), part.absDir, def.root) : plan0;
+    if (plan.pm) logLine(st, `패키지 관리자: ${plan.pm} (잠금 파일을 보고 골랐다) — ${plan.install ? plan.install.slice(0, -1).join(' ') : ''}`);
     if ((await healthy(part.baseUrl)).up) { st.phase = 'running'; logLine(st, '이미 켜져 있습니다'); return; }
     const port = new URL(part.baseUrl).port || '80';
     const { env, missing } = envFor(def, port);
