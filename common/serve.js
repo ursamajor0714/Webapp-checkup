@@ -215,11 +215,29 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     }
     throw new Error(`${timeoutSec}초 안에 켜지지 않았습니다 — 로그를 보세요`);
   } catch (e) {
-    const tail = st.log.slice(-40).join('\n');
-    const db = tail.match(/ECONNREFUSED[^\n]*?:(\d{2,5})|connect ECONNREFUSED [\d.:]+:(\d+)|could not connect to server|Connection refused[^\n]*port (\d+)/i);
-    const hint = db ? ` — 데이터베이스에 연결하지 못했다${db[1] || db[2] || db[3] ? ` (포트 ${db[1] || db[2] || db[3]})` : ''}. DB(Docker 컨테이너 등)가 켜져 있는지, .env 의 접속 주소가 맞는지 확인` : '';
+    const hint = failHint(st.log.slice(-40).join('\n'), def.root || path.dirname(part.absDir));
     st.phase = 'error'; st.error = e.message + hint + (st.installError ? ` (앞서 설치도 실패: ${st.installError})` : ''); logLine(st, '✗ ' + st.error);
   }
+}
+
+// 켜기가 실패한 로그 끝부분에서 원인을 읽어 할 일을 알려 준다 — "로그를 보세요" 로만 끝나지 않게
+function failHint(tail, root) {
+  const db = tail.match(/ECONNREFUSED[^\n]*?:(\d{2,5})|connect ECONNREFUSED [\d.:]+:(\d+)|could not connect to server|Connection refused[^\n]*port (\d+)/i);
+  if (db) return ` — 데이터베이스에 연결하지 못했다${db[1] || db[2] || db[3] ? ` (포트 ${db[1] || db[2] || db[3]})` : ''}. DB(Docker 컨테이너 등)가 켜져 있는지, .env 의 접속 주소가 맞는지 확인`;
+  // 빌드·시작 스크립트가 환경변수를 먼저 확인하는 앱 (umami check-env · Prisma · 흔한 "Missing env" 문구)
+  const names = new Set();
+  const list = tail.match(/environment variables? (?:are|is) (?:not defined|missing|required)[^\n]*((?:\n\s*-\s*[A-Z][A-Z0-9_]+)+)/i);
+  if (list) for (const m of list[1].matchAll(/[A-Z][A-Z0-9_]+/g)) names.add(m[0]);
+  for (const m of tail.matchAll(/(?:Environment variable not found|Missing (?:required )?(?:env(?:ironment)? var(?:iable)?s?)):?\s*([A-Z][A-Z0-9_]+)/gi)) names.add(m[1]);
+  if (!names.size) return '';
+  let h = ` — 앱이 요구하는 환경변수가 없다: ${[...names].join('·')}. 레포 .env 에 적는다`;
+  if ([...names].some(n => /DATABASE_URL|DB_|POSTGRES|MYSQL|MONGO/.test(n))) {
+    const compose = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].find(f => fs.existsSync(path.join(root, f)));
+    h += ` — DB 가 필요한 앱이다. 로컬 DB(Docker 등)를 띄우고 그 주소를 적는다 (예: DATABASE_URL=postgresql://user:pw@localhost:5433/db)`
+      + (compose ? `. 레포의 ${compose} 에 DB 설정이 있다 — 이미지·계정은 거기를 따른다` : '')
+      + '. .env 가 localhost 를 가리키면 다음부터 QA 가 그 DB 를 켠다';
+  }
+  return h;
 }
 
 function stop(st) {
@@ -234,4 +252,4 @@ function stop(st) {
 
 const canServe = part => !!(STACKS[part.stack] && STACKS[part.stack].serve) && !part.servedBy && !part.native && !!part.baseUrl;
 
-module.exports = { nodePm, withPm, newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
+module.exports = { failHint, nodePm, withPm, newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };

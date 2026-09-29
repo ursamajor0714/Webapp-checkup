@@ -777,3 +777,15 @@ test('JS 패키지 관리자 — 잠금 파일(위 폴더까지)로 고르고 np
   const p = withPm({ install: ['npm', 'install'], build: ['npm', 'run', 'build'], start: ['npx', 'next', 'start'] }, 'pnpm');
   if (p.pm) { assert.deepStrictEqual(p.install.slice(-1), ['install']); assert.notStrictEqual(p.install[0], 'npm'); assert.deepStrictEqual(p.start, ['npx', 'next', 'start'], 'npx 는 그대로'); }
 });
+
+test('서버 켜기 실패 — 로그에서 빠진 환경변수·DB 를 읽어 할 일을 알린다 (umami check-env)', () => {
+  const { failHint } = require('../common/serve');
+  const root = write(tmp(), { 'docker-compose.yml': 'services:\n  db:\n    image: postgres:15-alpine\n' });
+  const umami = '$ node scripts/check-env.js\nThe following environment variables are not defined:\n -  DATABASE_URL\n[ELIFECYCLE] Command failed with exit code 1.';
+  const h = failHint(umami, root);
+  assert.match(h, /DATABASE_URL/); assert.match(h, /DB 가 필요한 앱/); assert.match(h, /docker-compose\.yml/);
+  assert.match(failHint('Error: Environment variable not found: STRIPE_KEY.', root), /STRIPE_KEY/);
+  assert.doesNotMatch(failHint('Error: Environment variable not found: STRIPE_KEY.', root), /DB 가 필요한/);
+  assert.match(failHint('connect ECONNREFUSED 127.0.0.1:5432', root), /포트 5432/);
+  assert.strictEqual(failHint('SyntaxError: Unexpected token', root), '');
+});
