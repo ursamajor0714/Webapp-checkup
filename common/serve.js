@@ -209,6 +209,11 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
       st.phase = 'building'; await runStep(st, sub(plan.build), part.absDir, env);
       const l = readLocal(); l.built = { ...(l.built || {}), [key]: head }; writeLocal(l);
     }
+    // 검사용 DB 는 켤 때마다 비어 있다 — 빌드를 건너뛰었으면 표를 만드는 단계(마이그레이션)도 안 돌았다. 레포의 마이그레이션 스크립트, 없으면 Prisma
+    if (st.qaDb) {
+      const mig = migrateCmd(part.absDir, plan.pm);
+      if (mig) { logLine(st, '검사용 DB 에 표를 만든다 (마이그레이션)'); await runStep(st, mig, part.absDir, env); }
+    }
     st.phase = 'starting';
     const cmd = sub(plan.start);
     logLine(st, `$ ${cmd.join(' ')}  (PORT=${port})`);
@@ -233,6 +238,15 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     st.phase = 'error'; st.error = e.message + hint + (st.installError ? ` (앞서 설치도 실패: ${st.installError})` : ''); logLine(st, '✗ ' + st.error);
     dropDb(st);
   }
+}
+
+// 빈 DB 에 표를 만드는 명령 — package.json 의 마이그레이션 스크립트, 없으면 prisma/migrations 가 있을 때 prisma migrate deploy
+function migrateCmd(dir, pm = 'npm') {
+  let scripts = {}; try { scripts = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).scripts || {}; } catch { /* 없음 */ }
+  const name = ['db:migrate', 'migrate:deploy', 'db:deploy', 'migrate', 'prisma:migrate'].find(k => scripts[k] && !/\bdev\b|reset/.test(scripts[k]));
+  if (name) return [pm || 'npm', 'run', name];
+  const prisma = ['prisma/migrations', 'db/migrations'].find(d => fs.existsSync(path.join(dir, d, '..', 'schema.prisma')) && fs.existsSync(path.join(dir, d)));
+  return prisma ? ['npx', '--no-install', 'prisma', 'migrate', 'deploy'] : null;
 }
 
 // 켜기가 실패한 로그 끝부분에서 원인을 읽어 할 일을 알려 준다 — "로그를 보세요" 로만 끝나지 않게
@@ -269,4 +283,4 @@ function stop(st) {
 
 const canServe = part => !!(STACKS[part.stack] && STACKS[part.stack].serve) && !part.servedBy && !part.native && !!part.baseUrl;
 
-module.exports = { failHint, nodePm, withPm, newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
+module.exports = { failHint, migrateCmd, nodePm, withPm, newestCode, pythonFor, needsInstall, newestSource, healthy, newState, startPart, stop, envFor, fillDefaults, canServe, logLine };
