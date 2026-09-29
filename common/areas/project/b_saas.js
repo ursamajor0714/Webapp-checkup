@@ -209,7 +209,7 @@ function webhookItems(ctx) {
   const items = [];
   const { guardLine } = require('../../roles');
   // 관리자·로그인 가드가 붙은 경로는 외부 서비스가 부르는 웹훅이 아니다 (내부 알림 등)
-  const INTERNAL = /require\w*|isAuthenticated|protect\w*|login_required|IsAuthenticated|PreAuthorize|UseGuards|authenticate\w*/;
+  const INTERNAL = /require\w*|isAuthenticated|protect\w*|login_required|IsAuthenticated|PreAuthorize|UseGuards|authenticate\w*|\bauth\s*\(/;
   for (const r of (ctx.allRoutes ? ctx.allRoutes() : ctx.routes()).filter(r => ['POST', 'PUT', 'ANY'].includes(r.method) && WEBHOOK_PATH.test(r.path) && !/oauth|login|auth\/callback|signin/i.test(r.path) && !INTERNAL.test(guardLine(r.handler)))) {
     const pp = ctx.parts.find(x => x.id === r.service);
     const src = String(r.handler || ''), file = r.file ? read(path.resolve(pp ? pp.absDir : ctx.root, r.file)) : '';

@@ -106,6 +106,8 @@ function basePrefixes(files) {
   }
   // 래퍼가 경로 앞에 '/api' 를 붙인다 — joinPath(basePath, '/api') · `${base}/api${url}` (umami getApiUrl)
   for (const f of files) if (/\(\s*\w+\s*,\s*['"`]\/api['"`]\s*\)|\/api\$\{\s*(?:url|path|endpoint)\s*\}/.test(read(f))) { out.add('/api'); break; }
+  // this.baseUrl = options.baseUrl || "/api" (outline ApiClient)
+  for (const f of files) for (const m of read(f).matchAll(/base_?url\s*[=:][^;\n]{0,60}?['"`](\/[\w/-]+)['"`]/gi)) out.add(m[1].replace(/\/$/, ''));
   return [...out];
 }
 

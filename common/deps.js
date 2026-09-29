@@ -144,39 +144,71 @@ function dbKind(dir, root) {
 }
 const freePort = () => new Promise(res => { const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => res(p)); }); });
 
-async function throwawayDb(def, part, root, env, log = () => {}) {
-  if (part.lang !== 'js' || env.DATABASE_URL) return null;
-  const files = [root, part.absDir].flatMap(d => ['.env', '.env.local'].map(f => readEnvFile(path.join(d, f))));
-  if (files.some(v => v.DATABASE_URL)) return null;
-  const { walk, read } = require('./stacks/util');
-  const src = walk(part.absDir, ['.js', '.ts', '.mjs', '.cjs', '.prisma']).filter(f => !/node_modules|\.next|dist|build/.test(f)).slice(0, 3000).map(read).join('\n');
-  if (!/process\.env\.DATABASE_URL|env\(\s*['"]DATABASE_URL['"]\s*\)/.test(src)) return null;
-  const k = dbKind(part.absDir, root);
-  if (!k) return null;
-  const spec = TMP_DB[k.kind], image = k.image || spec.image;
-  const d = await dockerReady(log);
-  if (!d.ok) return { ok: false, why: `DATABASE_URL 이 없어 검사용 DB 를 띄우려 했지만 ${d.why}` };
-  const name = `qa-db-${String(def.id || 'project').replace(/[^\w.-]/g, '_')}`;
+// 견본 환경변수 파일에 적힌 이름 — 코드가 process.env 가 아닌 자기 설정 객체로 읽어도(outline environment.X) 쓰는 줄 안다
+const SAMPLE_ENV = ['.env.sample', '.env.example', '.env.template', '.env.dist', 'example.env'];
+function sampleEnv(...dirs) {
+  const out = {};
+  for (const d of dirs) for (const f of SAMPLE_ENV) Object.assign(out, readEnvFile(path.join(d, f)));
+  return out;
+}
+
+// 검사용 컨테이너 하나 — 켜고, 준비될 때까지 기다리고, 켜지다 꺼지면 바로 알린다
+const TMP_REDIS = { image: 'redis:7-alpine', port: 6379, args: ['redis-server', '--save', '', '--appendonly', 'no'], ready: ['redis-cli', 'ping'], url: p => `redis://localhost:${p}` };
+async function startTmp(name, spec, image, what, log) {
   sh('docker', ['rm', '-f', name]);   // 지난번에 QA 가 꺼지지 못하고 남긴 것
   const port = await freePort();
-  log(`DATABASE_URL 이 없다 — 검사용 ${k.kind} DB 를 메모리에 띄운다 (${image}, localhost:${port}, 끄면 지운다)`);
+  log(`${what} — ${image} 를 메모리에 띄운다 (localhost:${port}, 끄면 지운다)`);
   // 이미지를 받느라 몇 분 걸릴 수 있다 — 화면 서버(ui.js)가 멈추지 않게 비동기로 (execFileSync 는 그동안 화면을 붙잡았다)
-  const r = await shAsync('docker', ['run', '-d', '--name', name, '--tmpfs', spec.data, ...spec.env.flatMap(e => ['-e', e]), '-p', `127.0.0.1:${port}:${spec.port}`, image], 300000);
-  if (!r.ok) return { ok: false, why: `검사용 DB 를 띄우지 못했다: ${r.out.slice(0, 200)}` };
+  const r = await shAsync('docker', ['run', '-d', '--name', name, ...(spec.data ? ['--tmpfs', spec.data] : []), ...(spec.env || []).flatMap(e => ['-e', e]), '-p', `127.0.0.1:${port}:${spec.port}`, image, ...(spec.args || [])], 300000);
+  if (!r.ok) return { ok: false, why: `${image} 를 띄우지 못했다: ${r.out.slice(0, 200)}` };
   for (let i = 0; i < 60; i++) {
-    if ((await shAsync('docker', ['exec', name, ...spec.ready])).ok && await portOpen(port)) { env.DATABASE_URL = spec.url(port); return { ok: true, container: name, url: env.DATABASE_URL }; }
+    if ((await shAsync('docker', ['exec', name, ...spec.ready])).ok && await portOpen(port)) return { ok: true, url: spec.url(port) };
     // 켜지다 꺼졌으면 더 기다리지 않는다 — 마지막 로그를 알린다
     const st = await shAsync('docker', ['inspect', '-f', '{{.State.Running}}', name]);
     if (st.ok && st.out === 'false') {
       const logs = (await shAsync('docker', ['logs', '--tail', '8', name])).out.replace(/\s+/g, ' ').slice(0, 300);
       sh('docker', ['rm', '-f', name]);
-      return { ok: false, why: `검사용 DB(${image})가 켜지다 꺼졌다: ${logs}` };
+      return { ok: false, why: `${image} 가 켜지다 꺼졌다: ${logs}` };
     }
     await sleep(1000);
   }
   sh('docker', ['rm', '-f', name]);
-  return { ok: false, why: '검사용 DB 가 60초 안에 준비되지 않았다' };
+  return { ok: false, why: `${image} 가 60초 안에 준비되지 않았다` };
 }
-const removeDb = name => name && sh('docker', ['rm', '-f', name]).ok;
 
-module.exports = { ensureLocalServices, localServices, portOpen, readEnvFile, throwawayDb, removeDb, dbKind };
+// DATABASE_URL·REDIS_URL 이 필요한데 어디에도 값이 없으면 검사용으로 띄운다. 돌려주는 것: null(할 일 없음) | { ok, containers[], set{} } | { ok:false, why }
+//   DB  — 코드(process.env·Prisma env())나 견본 파일이 DATABASE_URL 을 쓰고, DB 종류를 알 때
+//   Redis — 견본 파일이 REDIS_URL 을 적었고 redis 클라이언트(ioredis·redis)를 쓸 때. 견본에 없으면 선택 기능일 수 있어 띄우지 않는다 (umami 는 Redis 가 있으면 동작이 바뀐다)
+async function throwawayDb(def, part, root, env, log = () => {}) {
+  if (part.lang !== 'js') return null;
+  const have = Object.assign({}, ...[root, part.absDir].flatMap(d => ['.env', '.env.local'].map(f => readEnvFile(path.join(d, f)))));
+  const sample = sampleEnv(root, part.absDir);
+  const { walk, read } = require('./stacks/util');
+  const src = walk(part.absDir, ['.js', '.ts', '.mjs', '.cjs', '.prisma']).filter(f => !/node_modules|\.next|dist|build/.test(f)).slice(0, 3000).map(read).join('\n');
+  let deps = {}; try { const p = JSON.parse(fs.readFileSync(path.join(part.absDir, 'package.json'), 'utf8')); deps = { ...p.dependencies, ...p.devDependencies }; } catch { /* 없음 */ }
+  const wantDb = !env.DATABASE_URL && !have.DATABASE_URL && ('DATABASE_URL' in sample || /process\.env\.DATABASE_URL|env\(\s*['"]DATABASE_URL['"]\s*\)/.test(src)) && dbKind(part.absDir, root);
+  const wantRedis = !env.REDIS_URL && !have.REDIS_URL && 'REDIS_URL' in sample && (deps.ioredis || deps.redis);
+  if (!wantDb && !wantRedis) return null;
+  const d = await dockerReady(log);
+  if (!d.ok) return { ok: false, why: `${wantDb ? 'DATABASE_URL' : 'REDIS_URL'} 이 없어 검사용으로 띄우려 했지만 ${d.why}` };
+  const id = String(def.id || 'project').replace(/[^\w.-]/g, '_');
+  const containers = [], set = {};
+  const fail = why => { for (const c of containers) sh('docker', ['rm', '-f', c]); return { ok: false, why }; };
+  if (wantDb) {
+    const spec = TMP_DB[wantDb.kind];
+    const r = await startTmp(`qa-db-${id}`, spec, wantDb.image || spec.image, `DATABASE_URL 이 없다 — 검사용 ${wantDb.kind} DB`, log);
+    if (!r.ok) return fail(r.why);
+    containers.push(`qa-db-${id}`); set.DATABASE_URL = r.url;
+    if (wantDb.kind === 'postgres') set.PGSSLMODE = 'disable';   // 검사용 DB 는 SSL 이 없다 — 운영 설정이 SSL 을 요구해도 붙게
+  }
+  if (wantRedis) {
+    const r = await startTmp(`qa-redis-${id}`, TMP_REDIS, TMP_REDIS.image, 'REDIS_URL 이 없다 — 검사용 Redis', log);
+    if (!r.ok) return fail(r.why);
+    containers.push(`qa-redis-${id}`); set.REDIS_URL = r.url;
+  }
+  Object.assign(env, set);
+  return { ok: true, containers, set };
+}
+const removeDb = names => [].concat(names || []).every(n => sh('docker', ['rm', '-f', n]).ok);
+
+module.exports = { ensureLocalServices, localServices, portOpen, readEnvFile, throwawayDb, removeDb, dbKind, sampleEnv };

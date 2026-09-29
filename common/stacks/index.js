@@ -8,6 +8,7 @@ const STACKS = {
   spring: require('./spring'),
   fastapi: require('./fastapi'),
   nestjs: require('./nestjs'),
+  koa: require('./koa'),
   express: require('./express'),
   expo: clients.expo,
   vue: clients.vue,
@@ -18,5 +19,5 @@ const STACKS = {
   static: clients.static,
   templates: clients.templates,
 };
-const ORDER = ['nextjs', 'nuxt', 'django', 'spring', 'fastapi', 'nestjs', 'express', 'expo', 'vue', 'react', 'swift', 'codeigniter', 'php', 'static'];
+const ORDER = ['nextjs', 'nuxt', 'django', 'spring', 'fastapi', 'nestjs', 'koa', 'express', 'expo', 'vue', 'react', 'swift', 'codeigniter', 'php', 'static'];
 module.exports = { STACKS, ORDER };
