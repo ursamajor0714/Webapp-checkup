@@ -25,7 +25,7 @@ module.exports = {
         const open = async () => {
           const page = await context.newPage();
           const ev = [];
-          page.on('pageerror', e => ev.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
+          page.on('pageerror', e => ev.push({ kind: '예외', text: require('../../browser').errText(e) }));
           page.on('dialog', d => { ev.push({ kind: '알림창', text: d.message() }); d.dismiss().catch(() => {}); });
           await page.route('**/*', route => {
             const req = route.request();

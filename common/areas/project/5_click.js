@@ -37,7 +37,7 @@ module.exports = {
         const page = await context.newPage();
         const events = [];   // 이 화면에서 일어난 일 (클릭마다 잘라 본다)
         let blocked = 0, requests = 0, failMode = false, destroyMode = false;
-        page.on('pageerror', e => events.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
+        page.on('pageerror', e => events.push({ kind: '예외', text: require('../../browser').errText(e) }));
         page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR_|favicon|DevTools|\[HMR\]/i.test(m.text())) events.push({ kind: '콘솔 오류', text: m.text().split('\n')[0] }); });
         page.on('dialog', async d => { events.push({ kind: '알림창', type: d.type(), text: d.message() }); await d.dismiss().catch(() => {}); });   // confirm 은 '취소'
         await page.route('**/*', async route => {

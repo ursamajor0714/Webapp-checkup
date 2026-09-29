@@ -40,7 +40,7 @@ module.exports = {
         const page = await context.newPage();
         const pErr = [], pReq = [], fw = [], pCsp = [];
         let reqCount = 0; page.on('request', () => reqCount++);
-        page.on('pageerror', e => pErr.push({ kind: '예외', text: String(e.message || e).split('\n')[0] }));
+        page.on('pageerror', e => pErr.push({ kind: '예외', text: require('../../browser').errText(e) }));
         page.on('console', m => {
           const t = m.text();
           // 프레임워크가 알려 주는 진짜 버그 — 경고(warning)로 나와도 모은다
@@ -80,7 +80,9 @@ module.exports = {
         // 1) 예외·콘솔 오류
         const uniq = [...new Map(pErr.map(e => [e.kind + e.text, e])).values()];
         // 'Failed to load resource' 는 아래 요청 검사가 주소와 함께 따로 판정한다 (403 은 권한상 정상일 수 있다)
-        if (uniq.length) for (const e of uniq.slice(0, 8)) errs.push({ name, ok: e.kind === '콘솔 오류' && /favicon|Download the React DevTools|\[HMR\]|\[Fast Refresh\]|Failed to load resource|net::ERR_/i.test(e.text) ? null : false, detail: `${e.kind}: ${e.text.slice(0, 220)}` });
+        // 인증 오류 예외 — 로그인하지 않은 화면에서 앱이 401 을 오류로 던지고 잡지 않은 것 (outline AuthorizationError). 화면은 뜬다 → 사람이 볼 것
+        const authErr = t => /^(Authori[sz]ation|Authentication|Unauthori[sz]ed|NotAuthenticated)\w*(Error|Exception)\b/.test(t);
+        if (uniq.length) for (const e of uniq.slice(0, 8)) errs.push({ name, ok: (e.kind === '콘솔 오류' && /favicon|Download the React DevTools|\[HMR\]|\[Fast Refresh\]|Failed to load resource|net::ERR_/i.test(e.text)) || (e.kind === '예외' && authErr(e.text)) ? null : false, detail: `${e.kind}: ${e.text.slice(0, 220)}${e.kind === '예외' && authErr(e.text) ? ' — 로그인하지 않아 서버가 401 을 주자 앱이 인증 오류를 던지고 잡지 않았다 (처리 안 한 Promise 거절 · 화면은 뜬다)' : ''}` });
         else errs.push({ name, ok: status < 400 || status === 0 ? true : false, detail: status >= 400 ? `페이지가 ${status}` : '예외·콘솔 오류 없음' });
         const ufw = [...new Map(fw.map(e => [e.text.slice(0, 80), e])).values()];
         if (ufw.length) for (const e of ufw.slice(0, 5)) fwItems.push({ name, ok: /hydrat|did not match|Maximum update depth|Cannot update a component/i.test(e.text) ? false : null, detail: e.text.slice(0, 220) });
@@ -166,7 +168,7 @@ module.exports = {
       // 뒤로·앞으로·새로고침 — 링크로 옮겨 갔다가 돌아와도 화면이 멀쩡한가 (빈 화면·예외·옛 주소)
       for (const { url: a, next, where } of navPairs) {
         const page = await context.newPage(); const errsN = [];
-        page.on('pageerror', e => errsN.push(String(e.message || e).split('\n')[0]));
+        page.on('pageerror', e => errsN.push(require('../../browser').errText(e)));
         const textLen = () => page.evaluate(() => (document.body ? document.body.innerText.trim().length : 0)).catch(() => 0);
         try {
           await page.goto(a, { waitUntil: 'load', timeout: 20000 }); await page.waitForTimeout(500);
