@@ -5,7 +5,7 @@
 const fs = require('fs');
 const net = require('net');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, execFile } = require('child_process');
 
 const DEFAULT_PORT = { postgres: 5432, postgresql: 5432, mysql: 3306, mariadb: 3306, mongodb: 27017, redis: 6379, rediss: 6379, amqp: 5672 };
 
@@ -38,6 +38,7 @@ const portOpen = (port, host = '127.0.0.1', ms = 800) => new Promise(res => {
   s.setTimeout(ms, () => done(false)); s.on('connect', () => done(true)); s.on('error', () => done(false));
 });
 const sh = (cmd, args, opt = {}) => { try { return { ok: true, out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000, ...opt }).trim() }; } catch (e) { return { ok: false, out: ((e.stdout || '') + (e.stderr || '')).trim() || e.message, missing: e.code === 'ENOENT' }; } };
+const shAsync = (cmd, args, timeout = 60000) => new Promise(res => execFile(cmd, args, { encoding: 'utf8', timeout }, (e, out, err) => res({ ok: !e, out: e ? ((out || '') + (err || '')).trim() || e.message : String(out).trim() })));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function dockerReady(log) {
@@ -124,7 +125,7 @@ async function ensureLocalServices(part, root, env, log = () => {}) {
 //   켤 때마다 비어 있고 끄면 컨테이너째 지운다. 레포 .env 는 건드리지 않고 서버 환경변수로만 넘긴다.
 //   DB 종류는 Prisma provider → compose 이미지 → 의존성(pg·mysql2) 순으로 본다. 모르면 하지 않는다.
 const TMP_DB = {
-  postgres: { image: 'postgres:16-alpine', port: 5432, data: '/var/lib/postgresql/data', env: ['POSTGRES_USER=qa', 'POSTGRES_PASSWORD=qa', 'POSTGRES_DB=qa'], ready: ['pg_isready', '-U', 'qa', '-d', 'qa'], url: p => `postgresql://qa:qa@localhost:${p}/qa` },
+  postgres: { image: 'postgres:16-alpine', port: 5432, data: '/var/lib/postgresql', env: ['POSTGRES_USER=qa', 'POSTGRES_PASSWORD=qa', 'POSTGRES_DB=qa'], ready: ['pg_isready', '-U', 'qa', '-d', 'qa'], url: p => `postgresql://qa:qa@localhost:${p}/qa` },
   mysql: { image: 'mysql:8.0', port: 3306, data: '/var/lib/mysql', env: ['MYSQL_ROOT_PASSWORD=qa', 'MYSQL_DATABASE=qa'], ready: ['mysqladmin', 'ping', '-h', '127.0.0.1', '-pqa'], url: p => `mysql://root:qa@localhost:${p}/qa` },
 };
 function dbKind(dir, root) {
@@ -134,7 +135,8 @@ function dbKind(dir, root) {
   if (pm) return /postgres/.test(pm[1]) ? { kind: 'postgres' } : /mysql/.test(pm[1]) ? { kind: 'mysql' } : null;
   const compose = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].map(f => path.join(root, f)).find(f => fs.existsSync(f));
   const img = compose && (fs.readFileSync(compose, 'utf8').match(/image:\s*['"]?((postgres|mysql|mariadb)[\w.:-]*)/) || null);
-  if (img) return { kind: img[2] === 'postgres' ? 'postgres' : 'mysql', image: img[1] };
+  // 버전 없는 이미지(outline: image: postgres)는 받는 날마다 달라진다 — QA 가 정한 버전을 쓴다 (postgres 18 은 데이터 폴더가 바뀌어 켜지지 않았다)
+  if (img) return { kind: img[2] === 'postgres' ? 'postgres' : 'mysql', ...(/:[\w.-]*\d/.test(img[1]) && !/:latest$/.test(img[1]) ? { image: img[1] } : {}) };
   let deps = {}; try { const p = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); deps = { ...p.dependencies, ...p.devDependencies }; } catch { /* 없음 */ }
   if (deps.pg || deps.postgres) return { kind: 'postgres' };
   if (deps.mysql2 || deps.mysql) return { kind: 'mysql' };
@@ -158,10 +160,18 @@ async function throwawayDb(def, part, root, env, log = () => {}) {
   sh('docker', ['rm', '-f', name]);   // 지난번에 QA 가 꺼지지 못하고 남긴 것
   const port = await freePort();
   log(`DATABASE_URL 이 없다 — 검사용 ${k.kind} DB 를 메모리에 띄운다 (${image}, localhost:${port}, 끄면 지운다)`);
-  const r = sh('docker', ['run', '-d', '--name', name, '--tmpfs', spec.data, ...spec.env.flatMap(e => ['-e', e]), '-p', `127.0.0.1:${port}:${spec.port}`, image], { timeout: 300000 });
+  // 이미지를 받느라 몇 분 걸릴 수 있다 — 화면 서버(ui.js)가 멈추지 않게 비동기로 (execFileSync 는 그동안 화면을 붙잡았다)
+  const r = await shAsync('docker', ['run', '-d', '--name', name, '--tmpfs', spec.data, ...spec.env.flatMap(e => ['-e', e]), '-p', `127.0.0.1:${port}:${spec.port}`, image], 300000);
   if (!r.ok) return { ok: false, why: `검사용 DB 를 띄우지 못했다: ${r.out.slice(0, 200)}` };
   for (let i = 0; i < 60; i++) {
-    if (sh('docker', ['exec', name, ...spec.ready]).ok && await portOpen(port)) { env.DATABASE_URL = spec.url(port); return { ok: true, container: name, url: env.DATABASE_URL }; }
+    if ((await shAsync('docker', ['exec', name, ...spec.ready])).ok && await portOpen(port)) { env.DATABASE_URL = spec.url(port); return { ok: true, container: name, url: env.DATABASE_URL }; }
+    // 켜지다 꺼졌으면 더 기다리지 않는다 — 마지막 로그를 알린다
+    const st = await shAsync('docker', ['inspect', '-f', '{{.State.Running}}', name]);
+    if (st.ok && st.out === 'false') {
+      const logs = (await shAsync('docker', ['logs', '--tail', '8', name])).out.replace(/\s+/g, ' ').slice(0, 300);
+      sh('docker', ['rm', '-f', name]);
+      return { ok: false, why: `검사용 DB(${image})가 켜지다 꺼졌다: ${logs}` };
+    }
     await sleep(1000);
   }
   sh('docker', ['rm', '-f', name]);
