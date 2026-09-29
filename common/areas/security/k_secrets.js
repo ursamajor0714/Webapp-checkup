@@ -45,6 +45,8 @@ function gitHistorySecrets(ctx) {
     let c = '';
     for (const l of envs.split('\n')) { if (l.startsWith('@@')) { c = l.slice(2); continue; } if (l && !/\.(example|sample|template|dist)$/.test(l)) { let old = ''; try { old = execFileSync('git', ['show', `${c}:${l}`], { cwd: ctx.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { /* 그 커밋에서 지운 것 */ }
       const sample = old && sampleOnlyEnv(old);
+      // .env.test·.env.ci — 시험용으로 일부러 올리는 파일 (outline: 값이 123·test). 진짜 키가 섞였는지만 사람이 본다
+      if (!sample && /\.env\.(test|testing|ci|e2e)$/.test(l)) { found.set('env:' + l, { name: `${l} (${c})`, ok: null, detail: '시험용 .env 가 깃에 있다 — 시험용으로 일부러 올리는 파일이다. 진짜 키·운영 주소가 섞이지 않았는지만 확인' }); continue; }
       found.set('env:' + l, { name: `${l} (${c})`, ok: sample ? null : false, detail: sample ? '.env 파일이 커밋된 적이 있지만 그때 내용은 견본 값뿐이다 — 진짜 키를 넣은 뒤 커밋하지 않도록 .gitignore 에' : '.env 파일이 커밋된 적이 있다 — 지금 없어도 기록에 남아 있다. 안의 비밀번호·키를 모두 바꿔야 한다' }); } }
   } catch { /* 무시 */ }
   const items = [...found.values()].filter(Boolean);

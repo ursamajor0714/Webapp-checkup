@@ -4,7 +4,9 @@ const { check, checkItems, pub } = require('../_util');
 function same(call, route, prefixes = []) {
   const tryOne = cp => {
     const a = cp.replace(/\/$/, '').split('/'), b = route.path.replace(/\/$/, '').split('/');
-    return a.length === b.length && b.every((s, i) => s.startsWith(':') || a[i].startsWith(':') || s === a[i] || s.endsWith('*'));
+    // 조각 안의 변수도 — 화면 `/users.${action}` → users.:action 은 users.suspend 와 같다 (outline RPC 꼴)
+    const part = (x, y) => x.includes(':') && new RegExp('^' + x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:\w+/g, '[^/]+') + '$').test(y);
+    return a.length === b.length && b.every((s, i) => s.startsWith(':') || a[i].startsWith(':') || s === a[i] || s.endsWith('*') || part(a[i], s) || part(s, a[i]));
   };
   return tryOne(call.path) || prefixes.some(p => tryOne(p + call.path));
 }

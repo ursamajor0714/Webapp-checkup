@@ -849,3 +849,38 @@ test('가입 경로 — 팀 합류(/api/teams/join)는 가입이 아니다', () 
   for (const p of ['/api/auth/register', '/api/member/register', '/join.php', '/member/join_process.php', '/accounts/signup/']) assert.ok(REGISTER.test(p), p);
   for (const p of ['/api/teams/join', '/api/admin/register']) assert.ok(!REGISTER.test(p), p);
 });
+
+test('Koa — mount 접두어·router.use(sub.routes())·RPC 이름 경로·별칭 import 를 따라간다 (outline 꼴)', () => {
+  const koa = require('../common/stacks/koa');
+  const root = write(tmp(), {
+    'package.json': JSON.stringify({ dependencies: { koa: '3', 'koa-router': '13', 'koa-mount': '4' }, scripts: { build: 'x', start: 'node ./build/server/index.js' } }),
+    'tsconfig.json': '{ "compilerOptions": { "paths": { "@server/*": ["./server/*"] } } }',
+    'server/web.ts': "import Koa from 'koa';\nimport mount from 'koa-mount';\nimport api from '@server/routes/api';\nconst app = new Koa();\napp.use(mount('/api', api));\n",
+    'server/routes/api/index.ts': "import Koa from 'koa';\nimport Router from 'koa-router';\nimport documents from './documents';\nconst api = new Koa();\nconst router = new Router();\nrouter.use('/', documents.routes());\napi.use(router.routes());\nexport default api;\n",
+    'server/routes/api/documents/index.ts': 'export { default } from "./documents";\n',
+    'server/routes/api/documents/documents.ts': "import Router from 'koa-router';\nconst router = new Router();\nrouter.post(\n  \"documents.list\",\n  auth(),\n  async ctx => {});\nrouter.post(`${config.id}.callback`, x);\nexport default router;\n",
+  });
+  assert.ok(koa.detect(root));
+  const r = koa.routes(root).map(x => `${x.method} ${x.path}${x.unmounted ? ' (끼운 곳 모름)' : ''}`);
+  assert.deepStrictEqual(r, ['POST /api/documents.list'], '틀 경로(${config.id})는 뺀다');
+  assert.strictEqual(koa.serve(root).buildMarker, './build/server/index.js');
+});
+
+test('서버 켤 때 채우는 값 — 견본 파일의 이름도 쓰는 줄 알고, 비밀은 64자리 16진수, 주소는 localhost, https 강제는 끈다', () => {
+  const { fillDefaults } = require('../common/serve');
+  const root = write(tmp(), { 'package.json': '{}', 'src/gh.js': 'process.env.GITHUB_WEBHOOK_SECRET', '.env.sample': 'URL=\nSECRET_KEY=generate\nUTILS_SECRET=generate\nSLACK_CLIENT_SECRET=x\nFORCE_HTTPS=true\nFILE_STORAGE=local\nFILE_STORAGE_LOCAL_ROOT_DIR=/var/lib/app/data\n' });
+  const env = { PORT: '3100' };
+  fillDefaults({ id: 't', root }, { absDir: root, dir: '.', lang: 'js' }, env);
+  assert.match(env.SECRET_KEY, /^[0-9a-f]{64}$/); assert.ok(env.UTILS_SECRET);
+  assert.strictEqual(env.SLACK_CLIENT_SECRET, undefined, '남이 발급하는 비밀은 넣지 않는다');
+  assert.strictEqual(env.GITHUB_WEBHOOK_SECRET, undefined, '견본에 없는 연동 비밀도');
+  assert.strictEqual(env.URL, 'http://localhost:3100'); assert.strictEqual(env.FORCE_HTTPS, 'false'); assert.strictEqual(env.FILE_STORAGE, 'local');
+  assert.ok(!env.FILE_STORAGE_LOCAL_ROOT_DIR.startsWith('/var/lib'));
+});
+
+test('가드 판단 — 여러 줄에 걸친 경로 선언의 미들웨어까지 본다 (Koa outline: router.post(\\n "x",\\n auth(),)', () => {
+  const { guardLine } = require('../common/roles');
+  assert.match(guardLine('router.post(\n  "documents.list",\n  auth({ role: Admin }),\n  validate(T.S),\n  async (ctx) => {\n ctx.body = 1 }'), /auth\(\{ role: Admin \}\), validate\(T\.S\)/);
+  assert.doesNotMatch(guardLine("router.get('/api/authors', async (req, res) => {"), /auth/, '경로 문자열은 가드가 아니다');
+  assert.match(guardLine("app.get('/x', requireAdmin, (req, res) => {"), /requireAdmin/);
+});

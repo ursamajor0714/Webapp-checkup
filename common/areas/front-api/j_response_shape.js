@@ -9,10 +9,14 @@ module.exports = {
     const as = ctx.sessions.owner ? 'owner' : 'anon';
     const api = ctx.routes().filter(r => r.method === 'GET' && !r.path.includes(':') && !ctx.pages().some(p => p.path === r.path)).slice(0, 40);
     const json = [], dates = [];
+    const apiPrefixed = ctx.routes().some(r => /^\/api\//.test(r.path));
     for (const r of api) {
       const res = await ctx.call(r.path, { service: r.service, as });
       if (res.status >= 300 && res.status < 400) continue;
       const ct = res.headers.get('content-type') || '';
+      // 파일 주소(robots.txt·opensearch.xml)와, API 가 /api 아래 모인 앱에서 /api 밖의 HTML(로그인 콜백 화면 등)은 API 가 아니다 (outline)
+      if (/\.\w{2,5}$/.test(r.path) && !/json/.test(ct)) { json.push({ name: `GET ${r.path} (${res.status})`, ok: true, detail: `${ct.split(';')[0]} — 파일 주소 (JSON 이 아니어도 된다)` }); continue; }
+      if (apiPrefixed && !/^\/api\//.test(r.path) && /html/.test(ct) && res.status < 400) { json.push({ name: `GET ${r.path} (${res.status})`, ok: true, detail: '화면(HTML)을 돌려주는 경로 — API 는 /api 아래에 있다' }); continue; }
       const isJson = /json/.test(ct) && (res.body !== null || /^\s*null\s*$/.test(res.text || ''));   // 본문이 JSON null 이어도 JSON 이다
       if (/spreadsheet|ms-excel|text\/csv|application\/pdf|application\/zip|octet-stream|^image\/|javascript|^text\/css/.test(ct) || /attachment/i.test(res.headers.get('content-disposition') || '')) { json.push({ name: `GET ${r.path} (${res.status})`, ok: true, detail: `${ct.split(';')[0]} — 파일·스크립트를 주는 경로 (JSON 이 아니어도 된다)` }); continue; }
       json.push({ name: `GET ${r.path} (${res.status})`, ok: isJson || res.status === 204 || /text\/plain/.test(ct) && res.text.length < 50, detail: isJson ? 'JSON' : `${ct || '형식 없음'} — API 가 JSON 이 아니다${/html/.test(ct) ? ' (오류 페이지 HTML?)' : ''}` });

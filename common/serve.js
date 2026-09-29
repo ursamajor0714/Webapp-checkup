@@ -149,13 +149,28 @@ function fillDefaults(def, part, env) {
   const { walk, read } = require('./stacks/util');
   const src = walk(part.absDir, ['.js', '.ts', '.mjs', '.cjs', '.py', '.properties', '.yml']).filter(f => !/node_modules|\.next|dist|build/.test(f)).slice(0, 3000).map(read).join('\n');
   const used = new Set([...src.matchAll(/(?:process\.env\.|os\.environ\.get\(\s*['"]|os\.getenv\(\s*['"]|os\.environ\[\s*['"]|config\(\s*['"]|\$\{)([A-Z][A-Z0-9_]{2,})/g)].map(m => m[1]));
+  // 견본 파일(.env.sample 등)에 적힌 이름도 — 코드가 자기 설정 객체로 읽으면(outline environment.X) 위에서 못 찾는다
+  const sample = require('./deps').sampleEnv(def.root || part.absDir, part.absDir);
+  for (const k of Object.keys(sample)) used.add(k);
+  const have = Object.assign({}, ...[def.root, part.absDir].filter(Boolean).flatMap(d => ['.env', '.env.local'].map(f => require('./deps').readEnvFile(path.join(d, f)))));
   const filled = [];
+  const port = env.PORT || '3000';
   for (const k of used) {
-    if (env[k]) continue;
-    if (/^(SECRET_KEY|DJANGO_SECRET_KEY|APP_SECRET|JWT_SECRET|JWT_SECRET_KEY|SESSION_SECRET|COOKIE_SECRET|TOKEN_SECRET|AUTH_SECRET|NEXTAUTH_SECRET)$/.test(k)) { env[k] = crypto.randomBytes(24).toString('base64url'); filled.push(`${k}(무작위)`); }
+    if (env[k] || have[k]) continue;
+    // 비밀 키 — 64자리 16진수 (outline SECRET_KEY 는 정확히 이 모양만 받는다. 다른 앱에도 무난하다). OAuth·AWS·웹훅처럼 남이 발급하는 비밀은 넣지 않는다 — 이름만 비슷한 것은 견본 파일에 적힌 것만 (outline 은 GITHUB_WEBHOOK_SECRET 이 있으면 GitHub 연동을 요구하며 켜지지 않았다)
+    if (/^(SECRET_KEY|DJANGO_SECRET_KEY|APP_SECRET|JWT_SECRET|JWT_SECRET_KEY|SESSION_SECRET|COOKIE_SECRET|TOKEN_SECRET|AUTH_SECRET|NEXTAUTH_SECRET)$/.test(k) || (/(^|_)SECRET(_KEY)?$/.test(k) && k in sample && !/CLIENT|ACCESS|AWS|STRIPE|API_SECRET|OAUTH|WEBHOOK/.test(k))) { env[k] = crypto.randomBytes(32).toString('hex'); filled.push(`${k}(무작위)`); }
     else if (k === 'DATABASE_URL' && part.lang === 'python') {
       const dir = path.join(__dirname, '..', '.qa-data'); fs.mkdirSync(dir, { recursive: true });
       env[k] = `sqlite:///${path.join(dir, `${(def.id || 'project').replace(/[^\w.-]/g, '_')}-${part.dir.replace(/[^\w.-]/g, '_')}.sqlite3`)}`; filled.push(`${k}(임시 sqlite)`);
+    }
+    // 앱 자기 주소 — 검사는 이 컴퓨터에서 http 로 한다
+    else if (/^(URL|APP_URL|BASE_URL|PUBLIC_URL|SITE_URL|SERVER_URL|NEXTAUTH_URL)$/.test(k)) { env[k] = `http://localhost:${port}`; filled.push(`${k}(http://localhost:${port})`); }
+    else if (/^(FORCE_HTTPS|FORCE_SSL|HTTPS_ONLY|SSL_REDIRECT)$/.test(k)) { env[k] = 'false'; filled.push(`${k}(false — 로컬은 http)`); }
+    // 파일 저장소 — 견본이 로컬 디스크를 고르면 그대로, 저장 폴더는 QA 폴더 안으로 (견본의 /var/lib/… 는 이 컴퓨터에 쓸 수 없다)
+    else if (/STORAGE$/.test(k) && /^(local|disk|fs|file)$/i.test(sample[k] || '')) { env[k] = sample[k]; filled.push(`${k}(${sample[k]})`); }
+    else if (/STORAGE.*(_DIR|_ROOT|_PATH)$|(_ROOT_DIR|UPLOAD_DIR)$/.test(k) && /^\//.test(sample[k] || '')) {
+      const dir = path.join(__dirname, '..', '.qa-data', 'files', String(def.id || 'project').replace(/[^\w.-]/g, '_')); fs.mkdirSync(dir, { recursive: true });
+      env[k] = dir; filled.push(`${k}(QA 임시 폴더)`);
     }
   }
   return filled;
@@ -181,7 +196,7 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     // DATABASE_URL 이 어디에도 없으면 검사용 DB 를 메모리에 띄운다 — 끌 때 지운다
     const tdb = await require('./deps').throwawayDb(def, part, def.root || path.dirname(part.absDir), env, m => logLine(st, m));
     if (tdb && !tdb.ok) throw new Error(tdb.why);
-    if (tdb) { st.qaDb = tdb.container; logLine(st, `검사용 DB 준비됨 — DATABASE_URL=${tdb.url}`); }
+    if (tdb) { st.qaDb = tdb.containers; logLine(st, `검사용 준비됨 — ${Object.entries(tdb.set).map(([k, v]) => `${k}=${v}`).join(' · ')}`); }
     const filled = fillDefaults(def, part, env);
     if (filled.length) { st.filledEnv = filled; logLine(st, `비어 있던 설정에 QA 가 검사용 값을 넣었다: ${filled.join(', ')}`); }
     // 파이썬인데 쓸 가상환경이 없으면 QA 폴더에 만든다
@@ -210,7 +225,7 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
       const l = readLocal(); l.built = { ...(l.built || {}), [key]: head }; writeLocal(l);
     }
     // 검사용 DB 는 켤 때마다 비어 있다 — 빌드를 건너뛰었으면 표를 만드는 단계(마이그레이션)도 안 돌았다. 레포의 마이그레이션 스크립트, 없으면 Prisma
-    if (st.qaDb) {
+    if (st.qaDb && st.qaDb.some(c => c.startsWith('qa-db-'))) {
       const mig = migrateCmd(part.absDir, plan.pm);
       if (mig) { logLine(st, '검사용 DB 에 표를 만든다 (마이그레이션)'); await runStep(st, mig, part.absDir, env); }
     }

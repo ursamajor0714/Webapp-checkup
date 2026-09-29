@@ -16,7 +16,9 @@ const bodyFields = h => { const m = String(h || '').match(/\{\s*([\w\s,:]+?)\s*\
 const tableOf = h => { const s = String(h || ''); const m = s.match(/\bFROM\s+["`]?(\w+)["`]?\s+WHERE/i) || s.match(/prisma\.(\w+)\.find/) || s.match(/\b([A-Z]\w+)\.findOne\(/); return m ? m[1] : null; };
 const inserts = (h, t) => new RegExp(`INSERT\\s+INTO\\s+["\`]?${t}\\b|prisma\\.${t}\\.create|\\b${t}\\.create\\(`, 'i').test(String(h || ''));
 // 첫 줄(경로 선언 + 미들웨어)에서 문자열을 뺀 것 — '/api/authors' 의 'auth' 에 가드로 걸리지 않게
-const guardLine = h => String(h || '').split('\n')[0].replace(/(['"`])(?:\\.|(?!\1).)*\1/g, "''");
+// 경로 선언부 — 처리 함수가 시작하기 전까지 (미들웨어·가드가 여기 있다). 여러 줄 선언도 (outline: router.post(\n "x",\n auth(),\n async ctx => …)
+//   경로 문자열은 지운다 — /api/authors 의 "auth" 를 가드로 보지 않게
+const guardLine = h => { const t = String(h || '').slice(0, 600); const end = t.search(/\basync\b|\bfunction\b|=>/); return (end > 0 ? t.slice(0, end) : t.split('\n')[0]).replace(/\s+/g, ' ').replace(/(['"`])(?:\\.|(?!\1).)*\1/g, "''"); };
 
 function findRoles(routes, auth = {}, contracts = []) {
   const { passwordEnvOf } = require('./project');
