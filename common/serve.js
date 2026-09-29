@@ -94,7 +94,17 @@ function withPm(plan, pm, dir = null, stop = null) {
     : onPath(pm) ? [pm] : null;
   if (!bin) return plan;
   const tr = a => (Array.isArray(a) && a[0] === 'npm' ? [...bin, ...a.slice(1)] : a);
-  return { ...plan, install: tr(plan.install), build: tr(plan.build), start: tr(plan.start), pm };
+  // 레포 스크립트가 안에서 다시 부르는 pnpm·yarn 도 같은 버전이 되게 — PATH 앞에 그 버전을 부르는 작은 실행 파일을 둔다
+  //   (umami: build 가 "pnpm --filter … build" 를 부르면 이 맥의 pnpm 11 이 잡혀 engines 에 걸린다)
+  let env = plan.env;
+  if (bin.length > 1) {
+    const shim = path.join(__dirname, '..', '.qa-data', 'pm-shims', bin.join('_').replace(/[^\w.@-]/g, '_'));
+    fs.mkdirSync(shim, { recursive: true });
+    fs.writeFileSync(path.join(shim, pm), `#!/bin/sh\nCOREPACK_ENABLE_DOWNLOAD_PROMPT=0 exec ${bin.join(' ')} "$@"\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(shim, `${pm}.cmd`), `@set COREPACK_ENABLE_DOWNLOAD_PROMPT=0\r\n@${bin.join(' ')} %*\r\n`);
+    env = { ...(plan.env || {}), PATH: shim + path.delimiter + ((plan.env && plan.env.PATH) || process.env.PATH || '') };
+  }
+  return { ...plan, install: tr(plan.install), build: tr(plan.build), start: tr(plan.start), pm, ...(env ? { env } : {}) };
 }
 function needsInstall(dir, plan, installedAt) {
   if (/^(npm|pnpm|yarn|bun|corepack)$/.test(plan.install[0])) {
@@ -168,6 +178,10 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
     const deps = await require('./deps').ensureLocalServices(part, def.root || path.dirname(part.absDir), env, m => logLine(st, m));
     if (!deps.ok) throw new Error(deps.why);
     Object.assign(env, plan.env || {});
+    // DATABASE_URL 이 어디에도 없으면 검사용 DB 를 메모리에 띄운다 — 끌 때 지운다
+    const tdb = await require('./deps').throwawayDb(def, part, def.root || path.dirname(part.absDir), env, m => logLine(st, m));
+    if (tdb && !tdb.ok) throw new Error(tdb.why);
+    if (tdb) { st.qaDb = tdb.container; logLine(st, `검사용 DB 준비됨 — DATABASE_URL=${tdb.url}`); }
     const filled = fillDefaults(def, part, env);
     if (filled.length) { st.filledEnv = filled; logLine(st, `비어 있던 설정에 QA 가 검사용 값을 넣었다: ${filled.join(', ')}`); }
     // 파이썬인데 쓸 가상환경이 없으면 QA 폴더에 만든다
@@ -217,6 +231,7 @@ async function startPart(def, part, st, { rebuild = false, timeoutSec = 180 } = 
   } catch (e) {
     const hint = failHint(st.log.slice(-40).join('\n'), def.root || path.dirname(part.absDir));
     st.phase = 'error'; st.error = e.message + hint + (st.installError ? ` (앞서 설치도 실패: ${st.installError})` : ''); logLine(st, '✗ ' + st.error);
+    dropDb(st);
   }
 }
 
@@ -240,7 +255,9 @@ function failHint(tail, root) {
   return h;
 }
 
+const dropDb = st => { if (st && st.qaDb) { require('./deps').removeDb(st.qaDb); st.qaDb = null; } };
 function stop(st) {
+  dropDb(st);   // 검사용 DB 는 서버와 함께 지운다
   if (!st || !st.child) return false;
   st.phase = 'stopping';
   try {

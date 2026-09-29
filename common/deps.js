@@ -120,4 +120,53 @@ async function ensureLocalServices(part, root, env, log = () => {}) {
   return { ok: true, notes };
 }
 
-module.exports = { ensureLocalServices, localServices, portOpen, readEnvFile };
+// 코드가 DATABASE_URL 을 읽는데 어디에도 값이 없으면 — 검사용 DB 를 메모리(tmpfs)에 띄운다 (PHP 스택과 같은 방식).
+//   켤 때마다 비어 있고 끄면 컨테이너째 지운다. 레포 .env 는 건드리지 않고 서버 환경변수로만 넘긴다.
+//   DB 종류는 Prisma provider → compose 이미지 → 의존성(pg·mysql2) 순으로 본다. 모르면 하지 않는다.
+const TMP_DB = {
+  postgres: { image: 'postgres:16-alpine', port: 5432, data: '/var/lib/postgresql/data', env: ['POSTGRES_USER=qa', 'POSTGRES_PASSWORD=qa', 'POSTGRES_DB=qa'], ready: ['pg_isready', '-U', 'qa', '-d', 'qa'], url: p => `postgresql://qa:qa@localhost:${p}/qa` },
+  mysql: { image: 'mysql:8.0', port: 3306, data: '/var/lib/mysql', env: ['MYSQL_ROOT_PASSWORD=qa', 'MYSQL_DATABASE=qa'], ready: ['mysqladmin', 'ping', '-h', '127.0.0.1', '-pqa'], url: p => `mysql://root:qa@localhost:${p}/qa` },
+};
+function dbKind(dir, root) {
+  const { walk, read } = require('./stacks/util');
+  const prisma = walk(dir, ['.prisma']).map(read).join('\n');
+  const pm = prisma.match(/datasource[\s\S]*?provider\s*=\s*"(\w+)"/);
+  if (pm) return /postgres/.test(pm[1]) ? { kind: 'postgres' } : /mysql/.test(pm[1]) ? { kind: 'mysql' } : null;
+  const compose = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].map(f => path.join(root, f)).find(f => fs.existsSync(f));
+  const img = compose && (fs.readFileSync(compose, 'utf8').match(/image:\s*['"]?((postgres|mysql|mariadb)[\w.:-]*)/) || null);
+  if (img) return { kind: img[2] === 'postgres' ? 'postgres' : 'mysql', image: img[1] };
+  let deps = {}; try { const p = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')); deps = { ...p.dependencies, ...p.devDependencies }; } catch { /* 없음 */ }
+  if (deps.pg || deps.postgres) return { kind: 'postgres' };
+  if (deps.mysql2 || deps.mysql) return { kind: 'mysql' };
+  return null;
+}
+const freePort = () => new Promise(res => { const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => res(p)); }); });
+
+async function throwawayDb(def, part, root, env, log = () => {}) {
+  if (part.lang !== 'js' || env.DATABASE_URL) return null;
+  const files = [root, part.absDir].flatMap(d => ['.env', '.env.local'].map(f => readEnvFile(path.join(d, f))));
+  if (files.some(v => v.DATABASE_URL)) return null;
+  const { walk, read } = require('./stacks/util');
+  const src = walk(part.absDir, ['.js', '.ts', '.mjs', '.cjs', '.prisma']).filter(f => !/node_modules|\.next|dist|build/.test(f)).slice(0, 3000).map(read).join('\n');
+  if (!/process\.env\.DATABASE_URL|env\(\s*['"]DATABASE_URL['"]\s*\)/.test(src)) return null;
+  const k = dbKind(part.absDir, root);
+  if (!k) return null;
+  const spec = TMP_DB[k.kind], image = k.image || spec.image;
+  const d = await dockerReady(log);
+  if (!d.ok) return { ok: false, why: `DATABASE_URL 이 없어 검사용 DB 를 띄우려 했지만 ${d.why}` };
+  const name = `qa-db-${String(def.id || 'project').replace(/[^\w.-]/g, '_')}`;
+  sh('docker', ['rm', '-f', name]);   // 지난번에 QA 가 꺼지지 못하고 남긴 것
+  const port = await freePort();
+  log(`DATABASE_URL 이 없다 — 검사용 ${k.kind} DB 를 메모리에 띄운다 (${image}, localhost:${port}, 끄면 지운다)`);
+  const r = sh('docker', ['run', '-d', '--name', name, '--tmpfs', spec.data, ...spec.env.flatMap(e => ['-e', e]), '-p', `127.0.0.1:${port}:${spec.port}`, image], { timeout: 300000 });
+  if (!r.ok) return { ok: false, why: `검사용 DB 를 띄우지 못했다: ${r.out.slice(0, 200)}` };
+  for (let i = 0; i < 60; i++) {
+    if (sh('docker', ['exec', name, ...spec.ready]).ok && await portOpen(port)) { env.DATABASE_URL = spec.url(port); return { ok: true, container: name, url: env.DATABASE_URL }; }
+    await sleep(1000);
+  }
+  sh('docker', ['rm', '-f', name]);
+  return { ok: false, why: '검사용 DB 가 60초 안에 준비되지 않았다' };
+}
+const removeDb = name => name && sh('docker', ['rm', '-f', name]).ok;
+
+module.exports = { ensureLocalServices, localServices, portOpen, readEnvFile, throwawayDb, removeDb, dbKind };
